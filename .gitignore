@@ -1,0 +1,25 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Environment Variables
+.env
+.env.local
+
+# IDEs
+.idea/
+.vscode/
+
+# Vercel
+.vercel/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+.vercel
