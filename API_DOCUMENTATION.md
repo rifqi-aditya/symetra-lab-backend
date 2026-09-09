@@ -28,6 +28,24 @@ Backend manajemen toko yang terintegrasi dengan **Shopee Open Platform (Open API
 | `GET` | `/api/v1/shopee/orders/:order_sn` | Mengambil detail lengkap 1 pesanan (item, custom note, potongan fee) |
 | `POST` | `/api/v1/shopee/orders/:order_sn/ship` | Konfirmasi "Atur Pengiriman" pesanan & terbitkan no resi kurir |
 | `GET` | `/api/v1/shopee/orders/:order_sn/shipping-label` | Download / Cetak langsung PDF Label Resi Pengiriman Thermal (100x150 mm) |
+| `GET` | `/api/v1/filaments` | Mengambil seluruh roll filamen beserta profil teknisnya (*flattened*) |
+| `GET` | `/api/v1/filaments/:id` | Mengambil rincian 1 roll filamen beserta profil teknis |
+| `POST` | `/api/v1/filaments` | Menambahkan roll filamen baru (otomatis membuat/mengaitkan profil) |
+| `PUT` | `/api/v1/filaments/:id` | Memperbarui data roll filamen dan profil teknis |
+| `DELETE` | `/api/v1/filaments/:id` | Menghapus roll filamen |
+| `POST` | `/api/v1/filaments/:id/sync-stock` | Mencatat hasil timbangan fisik roll (kalkulasi sisa gramasi bersih) |
+| `GET` | `/api/v1/filament-profiles` | Mengambil daftar master profil teknis bahan filamen |
+| `GET` | `/api/v1/machines` | Mengambil seluruh mesin printer beserta suku cadang perawatannya |
+| `GET` | `/api/v1/machines/:id` | Mengambil rincian 1 mesin printer |
+| `POST` | `/api/v1/machines` | Mendaftarkan 3D printer baru ke bengkel |
+| `PUT` | `/api/v1/machines/:id` | Memperbarui parameter printer (daya watt, harga beli, jam pakai) |
+| `PATCH` | `/api/v1/machines/:id/state` | Mengubah status mesin (`IDLE`, `PRINTING`, `MAINTENANCE`, `OFFLINE`) |
+| `DELETE` | `/api/v1/machines/:id` | Menghapus printer beserta suku cadangnya |
+| `GET` | `/api/v1/machines/:id/parts` | Mengambil daftar suku cadang perawatan untuk printer |
+| `POST` | `/api/v1/machines/:id/parts` | Menambahkan suku cadang baru ke printer |
+| `PUT` | `/api/v1/machines/parts/:part_id` | Memperbarui suku cadang (stok cadangan, biaya unit) |
+| `POST` | `/api/v1/machines/parts/:part_id/replace` | Penggantian suku cadang (reset jam pakai ke 0 & kurangi stok) |
+| `DELETE` | `/api/v1/machines/parts/:part_id` | Menghapus suku cadang |
 
 ---
 
@@ -418,4 +436,199 @@ CREATE TABLE "shopee_order_escrows" (
 2. **Refresh Token**
    - Masa berlaku: **30 Hari**.
    - Digunakan untuk meminta `access_token` baru tanpa mengharuskan seller login ulang.
+
+---
+
+## 🧵 Modul 5: Inventori Bahan Baku (Filaments & Profiles)
+
+Modul ini mengelola data gulungan (*spool*) filamen fisik dan profil teknis pencetakan (suhu nozzle/bed, retraksi, flow ratio, bobot spool kosong). Format respon `GET` otomatis digabungkan (*flattened*) sehingga siap dikonsumsi langsung oleh komponen frontend.
+
+### 1. `GET /api/v1/filaments`
+Mengambil seluruh gulungan filamen milik user beserta profil teknisnya.
+
+* **Query Parameters (Opsional)**:
+  - `brand` (string): Filter berdasarkan brand (contoh: `Sunlu`, `eSUN`).
+  - `material_type` (string): Filter berdasarkan tipe material (contoh: `PLA`, `PETG`, `ABS`).
+  - `user_id` (string): ID user spesifik (default menggunakan admin Supabase).
+
+* **Contoh Request**:
+  ```bash
+  curl -X GET "https://symetra-lab-backend.vercel.app/api/v1/filaments"
+  ```
+
+* **Contoh Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "total": 19,
+    "data": [
+      {
+        "id": "67324391-da1d-4001-a96a-0498305c4125",
+        "user_id": "4aecd5c5-c0a9-4f52-ba2f-b6f4272218b4",
+        "profile_id": "e81881ef-1fe5-412d-b0ad-ec82a1fc8375",
+        "brand": "Sunlu",
+        "material_type": "PLA+",
+        "diameter_mm": 1.75,
+        "nozzle_temp": 210,
+        "bed_temp": 60,
+        "retraction_length": 0.8,
+        "flow_ratio": 0.98,
+        "pressure_advance": 0.025,
+        "cooling_fan_percent": 100,
+        "max_volumetric_speed": 15.0,
+        "empty_spool_weight_grams": 220.0,
+        "spool_weight_grams": 1000.0,
+        "color_name": "Matte Navy Blue",
+        "color_hex": "#1B263B",
+        "sku": "SNLU-PLA-NVY",
+        "price_per_roll": 145000,
+        "current_stock_grams": 850.0,
+        "low_stock_threshold_grams": 200.0,
+        "last_weighed_grams": 1070.0,
+        "last_weighed_at": "2026-09-09T18:00:00Z",
+        "created_at": "2026-09-01T10:00:00Z",
+        "updated_at": "2026-09-09T18:00:00Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+### 2. `POST /api/v1/filaments`
+Menambahkan roll filamen baru. Jika profil teknis dengan kombinasi `(brand, material_type)` belum ada di database, profil baru akan otomatis dibuatkan.
+
+* **Contoh Request Body**:
+  ```json
+  {
+    "brand": "eSUN",
+    "material_type": "PLA+",
+    "nozzle_temp": 215,
+    "bed_temp": 60,
+    "empty_spool_weight_grams": 230,
+    "spool_weight_grams": 1000,
+    "color_name": "Cold White",
+    "color_hex": "#FFFFFF",
+    "sku": "ESUN-PLA-WHT",
+    "price_per_roll": 150000,
+    "current_stock_grams": 1000,
+    "low_stock_threshold_grams": 250
+  }
+  ```
+
+---
+
+### 3. `POST /api/v1/filaments/:id/sync-stock`
+Fitur pencatatan timbangan fisik spool di bengkel. Backend secara otomatis menghitung sisa filamen bersih:
+$$\text{Calculated Net Grams} = \text{Gross Weight} - \text{Empty Spool Weight}$$
+
+* **Contoh Request Body**:
+  ```json
+  {
+    "gross_weight_grams": 730.0
+  }
+  ```
+
+* **Contoh Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "message": "Stok berhasil disinkronkan dari timbangan",
+    "data": {
+      "filament_id": "67324391-da1d-4001-a96a-0498305c4125",
+      "gross_weight_grams": 730.0,
+      "empty_spool_weight_grams": 230.0,
+      "calculated_net_grams": 500.0,
+      "last_weighed_at": "2026-09-10T00:50:00Z"
+    }
+  }
+  ```
+
+---
+
+### 4. `GET /api/v1/filament-profiles`
+Mengambil daftar master profil teknis bahan filamen.
+
+---
+
+## ⚙️ Modul 6: Mesin 3D Printer & Suku Cadang (Machines & Maintenance Parts)
+
+Modul ini mengelola unit mesin cetak 3D di bengkel Symetra Lab, parameter biaya investasi, daya listrik, depresiasi jam terbang, serta monitoring suku cadang *wear-and-tear* (nozzle, build plate, belt).
+
+### 1. `GET /api/v1/machines`
+Mengambil seluruh daftar mesin 3D printer beserta relasi komponen suku cadang perawatannya.
+
+* **Query Parameters (Opsional)**:
+  - `state` (string): Filter berdasarkan status mesin (`IDLE`, `PRINTING`, `MAINTENANCE`, `OFFLINE`).
+
+* **Contoh Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "total": 1,
+    "data": [
+      {
+        "id": "e4933924-f4aa-49ee-b9b5-fcfb9195b058",
+        "user_id": "4aecd5c5-c0a9-4f52-ba2f-b6f4272218b4",
+        "name": "A1 Semoga Ga Libur",
+        "brand": "Bambu Lab",
+        "total_purchase_cost": 7500000,
+        "salvage_value": 1500000,
+        "lifespan_hours": 5000,
+        "total_hours_used": 1420.5,
+        "avg_power_watts": 350,
+        "current_state": "IDLE",
+        "maintenance_parts": [
+          {
+            "id": "180373fe-aef4-4f01-8b2b-426c117b3f94",
+            "machine_id": "e4933924-f4aa-49ee-b9b5-fcfb9195b058",
+            "part_name": "Hardened Steel Nozzle 0.4mm",
+            "cost_idr": 185000,
+            "lifespan_hours": 800,
+            "stock_quantity": 2,
+            "hours_used_current": 150.0,
+            "last_replaced_at": "2026-08-15T09:00:00Z"
+          }
+        ]
+      }
+    ]
+  }
+  ```
+
+---
+
+### 2. `PATCH /api/v1/machines/:id/state`
+Mengubah status mesin secara cepat (*lightweight*). Sangat berguna saat memulai pencetakan atau saat mesin masuk jadwal servis.
+
+* **Pilihan State Valid**: `IDLE`, `PRINTING`, `MAINTENANCE`, `OFFLINE`.
+* **Contoh Request Body**:
+  ```json
+  {
+    "state": "PRINTING"
+  }
+  ```
+
+---
+
+### 3. `POST /api/v1/machines/parts/:part_id/replace`
+Mencatat penggantian suku cadang yang aus. Secara otomatis:
+1. Mereset `hours_used_current` menjadi `0`.
+2. Mengurangi `stock_quantity` suku cadang sebesar `1`.
+3. Memperbarui `last_replaced_at` ke waktu sekarang (*timestamp* saat ini).
+
+* **Contoh Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "message": "Penggantian suku cadang berhasil dicatat",
+    "data": {
+      "part_id": "180373fe-aef4-4f01-8b2b-426c117b3f94",
+      "part_name": "Hardened Steel Nozzle 0.4mm",
+      "hours_used_current": 0,
+      "remaining_stock": 1,
+      "last_replaced_at": "2026-09-10T00:50:30Z"
+    }
+  }
+  ```
+
 

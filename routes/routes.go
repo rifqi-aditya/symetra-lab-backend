@@ -61,6 +61,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 	shopeeHandler := handlers.NewShopeeHandler(db, shopeeClient)
 	orderHandler := handlers.NewOrderHandler(db, shopeeClient)
 	logisticsHandler := handlers.NewLogisticsHandler(db, shopeeClient)
+	filamentHandler := handlers.NewFilamentHandler(db)
+	machineHandler := handlers.NewMachineHandler(db)
+
 	v1 := r.Group("/api/v1")
 	{
 		shopeeRoutes := v1.Group("/shopee")
@@ -79,6 +82,36 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 			// Logistik & Cetak Label Thermal
 			shopeeRoutes.POST("/orders/:order_sn/ship", logisticsHandler.ShipOrder)
 			shopeeRoutes.GET("/orders/:order_sn/shipping-label", logisticsHandler.DownloadShippingLabel)
+		}
+
+		// Inventori Bahan Baku: Filamen & Profil Teknis
+		filamentRoutes := v1.Group("/filaments")
+		{
+			filamentRoutes.GET("", filamentHandler.GetAllFilaments)
+			filamentRoutes.GET("/:id", filamentHandler.GetFilamentByID)
+			filamentRoutes.POST("", filamentHandler.CreateFilament)
+			filamentRoutes.PUT("/:id", filamentHandler.UpdateFilament)
+			filamentRoutes.DELETE("/:id", filamentHandler.DeleteFilament)
+			filamentRoutes.POST("/:id/sync-stock", filamentHandler.SyncStock)
+		}
+		v1.GET("/filament-profiles", filamentHandler.GetProfiles)
+
+		// Mesin Cetak 3D & Suku Cadang Perawatan
+		machineRoutes := v1.Group("/machines")
+		{
+			machineRoutes.GET("", machineHandler.GetAllMachines)
+			machineRoutes.GET("/:id", machineHandler.GetMachineByID)
+			machineRoutes.POST("", machineHandler.CreateMachine)
+			machineRoutes.PUT("/:id", machineHandler.UpdateMachine)
+			machineRoutes.PATCH("/:id/state", machineHandler.UpdateMachineState)
+			machineRoutes.DELETE("/:id", machineHandler.DeleteMachine)
+
+			// Sub-rute suku cadang perawatan (Machine Maintenance Parts)
+			machineRoutes.GET("/:id/parts", machineHandler.GetPartsByMachine)
+			machineRoutes.POST("/:id/parts", machineHandler.CreatePart)
+			machineRoutes.PUT("/parts/:part_id", machineHandler.UpdatePart)
+			machineRoutes.POST("/parts/:part_id/replace", machineHandler.ReplacePart)
+			machineRoutes.DELETE("/parts/:part_id", machineHandler.DeletePart)
 		}
 	}
 
