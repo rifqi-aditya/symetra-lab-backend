@@ -31,9 +31,14 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("gagal terhubung ke database: %w", err)
 	}
 
-	// 4. AutoMigrate: GORM akan otomatis membuat tabel "shops" di Supabase jika belum ada
-	if err := db.AutoMigrate(&models.Shop{}); err != nil {
-		return nil, fmt.Errorf("gagal migrasi tabel shop: %w", err)
+	// 4. AutoMigrate: GORM akan otomatis membuat tabel di Supabase jika belum ada
+	if err := db.AutoMigrate(
+		&models.Shop{},
+		&models.Order{},
+		&models.OrderItem{},
+		&models.OrderEscrow{},
+	); err != nil {
+		return nil, fmt.Errorf("gagal migrasi database: %w", err)
 	}
 
 	log.Println("[INFO] Berhasil terhubung ke Supabase PostgreSQL & migrasi selesai")

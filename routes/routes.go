@@ -59,14 +59,21 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 
 	// Group route Shopee
 	shopeeHandler := handlers.NewShopeeHandler(db, shopeeClient)
+	orderHandler := handlers.NewOrderHandler(db, shopeeClient)
 	v1 := r.Group("/api/v1")
 	{
 		shopeeRoutes := v1.Group("/shopee")
 		{
+			// Auth & Toko
 			shopeeRoutes.GET("/auth-url", shopeeHandler.GetAuthURL)
 			shopeeRoutes.GET("/callback", shopeeHandler.HandleCallback)
 			shopeeRoutes.GET("/shops", shopeeHandler.GetShops)
 			shopeeRoutes.POST("/shops/:shop_id/refresh", shopeeHandler.RefreshToken)
+
+			// Pesanan & Keuangan (Escrow)
+			shopeeRoutes.POST("/shops/:shop_id/sync-orders", orderHandler.SyncOrders)
+			shopeeRoutes.GET("/shops/:shop_id/orders", orderHandler.GetOrders)
+			shopeeRoutes.GET("/orders/:order_sn", orderHandler.GetOrderDetail)
 		}
 	}
 
