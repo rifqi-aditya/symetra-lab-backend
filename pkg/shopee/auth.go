@@ -20,10 +20,15 @@ type TokenResponseBody struct {
 
 // ShopeeResponse membungkus struktur JSON standar dari Shopee Open Platform
 type ShopeeResponse struct {
-	Error     string             `json:"error"`
-	Message   string             `json:"message"`
-	Response  *TokenResponseBody `json:"response,omitempty"`
-	RequestID string             `json:"request_id"`
+	Error        string             `json:"error"`
+	Message      string             `json:"message"`
+	Response     *TokenResponseBody `json:"response,omitempty"`
+	RequestID    string             `json:"request_id"`
+	// Field di tingkat root (Shopee v2 auth API mengembalikan token langsung di root objek)
+	AccessToken  string             `json:"access_token,omitempty"`
+	RefreshToken string             `json:"refresh_token,omitempty"`
+	ExpireIn     int                `json:"expire_in,omitempty"`
+	ShopIDList   []uint64           `json:"shop_id_list,omitempty"`
 }
 
 // BuildAuthURL membuat link otorisasi Shopee untuk diklik oleh pemilik toko
@@ -93,11 +98,22 @@ func (c *Client) GetAccessToken(code string, shopID uint64) (*TokenResponseBody,
 		return nil, fmt.Errorf("error dari Shopee [%s]: %s (request_id: %s)", shopeeResp.Error, shopeeResp.Message, shopeeResp.RequestID)
 	}
 
-	if shopeeResp.Response == nil {
-		return nil, fmt.Errorf("data response Shopee kosong")
+	// Cek apakah data token ada di dalam objek response atau langsung di root
+	var tokenData *TokenResponseBody
+	if shopeeResp.Response != nil && shopeeResp.Response.AccessToken != "" {
+		tokenData = shopeeResp.Response
+	} else if shopeeResp.AccessToken != "" {
+		tokenData = &TokenResponseBody{
+			AccessToken:  shopeeResp.AccessToken,
+			RefreshToken: shopeeResp.RefreshToken,
+			ExpireIn:     shopeeResp.ExpireIn,
+			ShopIDList:   shopeeResp.ShopIDList,
+		}
+	} else {
+		return nil, fmt.Errorf("data response Shopee kosong (raw: %s)", string(respBytes))
 	}
 
-	return shopeeResp.Response, nil
+	return tokenData, nil
 }
 
 // RefreshAccessToken memperbarui access token menggunakan refresh token
@@ -145,9 +161,19 @@ func (c *Client) RefreshAccessToken(refreshToken string, shopID uint64) (*TokenR
 		return nil, fmt.Errorf("error dari Shopee [%s]: %s (request_id: %s)", shopeeResp.Error, shopeeResp.Message, shopeeResp.RequestID)
 	}
 
-	if shopeeResp.Response == nil {
-		return nil, fmt.Errorf("data response Shopee kosong")
+	var tokenData *TokenResponseBody
+	if shopeeResp.Response != nil && shopeeResp.Response.AccessToken != "" {
+		tokenData = shopeeResp.Response
+	} else if shopeeResp.AccessToken != "" {
+		tokenData = &TokenResponseBody{
+			AccessToken:  shopeeResp.AccessToken,
+			RefreshToken: shopeeResp.RefreshToken,
+			ExpireIn:     shopeeResp.ExpireIn,
+			ShopIDList:   shopeeResp.ShopIDList,
+		}
+	} else {
+		return nil, fmt.Errorf("data response Shopee kosong (raw: %s)", string(respBytes))
 	}
 
-	return shopeeResp.Response, nil
+	return tokenData, nil
 }
