@@ -120,7 +120,7 @@ func (h *OrderHandler) SyncOrders(c *gin.Context) {
 		return
 	}
 
-	syncedOrders := make([]models.Order, 0, len(detailResp.Response.OrderList))
+	syncedOrders := make([]models.ShopeeOrder, 0, len(detailResp.Response.OrderList))
 
 	// 3. Iterasi setiap order, ambil escrow (finansial), lalu simpan ke DB
 	for _, od := range detailResp.Response.OrderList {
@@ -130,7 +130,7 @@ func (h *OrderHandler) SyncOrders(c *gin.Context) {
 			shipByDateTime = &t
 		}
 
-		orderModel := models.Order{
+		orderModel := models.ShopeeOrder{
 			OrderSN:           od.OrderSN,
 			ShopID:            shop.ShopID,
 			OrderStatus:       od.OrderStatus,
@@ -148,9 +148,9 @@ func (h *OrderHandler) SyncOrders(c *gin.Context) {
 		}
 
 		// Items
-		var items []models.OrderItem
+		var items []models.ShopeeOrderItem
 		for _, it := range od.ItemList {
-			items = append(items, models.OrderItem{
+			items = append(items, models.ShopeeOrderItem{
 				OrderSN:         od.OrderSN,
 				ItemID:          it.ItemID,
 				ItemName:        it.ItemName,
@@ -191,7 +191,7 @@ func (h *OrderHandler) SyncOrders(c *gin.Context) {
 				servRuleName = income.NetServiceFeeInfo[0].RuleDisplayName
 			}
 
-			orderModel.Escrow = &models.OrderEscrow{
+			orderModel.Escrow = &models.ShopeeOrderEscrow{
 				OrderSN:                  od.OrderSN,
 				EscrowAmount:             income.EscrowAmount,
 				SellingPrice:             sellingPrice,
@@ -216,7 +216,7 @@ func (h *OrderHandler) SyncOrders(c *gin.Context) {
 
 		if err == nil {
 			// Refresh items (hapus lama, pasang baru agar tidak duplikat)
-			_ = h.DB.Where("order_sn = ?", od.OrderSN).Delete(&models.OrderItem{})
+			_ = h.DB.Where("order_sn = ?", od.OrderSN).Delete(&models.ShopeeOrderItem{})
 			if len(items) > 0 {
 				_ = h.DB.Create(&items)
 			}
@@ -248,7 +248,7 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 		return
 	}
 
-	query := h.DB.Model(&models.Order{}).Where("shop_id = ?", shopID)
+	query := h.DB.Model(&models.ShopeeOrder{}).Where("shop_id = ?", shopID)
 
 	// Filter order_status
 	if status := c.Query("status"); status != "" {
@@ -288,7 +288,7 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 	var total int64
 	query.Count(&total)
 
-	var orders []models.Order
+	var orders []models.ShopeeOrder
 	if err := query.Preload("Items").Preload("Escrow").Offset(offset).Limit(pageSize).Find(&orders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data pesanan", "status": "error"})
 		return
@@ -315,7 +315,7 @@ func (h *OrderHandler) GetOrderDetail(c *gin.Context) {
 		return
 	}
 
-	var order models.Order
+	var order models.ShopeeOrder
 	if err := h.DB.Preload("Items").Preload("Escrow").Where("order_sn = ?", orderSN).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Pesanan tidak ditemukan", "status": "error"})
 		return

@@ -25,7 +25,12 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	}
 
 	// 3. Buka koneksi ke PostgreSQL
-	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), gormConfig)
+	// Catatan: PreferSimpleProtocol: true WAJIB digunakan untuk Supabase Transaction Pooler (PgBouncer)
+	// agar tidak terjadi error prepared statement duplicate (SQLSTATE 42P05).
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  cfg.DatabaseURL,
+		PreferSimpleProtocol: true,
+	}), gormConfig)
 	if err != nil {
 		// %w (wrap) membungkus error asli agar jejak errornya tidak hilang
 		return nil, fmt.Errorf("gagal terhubung ke database: %w", err)
@@ -34,9 +39,9 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	// 4. AutoMigrate: GORM akan otomatis membuat tabel di Supabase jika belum ada
 	if err := db.AutoMigrate(
 		&models.Shop{},
-		&models.Order{},
-		&models.OrderItem{},
-		&models.OrderEscrow{},
+		&models.ShopeeOrder{},
+		&models.ShopeeOrderItem{},
+		&models.ShopeeOrderEscrow{},
 	); err != nil {
 		return nil, fmt.Errorf("gagal migrasi database: %w", err)
 	}

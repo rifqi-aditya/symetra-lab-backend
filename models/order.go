@@ -4,32 +4,36 @@ import (
 	"time"
 )
 
-// Order merepresentasikan data transaksi pesanan dari Shopee
-type Order struct {
-	OrderSN           string       `gorm:"primaryKey;size:64;not null" json:"order_sn"`
-	ShopID            uint64       `gorm:"index;not null" json:"shop_id"`
-	OrderStatus       string       `gorm:"size:32;index;not null" json:"order_status"` // READY_TO_SHIP, PROCESSED, SHIPPED, COMPLETED, CANCELLED
-	BuyerUserID       uint64       `json:"buyer_user_id"`
-	BuyerUsername     string       `gorm:"size:128" json:"buyer_username"`
-	MessageToSeller   string       `gorm:"type:text" json:"message_to_seller"` // Catatan khusus/kustom pembeli
-	ShipByDate        int64        `json:"ship_by_date"`                       // Unix timestamp batas akhir pengiriman (SLA)
-	ShipByDateTime    *time.Time   `json:"ship_by_date_time,omitempty"`       // Format waktu deadline yang bisa dibaca
-	ShippingCarrier   string       `gorm:"size:64" json:"shipping_carrier"`    // J&T, SPX, SiCepat, dll
-	TrackingNumber    string       `gorm:"size:64" json:"tracking_number"`     // Nomor resi pengiriman
-	TotalAmount       float64      `gorm:"type:decimal(15,2)" json:"total_amount"` // Total nominal yang dibayar pembeli
-	BuyerCancelReason string       `gorm:"size:255" json:"buyer_cancel_reason,omitempty"`
-	CreateTimeShopee  int64        `json:"create_time_shopee"`
-	UpdateTimeShopee  int64        `json:"update_time_shopee"`
-	CreatedAt         time.Time    `json:"created_at"`
-	UpdatedAt         time.Time    `json:"updated_at"`
+// ShopeeOrder merepresentasikan data transaksi pesanan dari Shopee Open Platform
+type ShopeeOrder struct {
+	OrderSN           string              `gorm:"primaryKey;size:64;not null" json:"order_sn"`
+	ShopID            uint64              `gorm:"index;not null" json:"shop_id"`
+	OrderStatus       string              `gorm:"size:32;index;not null" json:"order_status"` // READY_TO_SHIP, PROCESSED, SHIPPED, COMPLETED, CANCELLED
+	BuyerUserID       uint64              `json:"buyer_user_id"`
+	BuyerUsername     string              `gorm:"size:128" json:"buyer_username"`
+	MessageToSeller   string              `gorm:"type:text" json:"message_to_seller"` // Catatan khusus/kustom pembeli
+	ShipByDate        int64               `json:"ship_by_date"`                       // Unix timestamp batas akhir pengiriman (SLA)
+	ShipByDateTime    *time.Time          `json:"ship_by_date_time,omitempty"`       // Format waktu deadline yang bisa dibaca
+	ShippingCarrier   string              `gorm:"size:64" json:"shipping_carrier"`    // J&T, SPX, SiCepat, dll
+	TrackingNumber    string              `gorm:"size:64" json:"tracking_number"`     // Nomor resi pengiriman
+	TotalAmount       float64             `gorm:"type:decimal(15,2)" json:"total_amount"` // Total nominal yang dibayar pembeli
+	BuyerCancelReason string              `gorm:"size:255" json:"buyer_cancel_reason,omitempty"`
+	CreateTimeShopee  int64               `json:"create_time_shopee"`
+	UpdateTimeShopee  int64               `json:"update_time_shopee"`
+	CreatedAt         time.Time           `json:"created_at"`
+	UpdatedAt         time.Time           `json:"updated_at"`
 
 	// Relasi
-	Items  []OrderItem  `gorm:"foreignKey:OrderSN;references:OrderSN;constraint:OnDelete:CASCADE" json:"items,omitempty"`
-	Escrow *OrderEscrow `gorm:"foreignKey:OrderSN;references:OrderSN;constraint:OnDelete:CASCADE" json:"escrow,omitempty"`
+	Items  []ShopeeOrderItem  `gorm:"foreignKey:OrderSN;references:OrderSN;constraint:OnDelete:CASCADE" json:"items,omitempty"`
+	Escrow *ShopeeOrderEscrow `gorm:"foreignKey:OrderSN;references:OrderSN;constraint:OnDelete:CASCADE" json:"escrow,omitempty"`
 }
 
-// OrderItem merepresentasikan rincian produk/varian dalam satu pesanan
-type OrderItem struct {
+func (ShopeeOrder) TableName() string {
+	return "shopee_orders"
+}
+
+// ShopeeOrderItem merepresentasikan rincian produk/varian dalam satu pesanan Shopee
+type ShopeeOrderItem struct {
 	ID              uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	OrderSN         string    `gorm:"size:64;index;not null" json:"order_sn"`
 	ItemID          uint64    `gorm:"index" json:"item_id"`
@@ -45,8 +49,12 @@ type OrderItem struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-// OrderEscrow merepresentasikan transparansi finansial dan rincian potongan admin Shopee
-type OrderEscrow struct {
+func (ShopeeOrderItem) TableName() string {
+	return "shopee_order_items"
+}
+
+// ShopeeOrderEscrow merepresentasikan transparansi finansial dan rincian potongan admin Shopee
+type ShopeeOrderEscrow struct {
 	OrderSN                  string    `gorm:"primaryKey;size:64;not null" json:"order_sn"`
 	EscrowAmount             float64   `gorm:"type:decimal(15,2)" json:"escrow_amount"`               // Nominal bersih masuk saldo seller
 	SellingPrice             float64   `gorm:"type:decimal(15,2)" json:"selling_price"`                // Total harga kotor produk
@@ -61,4 +69,8 @@ type OrderEscrow struct {
 	SellerVoucherDiscount    float64   `gorm:"type:decimal(15,2)" json:"seller_voucher_discount"`     // Diskon voucher ditanggung seller
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
+}
+
+func (ShopeeOrderEscrow) TableName() string {
+	return "shopee_order_escrows"
 }
