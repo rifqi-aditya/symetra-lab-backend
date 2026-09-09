@@ -26,6 +26,8 @@ Backend manajemen toko yang terintegrasi dengan **Shopee Open Platform (Open API
 | `POST` | `/api/v1/shopee/shops/:shop_id/sync-orders` | Sinkronisasi pesanan, item, dan rincian escrow dari Shopee |
 | `GET` | `/api/v1/shopee/shops/:shop_id/orders` | Mengambil daftar pesanan toko (filter status, search, deadline SLA) |
 | `GET` | `/api/v1/shopee/orders/:order_sn` | Mengambil detail lengkap 1 pesanan (item, custom note, potongan fee) |
+| `POST` | `/api/v1/shopee/orders/:order_sn/ship` | Konfirmasi "Atur Pengiriman" pesanan & terbitkan no resi kurir |
+| `GET` | `/api/v1/shopee/orders/:order_sn/shipping-label` | Download / Cetak langsung PDF Label Resi Pengiriman Thermal (100x150 mm) |
 
 ---
 
@@ -287,9 +289,52 @@ Mengambil detail 1 pesanan secara spesifik beserta varian item dan seluruh trans
 
 ---
 
+### 4. Modul Logistik & Pengiriman (Logistics & Shipping Labels)
+
+#### `POST /api/v1/shopee/orders/:order_sn/ship`
+Melakukan aksi **"Atur Pengiriman"** untuk pesanan yang berstatus `READY_TO_SHIP`. Backend secara otomatis memeriksa parameter pengiriman (apakah `dropoff` ke gerai kurir terdekat atau `pickup` ke workshop), mengirim konfirmasi siap kirim ke Shopee, mengambil nomor resi resmi, dan mengupdate status pesanan di database menjadi `PROCESSED`.
+
+* **Path Parameter**:
+  | Parameter | Tipe | Deskripsi |
+  | :--- | :--- | :--- |
+  | `order_sn` | `string` | Nomor pesanan Shopee yang ingin dikirim |
+
+* **Request Contoh**:
+  ```bash
+  curl -X POST https://symetra-lab-backend.vercel.app/api/v1/shopee/orders/260909K7J0045Q/ship
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "message": "Pengiriman berhasil diatur",
+    "order_sn": "260909K7J0045Q",
+    "order_status": "PROCESSED",
+    "tracking_number": "SPXID04829103948"
+  }
+  ```
+
+---
+
+#### `GET /api/v1/shopee/orders/:order_sn/shipping-label`
+Mengambil file biner **PDF Label Resi Pengiriman Thermal (100x150 mm)** resmi dari Shopee dan langsung menyajikannya ke browser atau dashboard frontend (*inline streaming*).
+
+* **Fitur Utama**:
+  - Format standar thermal 100x150 mm (cocok untuk printer thermal seperti Xprinter, Kassen, Phomemo, dll).
+  - Browser dapat langsung merender PDF di tab baru atau di dalam `<iframe>` untuk pencetakan sekali klik.
+  - Header otomatis: `Content-Type: application/pdf` dan `Content-Disposition: inline; filename="resi_260909K7J0045Q.pdf"`.
+
+* **Request Contoh**:
+  ```bash
+  # Buka langsung di browser atau panggil via cURL
+  curl -X GET https://symetra-lab-backend.vercel.app/api/v1/shopee/orders/260909K7J0045Q/shipping-label --output label_resi.pdf
+  ```
+
+---
+
 ## 🗄️ Skema Database Supabase PostgreSQL
 
-Tabel otomatis dikelola via **GORM AutoMigrate**:
+Tabel otomatis dikelola via **GORM AutoMigrate** dan terisolasi dari tabel internal 3D printing:
 
 ```sql
 -- 1. Tabel Toko (Kredensial & Token)
@@ -306,8 +351,8 @@ CREATE TABLE "shops" (
     "updated_at" timestamptz
 );
 
--- 2. Tabel Pesanan Utama
-CREATE TABLE "orders" (
+-- 2. Tabel Pesanan Shopee
+CREATE TABLE "shopee_orders" (
     "order_sn" varchar(64) PRIMARY KEY,
     "shop_id" bigint NOT NULL,
     "order_status" varchar(32) NOT NULL,
@@ -326,10 +371,10 @@ CREATE TABLE "orders" (
     "updated_at" timestamptz
 );
 
--- 3. Tabel Item/Varian Pesanan
-CREATE TABLE "order_items" (
+-- 3. Tabel Item/Varian Pesanan Shopee
+CREATE TABLE "shopee_order_items" (
     "id" bigserial PRIMARY KEY,
-    "order_sn" varchar(64) NOT NULL REFERENCES "orders"("order_sn") ON DELETE CASCADE,
+    "order_sn" varchar(64) NOT NULL REFERENCES "shopee_orders"("order_sn") ON DELETE CASCADE,
     "item_id" bigint,
     "item_name" varchar(255),
     "item_sku" varchar(128),
@@ -344,8 +389,8 @@ CREATE TABLE "order_items" (
 );
 
 -- 4. Tabel Transparansi Keuangan & Escrow Shopee
-CREATE TABLE "order_escrows" (
-    "order_sn" varchar(64) PRIMARY KEY REFERENCES "orders"("order_sn") ON DELETE CASCADE,
+CREATE TABLE "shopee_order_escrows" (
+    "order_sn" varchar(64) PRIMARY KEY REFERENCES "shopee_orders"("order_sn") ON DELETE CASCADE,
     "escrow_amount" numeric(15,2),
     "selling_price" numeric(15,2),
     "commission_fee" numeric(15,2),
