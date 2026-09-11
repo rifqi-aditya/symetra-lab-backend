@@ -64,6 +64,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 	filamentHandler := handlers.NewFilamentHandler(db)
 	machineHandler := handlers.NewMachineHandler(db)
 	componentHandler := handlers.NewComponentHandler(db)
+	packagingHandler := handlers.NewPackagingHandler(db)
 
 	v1 := r.Group("/api/v1")
 	{
@@ -123,6 +124,26 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 			componentRoutes.POST("", componentHandler.CreateComponent)
 			componentRoutes.PUT("/:id", componentHandler.UpdateComponent)
 			componentRoutes.DELETE("/:id", componentHandler.DeleteComponent)
+		}
+
+		// Bahan Kemasan Individual (Packaging Items)
+		packagingItemRoutes := v1.Group("/packaging-items")
+		{
+			packagingItemRoutes.GET("", packagingHandler.GetAllPackagingItems)
+			packagingItemRoutes.GET("/:id", packagingHandler.GetPackagingItemByID)
+			packagingItemRoutes.POST("", packagingHandler.CreatePackagingItem)
+			packagingItemRoutes.PUT("/:id", packagingHandler.UpdatePackagingItem)
+			packagingItemRoutes.DELETE("/:id", packagingHandler.DeletePackagingItem)
+		}
+
+		// Preset Kemasan / Bundel Packing (Packaging Presets)
+		packagingPresetRoutes := v1.Group("/packaging-presets")
+		{
+			packagingPresetRoutes.GET("", packagingHandler.GetAllPresets)
+			packagingPresetRoutes.GET("/:id", packagingHandler.GetPresetByID)
+			packagingPresetRoutes.POST("", packagingHandler.CreatePreset)
+			packagingPresetRoutes.PUT("/:id", packagingHandler.UpdatePreset)
+			packagingPresetRoutes.DELETE("/:id", packagingHandler.DeletePreset)
 		}
 	}
 

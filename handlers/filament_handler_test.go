@@ -27,6 +27,9 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.Machine{},
 		&models.MachineMaintenancePart{},
 		&models.Component{},
+		&models.PackagingItem{},
+		&models.PackagingPreset{},
+		&models.PackagingPresetItem{},
 	)
 	if err != nil {
 		t.Fatalf("Gagal auto-migrate tabel test: %v", err)

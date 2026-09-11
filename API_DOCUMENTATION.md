@@ -51,6 +51,16 @@ Backend manajemen toko yang terintegrasi dengan **Shopee Open Platform (Open API
 | `POST` | `/api/v1/components` | Menambahkan komponen tambahan baru |
 | `PUT` | `/api/v1/components/:id` | Memperbarui data komponen (harga pokok, markup, deskripsi) |
 | `DELETE` | `/api/v1/components/:id` | Menghapus komponen (dilengkapi safety check resep produk) |
+| `GET` | `/api/v1/packaging-items` | Mengambil seluruh bahan kemasan (filter `category`, search `?q=`, sort) |
+| `GET` | `/api/v1/packaging-items/:id` | Mengambil rincian 1 bahan kemasan |
+| `POST` | `/api/v1/packaging-items` | Menambahkan bahan kemasan baru (otomatis hitung `unit_cost`) |
+| `PUT` | `/api/v1/packaging-items/:id` | Memperbarui data bahan kemasan |
+| `DELETE` | `/api/v1/packaging-items/:id` | Menghapus bahan kemasan (dengan safety check relasi) |
+| `GET` | `/api/v1/packaging-presets` | Mengambil seluruh preset kemasan beserta komponen & total biaya terhitung |
+| `GET` | `/api/v1/packaging-presets/:id` | Mengambil rincian 1 preset kemasan |
+| `POST` | `/api/v1/packaging-presets` | Membuat preset kemasan baru beserta susunan item & kuantitas |
+| `PUT` | `/api/v1/packaging-presets/:id` | Memperbarui preset kemasan |
+| `DELETE` | `/api/v1/packaging-presets/:id` | Menghapus preset kemasan |
 
 ---
 
@@ -752,6 +762,151 @@ Menghapus komponen dari inventori. Endpoint ini memiliki fitur **Safe Delete**: 
     "message": "Komponen berhasil dihapus"
   }
   ```
+
+---
+
+## 📦 Modul 8: Bahan Kemasan & Preset Packing (Packaging System)
+
+Modul ini mengelola inventori bahan kemasan pengiriman (kardus diecut, plastik clip hologram, polymailer, sticker label, bubble wrap) dan bundel kemasan standar (*Packaging Presets*). Backend secara otomatis menghitung biaya satuan bahan pokok (`unit_cost = purchase_price / purchase_quantity`) serta total estimasi biaya kemasan per pesanan/produk.
+
+### 1. `GET /api/v1/packaging-items`
+Mengambil daftar seluruh bahan kemasan individual milik user.
+
+* **Query Parameters (Opsional)**:
+  - `category` (string): Filter jenis kemasan (`BOX`, `PLASTIC`, `LABEL`, `OTHER`).
+  - `q` (string): Pencarian kata kunci pada nama kemasan (contoh: `clip`, `mailer`, `diecut`).
+  - `sort` (string): Urutkan berdasarkan `name`, `unit_cost`, `stock`, `created_at` (default: `name`).
+  - `order` (string): `ASC` atau `DESC` (default: `ASC`).
+
+* **Contoh Request**:
+  ```bash
+  curl -X GET "https://symetra-lab-backend.vercel.app/api/v1/packaging-items"
+  ```
+
+* **Contoh Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "total": 6,
+    "data": [
+      {
+        "id": "1aa4dcce-5599-43bd-9a5f-95148ed3fc0a",
+        "user_id": "4aecd5c5-c0a9-4f52-ba2f-b6f4272218b4",
+        "name": "Diecut Kecil",
+        "category": "BOX",
+        "unit_type": "PCS",
+        "purchase_price": 515,
+        "purchase_quantity": 1,
+        "unit_cost": 515,
+        "stock_quantity": 50,
+        "created_at": "2026-08-01T10:00:00Z",
+        "updated_at": "2026-08-01T10:00:00Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+### 2. `POST /api/v1/packaging-items`
+Menambahkan bahan kemasan baru. Biaya per unit dihitung otomatis oleh sistem.
+
+* **Contoh Request Body**:
+  ```json
+  {
+    "name": "Kardus Diecut Sedang 15x15x5",
+    "category": "BOX",
+    "unit_type": "PCS",
+    "purchase_price": 42500,
+    "purchase_quantity": 50,
+    "stock_quantity": 50
+  }
+  ```
+
+---
+
+### 3. `GET /api/v1/packaging-presets`
+Mengambil seluruh bundel preset kemasan beserta komponen item penyusunnya dan kalkulasi otomatis `total_cost`.
+
+* **Contoh Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "total": 2,
+    "data": [
+      {
+        "id": "00caeb44-4409-4224-bfb2-88bae9e41268",
+        "user_id": "4aecd5c5-c0a9-4f52-ba2f-b6f4272218b4",
+        "name": "Keychain",
+        "description": "Paket kemasan gantungan kunci",
+        "total_cost": 1509,
+        "items": [
+          {
+            "id": "4b721e90-2134-4bc1-9c60-e837f1912a7e",
+            "packaging_item_id": "e277a177-cd84-4813-b8b9-9ebaca2a6d99",
+            "item_name": "Plastik Clip Hologram 10x18",
+            "category": "PLASTIC",
+            "unit_type": "PCS",
+            "quantity_used": 1,
+            "unit_cost": 464,
+            "subtotal_cost": 464
+          },
+          {
+            "id": "8f812b10-2134-4bc1-9c60-e837f1912a7f",
+            "packaging_item_id": "520e932a-f8ae-455f-aee1-fc017be5b7b8",
+            "item_name": "Mailer Putih",
+            "category": "PLASTIC",
+            "unit_type": "PCS",
+            "quantity_used": 1,
+            "unit_cost": 895,
+            "subtotal_cost": 895
+          },
+          {
+            "id": "9a123c10-2134-4bc1-9c60-e837f1912a80",
+            "packaging_item_id": "8cd8ebf2-b3a5-4951-a33d-be176f88b48f",
+            "item_name": "Sticker Symetra",
+            "category": "LABEL",
+            "unit_type": "PCS",
+            "quantity_used": 1,
+            "unit_cost": 150,
+            "subtotal_cost": 150
+          }
+        ],
+        "created_at": "2026-08-01T10:00:00Z",
+        "updated_at": "2026-08-01T10:00:00Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+### 4. `POST /api/v1/packaging-presets`
+Membuat preset bundel kemasan baru secara transaksional.
+
+* **Contoh Request Body**:
+  ```json
+  {
+    "name": "Box Miniatur Hemat",
+    "description": "Dus diecut kecil + bubble wrap + sticker logo",
+    "items": [
+      {
+        "packaging_item_id": "1aa4dcce-5599-43bd-9a5f-95148ed3fc0a",
+        "quantity_used": 1
+      },
+      {
+        "packaging_item_id": "8cd8ebf2-b3a5-4951-a33d-be176f88b48f",
+        "quantity_used": 1
+      }
+    ]
+  }
+  ```
+
+---
+
+### 5. `DELETE /api/v1/packaging-presets/:id`
+Menghapus preset kemasan beserta daftar item di dalamnya (cascade delete).
+
 
 
 
