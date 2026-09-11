@@ -63,6 +63,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 	logisticsHandler := handlers.NewLogisticsHandler(db, shopeeClient)
 	filamentHandler := handlers.NewFilamentHandler(db)
 	machineHandler := handlers.NewMachineHandler(db)
+	componentHandler := handlers.NewComponentHandler(db)
 
 	v1 := r.Group("/api/v1")
 	{
@@ -112,6 +113,16 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 			machineRoutes.PUT("/parts/:part_id", machineHandler.UpdatePart)
 			machineRoutes.POST("/parts/:part_id/replace", machineHandler.ReplacePart)
 			machineRoutes.DELETE("/parts/:part_id", machineHandler.DeletePart)
+		}
+
+		// Komponen Tambahan (Hardware & Aksesoris Non-3D Print)
+		componentRoutes := v1.Group("/components")
+		{
+			componentRoutes.GET("", componentHandler.GetAllComponents)
+			componentRoutes.GET("/:id", componentHandler.GetComponentByID)
+			componentRoutes.POST("", componentHandler.CreateComponent)
+			componentRoutes.PUT("/:id", componentHandler.UpdateComponent)
+			componentRoutes.DELETE("/:id", componentHandler.DeleteComponent)
 		}
 	}
 

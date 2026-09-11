@@ -46,6 +46,11 @@ Backend manajemen toko yang terintegrasi dengan **Shopee Open Platform (Open API
 | `PUT` | `/api/v1/machines/parts/:part_id` | Memperbarui suku cadang (stok cadangan, biaya unit) |
 | `POST` | `/api/v1/machines/parts/:part_id/replace` | Penggantian suku cadang (reset jam pakai ke 0 & kurangi stok) |
 | `DELETE` | `/api/v1/machines/parts/:part_id` | Menghapus suku cadang |
+| `GET` | `/api/v1/components` | Mengambil seluruh komponen tambahan (filter search `?q=`, sort) |
+| `GET` | `/api/v1/components/:id` | Mengambil rincian 1 komponen tambahan |
+| `POST` | `/api/v1/components` | Menambahkan komponen tambahan baru |
+| `PUT` | `/api/v1/components/:id` | Memperbarui data komponen (harga pokok, markup, deskripsi) |
+| `DELETE` | `/api/v1/components/:id` | Menghapus komponen (dilengkapi safety check resep produk) |
 
 ---
 
@@ -630,5 +635,123 @@ Mencatat penggantian suku cadang yang aus. Secara otomatis:
     }
   }
   ```
+
+---
+
+## 🔩 Modul 7: Komponen Tambahan (Hardware & Aksesoris Non-3D Print)
+
+Modul ini mengelola data inventori komponen non-cetak yang disematkan ke dalam produk akhir bengkel Symetra Lab (seperti baut, mur, magnet, gantungan kunci, bearing, modul TP4056, saklar, lampu LED, baterai, serta ongkos jasa perakitan). Respon API otomatis menghitung estimasi harga jual yang disarankan (`calculated_selling_price`) berdasarkan persentase markup.
+
+### 1. `GET /api/v1/components`
+Mengambil daftar seluruh komponen tambahan milik user.
+
+* **Query Parameters (Opsional)**:
+  - `q` (string): Pencarian kata kunci pada nama atau deskripsi komponen (contoh: `switch`, `baut`, `bearing`).
+  - `sort` (string): Urutkan berdasarkan `name`, `price`, atau `created_at` (default: `name`).
+  - `order` (string): `ASC` atau `DESC` (default: `ASC`).
+
+* **Contoh Request**:
+  ```bash
+  curl -X GET "https://symetra-lab-backend.vercel.app/api/v1/components?q=switch"
+  ```
+
+* **Contoh Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "total": 1,
+    "data": [
+      {
+        "id": "828352ce-c0e2-48b5-a55d-af8d50d33fd3",
+        "user_id": "4aecd5c5-c0a9-4f52-ba2f-b6f4272218b4",
+        "name": "Blue Switch Keyboard",
+        "price_per_unit": 1600,
+        "default_markup_percent": 25,
+        "calculated_selling_price": 2000,
+        "description": "Blue Switch Keyboard Tactile Clicky",
+        "created_at": "2026-07-04T12:00:00Z",
+        "updated_at": "2026-07-04T12:00:00Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+### 2. `GET /api/v1/components/:id`
+Mengambil rincian 1 komponen spesifik berdasarkan UUID.
+
+---
+
+### 3. `POST /api/v1/components`
+Menambahkan komponen hardware baru ke inventori bengkel.
+
+* **Contoh Request Body**:
+  ```json
+  {
+    "name": "Magnet Neodymium 5x2mm",
+    "price_per_unit": 450,
+    "default_markup_percent": 30,
+    "description": "Magnet bulat kuat untuk engsel box dan miniatur"
+  }
+  ```
+
+* **Contoh Response (201 Created)**:
+  ```json
+  {
+    "status": "success",
+    "message": "Komponen berhasil ditambahkan",
+    "data": {
+      "id": "3a7b91d2-9982-4fa1-b1e2-9b2f34918e9a",
+      "user_id": "4aecd5c5-c0a9-4f52-ba2f-b6f4272218b4",
+      "name": "Magnet Neodymium 5x2mm",
+      "price_per_unit": 450,
+      "default_markup_percent": 30,
+      "calculated_selling_price": 585,
+      "description": "Magnet bulat kuat untuk engsel box dan miniatur",
+      "created_at": "2026-09-11T18:05:00Z",
+      "updated_at": "2026-09-11T18:05:00Z"
+    }
+  }
+  ```
+
+---
+
+### 4. `PUT /api/v1/components/:id`
+Memperbarui data komponen (harga pokok beli, target markup %, atau catatan spesifikasi).
+
+* **Contoh Request Body**:
+  ```json
+  {
+    "price_per_unit": 500,
+    "default_markup_percent": 40
+  }
+  ```
+
+---
+
+### 5. `DELETE /api/v1/components/:id`
+Menghapus komponen dari inventori. Endpoint ini memiliki fitur **Safe Delete**: jika komponen sedang tercatat dalam resep produk (`product_components`), sistem akan menolak penghapusan dengan status `409 Conflict` guna menjaga keutuhan resep produk.
+
+* **Query Parameters**:
+  - `force=true` (opsional): Memaksa penghapusan meskipun komponen terhubung ke resep produk.
+
+* **Contoh Response Penolakan (409 Conflict)**:
+  ```json
+  {
+    "status": "error",
+    "message": "Komponen tidak dapat dihapus karena sedang digunakan dalam 4 resep produk. Gunakan ?force=true jika tetap ingin menghapus.",
+    "usage_count": 4
+  }
+  ```
+
+* **Contoh Response Berhasil (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "message": "Komponen berhasil dihapus"
+  }
+  ```
+
 
 
