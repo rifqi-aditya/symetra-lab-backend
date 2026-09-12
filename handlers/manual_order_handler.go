@@ -34,7 +34,8 @@ func generateOrderNumber() string {
 // GetOrders mengambil daftar pesanan manual / offline dari database
 // GET /api/v1/orders
 func (h *ManualOrderHandler) GetOrders(c *gin.Context) {
-	query := h.DB.Model(&models.Order{}).Where("user_id = ?", DefaultAdminUserID)
+	userID := getUserID(c)
+	query := h.DB.Model(&models.Order{}).Where("user_id = ?", userID)
 
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
@@ -246,9 +247,11 @@ func (h *ManualOrderHandler) CreateOrder(c *gin.Context) {
 
 	totalProfit := totalRevenue - totalHPP
 
+	userID := getUserID(c)
+
 	order := models.Order{
 		ID:              orderID,
-		UserID:          DefaultAdminUserID,
+		UserID:          userID,
 		OrderNumber:     orderNum,
 		CustomerName:    req.CustomerName,
 		CustomerContact: req.CustomerContact,
