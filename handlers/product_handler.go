@@ -101,8 +101,9 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":  responses,
-		"total": len(responses),
+		"status": "success",
+		"data":   responses,
+		"total":  len(responses),
 	})
 }
 
@@ -130,6 +131,7 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	breakdown := costing.CalculateCostBreakdown(&product, cfg, shopee)
 
 	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
 		"data": models.ProductResponse{
 			Product:       product,
 			CostBreakdown: breakdown,
@@ -168,6 +170,7 @@ func (h *ProductHandler) GetProductBySKU(c *gin.Context) {
 	breakdown := costing.CalculateCostBreakdown(&product, cfg, shopee)
 
 	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
 		"data": models.ProductResponse{
 			Product:       product,
 			CostBreakdown: breakdown,
