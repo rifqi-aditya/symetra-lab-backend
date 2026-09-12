@@ -23,9 +23,12 @@ Backend manajemen toko yang terintegrasi dengan **Shopee Open Platform (Open API
 | `GET` | `/api/v1/shopee/callback` | Callback redirect OAuth Shopee |
 | `GET` | `/api/v1/shopee/shops` | Mengambil daftar toko yang terhubung |
 | `POST` | `/api/v1/shopee/shops/:shop_id/refresh` | Manual refresh access token toko |
-| `POST` | `/api/v1/shopee/shops/:shop_id/sync-orders` | Sinkronisasi pesanan, item, dan rincian escrow dari Shopee |
+| `POST` | `/api/v1/shopee/shops/:shop_id/sync-orders` | Sinkronisasi pesanan Shopee, auto-match SKU, dan alokasi kas 5 ember |
 | `GET` | `/api/v1/shopee/shops/:shop_id/orders` | Mengambil daftar pesanan toko (filter status, search, deadline SLA) |
-| `GET` | `/api/v1/shopee/orders/:order_sn` | Mengambil detail lengkap 1 pesanan (item, custom note, potongan fee) |
+| `GET` | `/api/v1/shopee/orders/:order_sn` | Mengambil detail lengkap 1 pesanan (item, link produk master, alokasi kas) |
+| `POST` | `/api/v1/shopee/orders/:order_sn/items/:item_id/link-sku` | Hubungkan item pesanan Shopee tanpa SKU ke Master Produk fisik |
+| `GET` | `/api/v1/shopee/financial/cashflow-summary` | Rekapitulasi 5 Ember Kas Bengkel (Filamen, Packing, Mesin, Net Profit) |
+| `POST` | `/api/v1/shopee/financial/recalculate` | Hitung ulang alokasi kas & matching SKU seluruh pesanan di database |
 | `POST` | `/api/v1/shopee/orders/:order_sn/ship` | Konfirmasi "Atur Pengiriman" pesanan & terbitkan no resi kurir |
 | `GET` | `/api/v1/shopee/orders/:order_sn/shipping-label` | Download / Cetak langsung PDF Label Resi Pengiriman Thermal (100x150 mm) |
 | `GET` | `/api/v1/filaments` | Mengambil seluruh roll filamen beserta profil teknisnya (*flattened*) |
@@ -318,6 +321,94 @@ Mengambil detail 1 pesanan secara spesifik beserta varian item dan seluruh trans
 * **Request Contoh**:
   ```bash
   curl -X GET https://symetra-lab-backend.vercel.app/api/v1/shopee/orders/260909K7J0045Q
+  ```
+
+---
+
+#### `POST /api/v1/shopee/orders/:order_sn/items/:item_id/link-sku`
+Menghubungkan item pesanan Shopee yang belum memiliki SKU di Shopee (*unmapped*) ke master produk fisik. Begitu terhubung, sistem otomatis menghitung ulang HPP, rincian biaya filamen, kemasan, jam mesin, dan memecah nominal escrow ke 5 ember kas bengkel.
+
+* **Path Parameters**:
+  | Parameter | Tipe | Deskripsi |
+  | :--- | :--- | :--- |
+  | `order_sn` | `string` | Nomor pesanan Shopee |
+  | `item_id` | `uint64` | ID item pesanan Shopee |
+
+* **Request Body**:
+  ```json
+  {
+    "product_id": "d0d96fe9-e85a-4a9b-8091-b98344f3628c"
+  }
+  ```
+
+* **Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "message": "Berhasil memetakan item Stand Handphone ke produk Smiley Night Fury (KEY-SMILNIGH-STD)",
+    "data": { ... }
+  }
+  ```
+
+---
+
+#### `GET /api/v1/shopee/financial/cashflow-summary`
+Mengambil rekapitulasi performa keuangan dan alokasi **5 Ember Kas Bengkel** dari seluruh pesanan Shopee. Endpoint ini menjadi sumber data utama untuk dashboard cashflow bengkel.
+
+* **Query Parameters (Opsional)**:
+  | Parameter | Tipe | Default | Keterangan |
+  | :--- | :--- | :--- | :--- |
+  | `shop_id` | `uint64` | *(Semua)* | Filter berdasarkan toko tertentu |
+  | `start_date` | `string` | - | Tanggal awal ISO (`2026-09-01`) |
+  | `end_date` | `string` | - | Tanggal akhir ISO (`2026-09-30`) |
+
+* **Request Contoh**:
+  ```bash
+  curl -X GET "https://symetra-lab-backend.vercel.app/api/v1/shopee/financial/cashflow-summary?shop_id=711996297"
+  ```
+
+* **Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "total_orders": 45,
+      "total_gross_sales": 3450000.00,
+      "total_marketplace_fees": 431250.00,
+      "total_escrow_net_in": 3018750.00,
+      "total_hpp": 1120500.00,
+      "bucket_filament": 580000.00,
+      "bucket_hardware_packaging": 140500.00,
+      "bucket_machine_electricity": 400000.00,
+      "bucket_net_profit": 1898250.00,
+      "average_profit_margin": 55.02,
+      "unmapped_items_count": 0
+    }
+  }
+  ```
+
+---
+
+#### `POST /api/v1/shopee/financial/recalculate`
+Menghitung ulang seluruh alokasi kas dan SKU matching pesanan yang sudah tersimpan di database menggunakan parameter harga dan resep produk terbaru.
+
+* **Query Parameter (Opsional)**:
+  | Parameter | Tipe | Keterangan |
+  | :--- | :--- | :--- |
+  | `order_sn` | `string` | Jika hanya ingin menghitung ulang 1 pesanan tertentu |
+
+* **Request Contoh**:
+  ```bash
+  curl -X POST "https://symetra-lab-backend.vercel.app/api/v1/shopee/financial/recalculate"
+  ```
+
+* **Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "message": "Berhasil menghitung ulang alokasi kas untuk 45 pesanan",
+    "recalculated_count": 45
+  }
   ```
 
 ---

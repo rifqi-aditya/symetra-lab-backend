@@ -45,8 +45,21 @@ type ShopeeOrderItem struct {
 	Quantity        int       `json:"quantity"`
 	OriginalPrice   float64   `gorm:"type:decimal(15,2)" json:"original_price"`
 	DiscountedPrice float64   `gorm:"type:decimal(15,2)" json:"discounted_price"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+
+	// Relasi & Matching ke Master Produk Fisik
+	ProductID     *string  `gorm:"type:uuid;index" json:"product_id,omitempty"`
+	MatchedSKU    string   `gorm:"size:50;index" json:"matched_sku,omitempty"`
+	MappingStatus string   `gorm:"size:20;default:'UNMAPPED'" json:"mapping_status"` // UNMAPPED, MATCHED, MANUAL_LINKED
+	FilamentCost  float64  `gorm:"type:decimal(15,2);default:0" json:"filament_cost"`
+	HardwareCost  float64  `gorm:"type:decimal(15,2);default:0" json:"hardware_cost"`
+	PackagingCost float64  `gorm:"type:decimal(15,2);default:0" json:"packaging_cost"`
+	MachineCost   float64  `gorm:"type:decimal(15,2);default:0" json:"machine_cost"`
+	BaseHPP       float64  `gorm:"type:decimal(15,2);default:0" json:"base_hpp"`
+	NetProfit     float64  `gorm:"type:decimal(15,2);default:0" json:"net_profit"`
+
+	Product   *Product  `gorm:"foreignKey:ProductID" json:"product,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (ShopeeOrderItem) TableName() string {
@@ -67,10 +80,40 @@ type ShopeeOrderEscrow struct {
 	SellerTransactionFee     float64   `gorm:"type:decimal(15,2)" json:"seller_transaction_fee"`      // Biaya penanganan transaksi pembayaran (~4%)
 	SellerOrderProcessingFee float64   `gorm:"type:decimal(15,2)" json:"seller_order_processing_fee"` // Biaya pemrosesan per pesanan (Rp 1.000 / 1.250)
 	SellerVoucherDiscount    float64   `gorm:"type:decimal(15,2)" json:"seller_voucher_discount"`     // Diskon voucher ditanggung seller
-	CreatedAt                time.Time `json:"created_at"`
-	UpdatedAt                time.Time `json:"updated_at"`
+
+	// Alokasi 5 Ember Kas Bengkel (Cashflow Buckets)
+	TotalHPP                    float64 `gorm:"type:decimal(15,2);default:0" json:"total_hpp"`
+	TotalFilamentCost           float64 `gorm:"type:decimal(15,2);default:0" json:"total_filament_cost"`
+	TotalHardwarePackagingCost  float64 `gorm:"type:decimal(15,2);default:0" json:"total_hardware_packaging_cost"`
+	TotalMachineCost            float64 `gorm:"type:decimal(15,2);default:0" json:"total_machine_cost"`
+	NetProfit                   float64 `gorm:"type:decimal(15,2);default:0" json:"net_profit"`
+	ProfitMarginPercent         float64 `gorm:"type:decimal(5,2);default:0" json:"profit_margin_percent"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (ShopeeOrderEscrow) TableName() string {
 	return "shopee_order_escrows"
 }
+
+// CashflowSummaryResponse merepresentasikan rekap finansial 5 ember kas bengkel
+type CashflowSummaryResponse struct {
+	TotalOrders               int64   `json:"total_orders"`
+	TotalGrossSales           float64 `json:"total_gross_sales"`
+	TotalMarketplaceFees      float64 `json:"total_marketplace_fees"`
+	TotalEscrowNetIn          float64 `json:"total_escrow_net_in"`
+	TotalHPP                  float64 `json:"total_hpp"`
+	BucketFilament            float64 `json:"bucket_filament"`             // Ember 1: Tabungan restock filamen
+	BucketHardwarePackaging   float64 `json:"bucket_hardware_packaging"`   // Ember 2: Penggantian komponen & packing
+	BucketMachineElectricity  float64 `json:"bucket_machine_electricity"`  // Ember 3: Cadangan maintenance & listrik PLN
+	BucketNetProfit           float64 `json:"bucket_net_profit"`           // Ember 5: Keuntungan bersih murni bengkel
+	AverageProfitMargin       float64 `json:"average_profit_margin"`
+	UnmappedItemsCount        int64   `json:"unmapped_items_count"`
+}
+
+// LinkSKURequest DTO untuk menghubungkan item Shopee yang belum terpetakan ke master produk
+type LinkSKURequest struct {
+	ProductID string `json:"product_id" binding:"required"`
+}
+

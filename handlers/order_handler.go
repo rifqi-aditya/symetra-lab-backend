@@ -3,12 +3,14 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"symetra-lab-backend/models"
+	"symetra-lab-backend/pkg/costing"
 	"symetra-lab-backend/pkg/shopee"
 
 	"github.com/gin-gonic/gin"
@@ -210,17 +212,20 @@ func (h *OrderHandler) SyncOrders(c *gin.Context) {
 			}
 		}
 
-		// 5. Upsert ke Database PostgreSQL (GORM Clauses)
+		// 5. Kalkulasi Alokasi Kas Bengkel & Auto-Match SKU ke Master Produk
+		_ = costing.AllocateShopeeOrderFinances(&orderModel, h.DB)
+
+		// 6. Upsert ke Database PostgreSQL (GORM Clauses)
 		err = h.DB.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "order_sn"}},
 			UpdateAll: true,
 		}).Create(&orderModel).Error
 
 		if err == nil {
-			// Refresh items (hapus lama, pasang baru agar tidak duplikat)
+			// Refresh items (hapus lama, pasang baru lengkap dengan snapshot HPP & kas terhitung)
 			_ = h.DB.Where("order_sn = ?", od.OrderSN).Delete(&models.ShopeeOrderItem{})
-			if len(items) > 0 {
-				_ = h.DB.Create(&items)
+			if len(orderModel.Items) > 0 {
+				_ = h.DB.Create(&orderModel.Items)
 			}
 			if orderModel.Escrow != nil {
 				_ = h.DB.Clauses(clause.OnConflict{
@@ -291,7 +296,7 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 	query.Count(&total)
 
 	var orders []models.ShopeeOrder
-	if err := query.Preload("Items").Preload("Escrow").Offset(offset).Limit(pageSize).Find(&orders).Error; err != nil {
+	if err := query.Preload("Items.Product").Preload("Escrow").Offset(offset).Limit(pageSize).Find(&orders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data pesanan", "status": "error"})
 		return
 	}
@@ -318,7 +323,7 @@ func (h *OrderHandler) GetOrderDetail(c *gin.Context) {
 	}
 
 	var order models.ShopeeOrder
-	if err := h.DB.Preload("Items").Preload("Escrow").Where("order_sn = ?", orderSN).First(&order).Error; err != nil {
+	if err := h.DB.Preload("Items.Product").Preload("Escrow").Where("order_sn = ?", orderSN).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Pesanan tidak ditemukan", "status": "error"})
 		return
 	}
@@ -451,3 +456,204 @@ func (h *OrderHandler) GetRawOrders(c *gin.Context) {
 		"shopee_raw_escrow_sample":       escrowJSON,
 	})
 }
+
+// LinkItemSKU menghubungkan item pesanan Shopee yang belum terpetakan ke master produk fisik
+// POST /api/v1/shopee/orders/:order_sn/items/:item_id/link-sku
+func (h *OrderHandler) LinkItemSKU(c *gin.Context) {
+	orderSN := c.Param("order_sn")
+	itemIDStr := c.Param("item_id")
+	itemID, err := strconv.ParseUint(itemIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format item_id tidak valid", "status": "error"})
+		return
+	}
+
+	var req models.LinkSKURequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "product_id wajib diisi", "status": "error"})
+		return
+	}
+
+	// 1. Cek apakah produk fisik valid
+	var product models.Product
+	if err := h.DB.Where("id = ?", req.ProductID).First(&product).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Produk fisik tidak ditemukan", "status": "error"})
+		return
+	}
+
+	// 2. Cek apakah item pesanan ada
+	var item models.ShopeeOrderItem
+	if err := h.DB.Where("order_sn = ? AND (item_id = ? OR id = ?)", orderSN, itemID, itemID).First(&item).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item pesanan tidak ditemukan", "status": "error"})
+		return
+	}
+
+	// 3. Update mapping status & product_id
+	item.ProductID = &product.ID
+	skuVal := ""
+	if product.SKU != nil {
+		skuVal = *product.SKU
+	}
+	item.MatchedSKU = skuVal
+	item.MappingStatus = "MANUAL_LINKED"
+	if err := h.DB.Save(&item).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan link produk", "status": "error"})
+		return
+	}
+
+	// 4. Muat ulang seluruh order dan hitung ulang alokasi kas
+	var order models.ShopeeOrder
+	if err := h.DB.Preload("Items").Preload("Escrow").Where("order_sn = ?", orderSN).First(&order).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat pesanan", "status": "error"})
+		return
+	}
+
+	_ = costing.AllocateShopeeOrderFinances(&order, h.DB)
+
+	// Simpan hasil kalkulasi baru
+	for _, it := range order.Items {
+		_ = h.DB.Save(&it)
+	}
+	if order.Escrow != nil {
+		_ = h.DB.Save(order.Escrow)
+	}
+
+	// Reload dengan relasi product
+	_ = h.DB.Preload("Items.Product").Preload("Escrow").Where("order_sn = ?", orderSN).First(&order)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Berhasil memetakan item %s ke produk %s (%s)", item.ItemName, product.Name, skuVal),
+		"status":  "success",
+		"data":    order,
+	})
+}
+
+// GetCashflowSummary mengembalikan rekapitulasi 5 ember kas bengkel berdasarkan pesanan Shopee
+// GET /api/v1/shopee/financial/cashflow-summary
+func (h *OrderHandler) GetCashflowSummary(c *gin.Context) {
+	shopIDParam := c.Query("shop_id")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	query := h.DB.Table("shopee_orders").
+		Joins("JOIN shopee_order_escrows ON shopee_orders.order_sn = shopee_order_escrows.order_sn")
+
+	if shopIDParam != "" {
+		if shopID, err := strconv.ParseUint(shopIDParam, 10, 64); err == nil {
+			query = query.Where("shopee_orders.shop_id = ?", shopID)
+		}
+	}
+
+	if startDate != "" {
+		query = query.Where("shopee_orders.created_at >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("shopee_orders.created_at <= ?", endDate)
+	}
+
+	type SummaryResult struct {
+		TotalOrders             int64   `gorm:"column:total_orders"`
+		TotalGrossSales         float64 `gorm:"column:total_gross_sales"`
+		TotalCommissionFee      float64 `gorm:"column:total_commission_fee"`
+		TotalServiceFee         float64 `gorm:"column:total_service_fee"`
+		TotalTxnFee             float64 `gorm:"column:total_txn_fee"`
+		TotalProcessingFee      float64 `gorm:"column:total_processing_fee"`
+		TotalVoucherDiscount    float64 `gorm:"column:total_voucher_discount"`
+		TotalEscrowNetIn        float64 `gorm:"column:total_escrow_net_in"`
+		TotalHPP                float64 `gorm:"column:total_hpp"`
+		BucketFilament          float64 `gorm:"column:bucket_filament"`
+		BucketHardwarePackaging float64 `gorm:"column:bucket_hardware_packaging"`
+		BucketMachineCost       float64 `gorm:"column:bucket_machine_cost"`
+		BucketNetProfit         float64 `gorm:"column:bucket_net_profit"`
+	}
+
+	var res SummaryResult
+	err := query.Select(`
+		COUNT(shopee_orders.order_sn) AS total_orders,
+		COALESCE(SUM(shopee_order_escrows.selling_price), 0) AS total_gross_sales,
+		COALESCE(SUM(shopee_order_escrows.commission_fee), 0) AS total_commission_fee,
+		COALESCE(SUM(shopee_order_escrows.service_fee), 0) AS total_service_fee,
+		COALESCE(SUM(shopee_order_escrows.seller_transaction_fee), 0) AS total_txn_fee,
+		COALESCE(SUM(shopee_order_escrows.seller_order_processing_fee), 0) AS total_processing_fee,
+		COALESCE(SUM(shopee_order_escrows.seller_voucher_discount), 0) AS total_voucher_discount,
+		COALESCE(SUM(shopee_order_escrows.escrow_amount), 0) AS total_escrow_net_in,
+		COALESCE(SUM(shopee_order_escrows.total_hpp), 0) AS total_hpp,
+		COALESCE(SUM(shopee_order_escrows.total_filament_cost), 0) AS bucket_filament,
+		COALESCE(SUM(shopee_order_escrows.total_hardware_packaging_cost), 0) AS bucket_hardware_packaging,
+		COALESCE(SUM(shopee_order_escrows.total_machine_cost), 0) AS bucket_machine_cost,
+		COALESCE(SUM(shopee_order_escrows.net_profit), 0) AS bucket_net_profit
+	`).Scan(&res).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghitung ringkasan kas: " + err.Error(), "status": "error"})
+		return
+	}
+
+	// Hitung jumlah item yang belum terpetakan (unmapped)
+	var unmappedCount int64
+	h.DB.Model(&models.ShopeeOrderItem{}).Where("mapping_status = 'UNMAPPED'").Count(&unmappedCount)
+
+	totalMarketplaceFees := res.TotalCommissionFee + res.TotalServiceFee + res.TotalTxnFee + res.TotalProcessingFee + res.TotalVoucherDiscount
+
+	avgMargin := 0.0
+	if res.TotalGrossSales > 0 {
+		avgMargin = (res.BucketNetProfit / res.TotalGrossSales) * 100
+	}
+
+	resp := models.CashflowSummaryResponse{
+		TotalOrders:              res.TotalOrders,
+		TotalGrossSales:          res.TotalGrossSales,
+		TotalMarketplaceFees:     math.Round(totalMarketplaceFees*100) / 100,
+		TotalEscrowNetIn:         res.TotalEscrowNetIn,
+		TotalHPP:                 res.TotalHPP,
+		BucketFilament:           res.BucketFilament,
+		BucketHardwarePackaging:  res.BucketHardwarePackaging,
+		BucketMachineElectricity: res.BucketMachineCost,
+		BucketNetProfit:          res.BucketNetProfit,
+		AverageProfitMargin:      math.Round(avgMargin*100) / 100,
+		UnmappedItemsCount:       unmappedCount,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   resp,
+	})
+}
+
+// RecalculateFinances menghitung ulang seluruh pesanan Shopee di database menggunakan rumus alokasi kas & SKU matching terbaru
+// POST /api/v1/shopee/financial/recalculate
+func (h *OrderHandler) RecalculateFinances(c *gin.Context) {
+	orderSN := c.Query("order_sn")
+
+	var orders []models.ShopeeOrder
+	query := h.DB.Preload("Items").Preload("Escrow")
+	if orderSN != "" {
+		query = query.Where("order_sn = ?", orderSN)
+	}
+
+	if err := query.Find(&orders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat pesanan", "status": "error"})
+		return
+	}
+
+	recalculatedCount := 0
+	for i := range orders {
+		order := &orders[i]
+		_ = costing.AllocateShopeeOrderFinances(order, h.DB)
+
+		for _, it := range order.Items {
+			_ = h.DB.Save(&it)
+		}
+		if order.Escrow != nil {
+			_ = h.DB.Save(order.Escrow)
+		}
+		recalculatedCount++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":            fmt.Sprintf("Berhasil menghitung ulang alokasi kas untuk %d pesanan", recalculatedCount),
+		"recalculated_count": recalculatedCount,
+		"status":             "success",
+	})
+}
+

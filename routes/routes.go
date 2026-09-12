@@ -77,11 +77,14 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 			shopeeRoutes.GET("/shops", shopeeHandler.GetShops)
 			shopeeRoutes.POST("/shops/:shop_id/refresh", shopeeHandler.RefreshToken)
 
-			// Pesanan & Keuangan (Escrow)
+			// Pesanan & Keuangan (Escrow & Alokasi Kas Bengkel)
 			shopeeRoutes.POST("/shops/:shop_id/sync-orders", orderHandler.SyncOrders)
 			shopeeRoutes.GET("/shops/:shop_id/orders", orderHandler.GetOrders)
 			shopeeRoutes.GET("/shops/:shop_id/raw-orders", orderHandler.GetRawOrders)
 			shopeeRoutes.GET("/orders/:order_sn", orderHandler.GetOrderDetail)
+			shopeeRoutes.POST("/orders/:order_sn/items/:item_id/link-sku", orderHandler.LinkItemSKU)
+			shopeeRoutes.GET("/financial/cashflow-summary", orderHandler.GetCashflowSummary)
+			shopeeRoutes.POST("/financial/recalculate", orderHandler.RecalculateFinances)
 
 			// Logistik & Cetak Label Thermal
 			shopeeRoutes.POST("/orders/:order_sn/ship", logisticsHandler.ShipOrder)
