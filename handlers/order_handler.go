@@ -345,18 +345,55 @@ func (h *OrderHandler) GetRawOrders(c *gin.Context) {
 		return
 	}
 
+	// Filter opsional dari query params:
+	// ?status=READY_TO_SHIP | PROCESSED | SHIPPED | COMPLETED | CANCELLED
+	// ?order_sn=260912T07VRYRJ (untuk cek 1 pesanan tertentu langsung)
+	statusFilter := strings.ToUpper(strings.TrimSpace(c.Query("status")))
+	specificOrderSN := strings.TrimSpace(c.Query("order_sn"))
+
+	// Jika ada parameter order_sn spesifik, langsung tarik detail pesanan tersebut
+	if specificOrderSN != "" {
+		detailRaw, _ := h.ShopeeClient.CallShopeeAPIRaw("/api/v2/order/get_order_detail", shop.AccessToken, shop.ShopID, map[string]string{
+			"order_sn_list":            specificOrderSN,
+			"response_optional_fields": "buyer_user_id,buyer_username,item_list,recipient_address,shipping_carrier,total_amount,payment_method,estimated_shipping_fee,message_to_seller",
+		})
+		var detailJSON map[string]interface{}
+		_ = json.Unmarshal(detailRaw, &detailJSON)
+
+		escrowRaw, _ := h.ShopeeClient.CallShopeeAPIRaw("/api/v2/payment/get_escrow_detail", shop.AccessToken, shop.ShopID, map[string]string{
+			"order_sn": specificOrderSN,
+		})
+		var escrowJSON map[string]interface{}
+		_ = json.Unmarshal(escrowRaw, &escrowJSON)
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":                   "success",
+			"mode":                     "SPECIFIC_ORDER_INSPECTION",
+			"shop_id":                  shop.ShopID,
+			"order_sn":                 specificOrderSN,
+			"order_detail":             detailJSON,
+			"escrow_detail":            escrowJSON,
+		})
+		return
+	}
+
 	// 14 hari terakhir (Shopee v2 batas time range maksimal 15 hari)
 	timeTo := time.Now().Unix()
 	timeFrom := time.Now().AddDate(0, 0, -14).Unix()
 
-	// 1. Ambil raw order list
-	orderListRaw, err := h.ShopeeClient.CallShopeeAPIRaw("/api/v2/order/get_order_list", shop.AccessToken, shop.ShopID, map[string]string{
+	extraParams := map[string]string{
 		"time_range_field":         "create_time",
 		"time_from":                fmt.Sprintf("%d", timeFrom),
 		"time_to":                  fmt.Sprintf("%d", timeTo),
 		"page_size":                "20",
 		"response_optional_fields": "order_status",
-	})
+	}
+	if statusFilter != "" {
+		extraParams["order_status"] = statusFilter
+	}
+
+	// 1. Ambil raw order list
+	orderListRaw, err := h.ShopeeClient.CallShopeeAPIRaw("/api/v2/order/get_order_list", shop.AccessToken, shop.ShopID, extraParams)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghubungi get_order_list Shopee: " + err.Error(), "status": "error"})
 		return
