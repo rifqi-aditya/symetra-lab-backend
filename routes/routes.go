@@ -80,9 +80,28 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 	configHandler := handlers.NewConfigHandler(db)
 	manualOrderHandler := handlers.NewManualOrderHandler(db)
 	productionHandler := handlers.NewProductionHandler(db)
+	authHandler := handlers.NewAuthHandler(cfg)
+	categoryHandler := handlers.NewCategoryHandler(db)
 
 	v1 := r.Group("/api/v1")
 	{
+		// Autentikasi Pengguna
+		authRoutes := v1.Group("/auth")
+		{
+			authRoutes.POST("/login", authHandler.Login)
+			authRoutes.GET("/me", authHandler.GetProfile)
+			authRoutes.POST("/logout", authHandler.Logout)
+		}
+
+		// Kategori Produk
+		categoryRoutes := v1.Group("/categories")
+		{
+			categoryRoutes.GET("", categoryHandler.GetAll)
+			categoryRoutes.POST("", categoryHandler.Create)
+			categoryRoutes.PUT("/:id", categoryHandler.Update)
+			categoryRoutes.DELETE("/:id", categoryHandler.Delete)
+		}
+
 		shopeeRoutes := v1.Group("/shopee")
 		{
 			// Auth & Toko

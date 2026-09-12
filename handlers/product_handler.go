@@ -178,22 +178,41 @@ func (h *ProductHandler) GetProductBySKU(c *gin.Context) {
 	})
 }
 
+type CreateProductFilamentItem struct {
+	FilamentID      *string `json:"filament_id"`
+	WeightUsedGrams float64 `json:"weight_used_grams"`
+}
+
+type CreateProductComponentItem struct {
+	ComponentID   string  `json:"component_id"`
+	Quantity      float64 `json:"quantity"`
+	MarkupPercent float64 `json:"markup_percent"`
+}
+
+type CreateProductPackagingItem struct {
+	PackagingItemID string  `json:"packaging_item_id"`
+	QuantityUsed    float64 `json:"quantity_used"`
+}
+
 // CreateProductPayload merepresentasikan data input pembuatan produk
 type CreateProductPayload struct {
-	Name                  string   `json:"name" binding:"required"`
-	ParentSKU             *string  `json:"parent_sku"`
-	SKU                   *string  `json:"sku"`
-	Description           *string  `json:"description"`
-	Category              string   `json:"category"`
-	ThumbnailURL          *string  `json:"thumbnail_url"`
-	DesignLink            *string  `json:"design_link"`
-	DefaultWeightGrams    float64  `json:"default_weight_grams"`
-	DefaultPrintTimeHours float64  `json:"default_print_time_hours"`
-	DefaultMachineID      *string  `json:"default_machine_id"`
-	PackagingPresetID     *string  `json:"packaging_preset_id"`
-	BatchSize             int      `json:"batch_size"`
-	PackingFeeIDR         int      `json:"packing_fee_idr"`
-	TargetMarginPercent   int      `json:"target_margin_percent"`
+	Name                  string                       `json:"name" binding:"required"`
+	ParentSKU             *string                      `json:"parent_sku"`
+	SKU                   *string                      `json:"sku"`
+	Description           *string                      `json:"description"`
+	Category              string                       `json:"category"`
+	ThumbnailURL          *string                      `json:"thumbnail_url"`
+	DesignLink            *string                      `json:"design_link"`
+	DefaultWeightGrams    float64                      `json:"default_weight_grams"`
+	DefaultPrintTimeHours float64                      `json:"default_print_time_hours"`
+	DefaultMachineID      *string                      `json:"default_machine_id"`
+	PackagingPresetID     *string                      `json:"packaging_preset_id"`
+	BatchSize             int                          `json:"batch_size"`
+	PackingFeeIDR         int                          `json:"packing_fee_idr"`
+	TargetMarginPercent   int                          `json:"target_margin_percent"`
+	Filaments             []CreateProductFilamentItem  `json:"filaments"`
+	Components            []CreateProductComponentItem `json:"components"`
+	PackagingItems        []CreateProductPackagingItem `json:"packaging_items"`
 }
 
 // CreateProduct membuat produk baru dengan validasi SKU dan kalkulasi otomatis
@@ -217,7 +236,6 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	if payload.SKU != nil && strings.TrimSpace(*payload.SKU) != "" {
 		finalSKU = costing.CleanSKUPart(*payload.SKU)
 		if parentSKU == "" {
-			// Ekstrak parent dari prefix sebelum tanda strip terakhir jika ada
 			parts := strings.Split(finalSKU, "-")
 			if len(parts) >= 2 {
 				parentSKU = strings.Join(parts[:len(parts)-1], "-")
@@ -226,7 +244,6 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 			}
 		}
 	} else if parentSKU != "" {
-		// Otomatis buat SKU dengan suffix -STD jika SKU tidak diisi
 		_, full := costing.FormatScalableSKU(parentSKU, "STD")
 		finalSKU = full
 	}
@@ -269,17 +286,63 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		TargetMarginPercent:   margin,
 	}
 
-	cfg, shopee := h.getActiveConfigAndShopee(userID)
-	breakdown := costing.CalculateCostBreakdown(&product, cfg, shopee)
-	product.BaseHPP = breakdown.BaseHPP
-	product.BaseSellingPrice = breakdown.BaseSellingPrice
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&product).Error; err != nil {
+			return err
+		}
+		for _, f := range payload.Filaments {
+			pf := models.ProductFilament{
+				ID:              uuid.New().String(),
+				ProductID:       product.ID,
+				FilamentID:      f.FilamentID,
+				WeightUsedGrams: f.WeightUsedGrams,
+			}
+			if err := tx.Create(&pf).Error; err != nil {
+				return err
+			}
+		}
+		for _, comp := range payload.Components {
+			pc := models.ProductComponent{
+				ID:            uuid.New().String(),
+				ProductID:     product.ID,
+				ComponentID:   nilIfEmpty(comp.ComponentID),
+				Quantity:      comp.Quantity,
+				MarkupPercent: comp.MarkupPercent,
+			}
+			if err := tx.Create(&pc).Error; err != nil {
+				return err
+			}
+		}
+		for _, pack := range payload.PackagingItems {
+			pi := models.ProductPackagingItem{
+				ID:              uuid.New().String(),
+				ProductID:       product.ID,
+				PackagingItemID: pack.PackagingItemID,
+				QuantityUsed:    pack.QuantityUsed,
+			}
+			if err := tx.Create(&pi).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 
-	if err := h.db.Create(&product).Error; err != nil {
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan produk: " + err.Error()})
 		return
 	}
 
+	cfg, shopee := h.getActiveConfigAndShopee(userID)
+	breakdown := costing.CalculateCostBreakdown(&product, cfg, shopee)
+	product.BaseHPP = breakdown.BaseHPP
+	product.BaseSellingPrice = breakdown.BaseSellingPrice
+	_ = h.db.Model(&product).Updates(map[string]interface{}{
+		"base_hpp":           breakdown.BaseHPP,
+		"base_selling_price": breakdown.BaseSellingPrice,
+	})
+
 	c.JSON(http.StatusCreated, gin.H{
+		"status":  "success",
 		"message": "Produk berhasil dibuat",
 		"data": models.ProductResponse{
 			Product:       product,
@@ -341,6 +404,61 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		product.ParentSKU = &cleanParent
 	}
 
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&product).Error; err != nil {
+			return err
+		}
+		if payload.Filaments != nil {
+			tx.Where("product_id = ?", id).Delete(&models.ProductFilament{})
+			for _, f := range payload.Filaments {
+				pf := models.ProductFilament{
+					ID:              uuid.New().String(),
+					ProductID:       product.ID,
+					FilamentID:      f.FilamentID,
+					WeightUsedGrams: f.WeightUsedGrams,
+				}
+				if err := tx.Create(&pf).Error; err != nil {
+					return err
+				}
+			}
+		}
+		if payload.Components != nil {
+			tx.Where("product_id = ?", id).Delete(&models.ProductComponent{})
+			for _, comp := range payload.Components {
+				pc := models.ProductComponent{
+					ID:            uuid.New().String(),
+					ProductID:     product.ID,
+					ComponentID:   nilIfEmpty(comp.ComponentID),
+					Quantity:      comp.Quantity,
+					MarkupPercent: comp.MarkupPercent,
+				}
+				if err := tx.Create(&pc).Error; err != nil {
+					return err
+				}
+			}
+		}
+		if payload.PackagingItems != nil {
+			tx.Where("product_id = ?", id).Delete(&models.ProductPackagingItem{})
+			for _, pack := range payload.PackagingItems {
+				pi := models.ProductPackagingItem{
+					ID:              uuid.New().String(),
+					ProductID:       product.ID,
+					PackagingItemID: pack.PackagingItemID,
+					QuantityUsed:    pack.QuantityUsed,
+				}
+				if err := tx.Create(&pi).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui produk: " + err.Error()})
+		return
+	}
+
 	// Reload BOM relationships untuk re-kalkulasi
 	h.db.
 		Preload("Filaments.Filament.Profile").
@@ -355,13 +473,13 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	breakdown := costing.CalculateCostBreakdown(&product, cfg, shopee)
 	product.BaseHPP = breakdown.BaseHPP
 	product.BaseSellingPrice = breakdown.BaseSellingPrice
-
-	if err := h.db.Save(&product).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui produk: " + err.Error()})
-		return
-	}
+	_ = h.db.Model(&product).Updates(map[string]interface{}{
+		"base_hpp":           breakdown.BaseHPP,
+		"base_selling_price": breakdown.BaseSellingPrice,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
 		"message": "Produk berhasil diperbarui",
 		"data": models.ProductResponse{
 			Product:       product,
