@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"symetra-lab-backend/config"
 	"symetra-lab-backend/models"
@@ -20,9 +21,19 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("DATABASE_URL belum diatur di file .env")
 	}
 
-	// 2. Konfigurasi logger GORM agar menampilkan query SQL di terminal
+	// 2. Konfigurasi logger GORM dengan ambang batas slow query 2 detik (menyesuaikan latensi cloud Supabase)
+	customLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			SlowThreshold:             2 * time.Second,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  true,
+		},
+	)
+
 	gormConfig := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: customLogger,
 	}
 
 	// 3. Buka koneksi ke PostgreSQL
