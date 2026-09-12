@@ -64,6 +64,20 @@ Backend manajemen toko yang terintegrasi dengan **Shopee Open Platform (Open API
 | `POST` | `/api/v1/packaging-presets` | Membuat preset kemasan baru beserta susunan item & kuantitas |
 | `PUT` | `/api/v1/packaging-presets/:id` | Memperbarui preset kemasan |
 | `DELETE` | `/api/v1/packaging-presets/:id` | Menghapus preset kemasan |
+| `GET` | `/api/v1/config/shop` | Mengambil parameter aktif bengkel (tarif listrik PLN, buffer gagal, dll) |
+| `PUT` | `/api/v1/config/shop` | Memperbarui parameter aktif bengkel |
+| `GET` | `/api/v1/config/marketplaces` | Mengambil daftar platform marketplace & skema potongan admin |
+| `POST` | `/api/v1/config/marketplaces` | Menambahkan platform marketplace baru |
+| `PUT` | `/api/v1/config/marketplaces/:id` | Memperbarui fee platform marketplace |
+| `DELETE` | `/api/v1/config/marketplaces/:id` | Menghapus platform marketplace |
+| `GET` | `/api/v1/orders` | Mengambil daftar pesanan manual / offline (filter status, search) |
+| `GET` | `/api/v1/orders/:id` | Mengambil detail 1 pesanan manual beserta rincian BOM |
+| `POST` | `/api/v1/orders` | Membuat pesanan manual baru (otomatis kalkulasi HPP & modal) |
+| `PATCH` | `/api/v1/orders/:id/status` | Memperbarui status pesanan (`PENDING`, `IN_PRODUCTION`, `COMPLETED`, dll) |
+| `PATCH` | `/api/v1/orders/:id/payment` | Memperbarui status pembayaran (`PAID`, `UNPAID`) |
+| `DELETE` | `/api/v1/orders/:id` | Menghapus pesanan manual |
+| `GET` | `/api/v1/production/queue` | Papan Antrean Cetak Terpadu (Shopee SLA terdekat + Pesanan Manual) |
+| `POST` | `/api/v1/production/complete-job` | Selesai cetak: otomatis potong stok filamen & tambah jam operasional mesin |
 
 ---
 
@@ -1093,6 +1107,190 @@ Menghapus produk beserta resep BOM secara aman (*safe delete*). Menolak penghapu
 
 ### 7. `POST /api/v1/products/generate-skus`
 Fitur otomatisasi untuk men-generate kode SKU modular dan scalable bagi seluruh produk lama yang kolom SKU-nya masih kosong di database.
+
+---
+
+## 8. Modul Pengaturan Bengkel & Platform Marketplace (Config)
+
+### 1. `GET /api/v1/config/shop`
+Mengambil parameter operasional bengkel aktif (tarif listrik PLN, buffer kegagalan, harga filamen default, daya printer default).
+
+* **Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "electricity_tariff_per_kwh": 1700,
+      "failure_buffer_percent": 10,
+      "filament_price_per_roll": 200000,
+      "filament_weight_grams": 1000,
+      "printer_power_watts": 200,
+      "printer_price": 5000000,
+      "printer_lifespan_hours": 3000
+    }
+  }
+  ```
+
+---
+
+### 2. `PUT /api/v1/config/shop`
+Memperbarui parameter operasional bengkel.
+
+* **Request Body**:
+  ```json
+  {
+    "electricity_tariff_per_kwh": 1850,
+    "failure_buffer_percent": 15,
+    "printer_power_watts": 250
+  }
+  ```
+
+---
+
+### 3. `GET /api/v1/config/marketplaces`
+Mengambil daftar platform marketplace beserta skema potongan komisi, promo fee, dan flat fee.
+
+---
+
+### 4. `POST /api/v1/config/marketplaces`
+Menambahkan platform penjualan baru (Tokopedia, TikTok Shop, dll).
+
+---
+
+### 5. `PUT /api/v1/config/marketplaces/:id`
+Memperbarui skema potongan fee platform jika ada kenaikan/penyesuaian dari marketplace.
+
+---
+
+### 6. `DELETE /api/v1/config/marketplaces/:id`
+Menghapus konfigurasi platform marketplace.
+
+---
+
+## 9. Modul Pesanan Manual / Offline (Direct Orders Hub)
+
+### 1. `GET /api/v1/orders`
+Mengambil daftar seluruh pesanan manual / offline dengan fitur pagination, pencarian nama pelanggan / nomor pesanan, dan filter status.
+
+* **Query Parameters (Opsional)**:
+  * `status`: `PENDING`, `IN_PRODUCTION`, `COMPLETED`, `DELIVERED`, `CANCELLED`
+  * `payment_status`: `PAID`, `UNPAID`
+  * `search`: Kata kunci pencarian nama pembeli atau nomor pesanan
+  * `page` / `page_size`: Pagination
+
+---
+
+### 2. `GET /api/v1/orders/:id`
+Mengambil rincian 1 pesanan manual lengkap dengan snapshot modal filamen, komponen hardware, jam mesin, dan kalkulasi profit.
+
+---
+
+### 3. `POST /api/v1/orders`
+Membuat pesanan manual baru. Jika `product_id` diisi menggunakan master produk katalog, backend **otomatis mengkalkulasi HPP riil dari resep BOM** dan snapshot pemakaian filamen serta jam mesin.
+
+* **Request Body**:
+  ```json
+  {
+    "customer_name": "Budi Santoso",
+    "customer_contact": "081234567890",
+    "notes": "Tolong warna hitam doff",
+    "payment_status": "PAID",
+    "source": "DIRECT_WHATSAPP",
+    "items": [
+      {
+        "product_id": "d0d96fe9-e85a-4a9b-8091-b98344f3628c",
+        "product_name": "Smiley Night Fury Keychain",
+        "quantity": 2,
+        "selling_price": 15000
+      }
+    ]
+  }
+  ```
+
+---
+
+### 4. `PATCH /api/v1/orders/:id/status`
+Memperbarui status pengerjaan pesanan (`PENDING` $\rightarrow$ `IN_PRODUCTION` $\rightarrow$ `COMPLETED` $\rightarrow$ `DELIVERED` $\rightarrow$ `CANCELLED`). Otomatis mencatat timestamp `started_at` dan `completed_at`.
+
+---
+
+### 5. `PATCH /api/v1/orders/:id/payment`
+Memperbarui status pembayaran pesanan (`PAID` / `UNPAID`).
+
+---
+
+### 6. `DELETE /api/v1/orders/:id`
+Menghapus pesanan manual dari database.
+
+---
+
+## 10. Modul Antrean Produksi Terpadu (Production Queue & Auto-Deduct)
+
+### 1. `GET /api/v1/production/queue`
+Papan antrean cetak terpadu yang menyatukan seluruh pekerjaan cetak dari:
+1. **Pesanan Shopee** (`READY_TO_SHIP` / `PROCESSED`) diurutkan berdasarkan batas waktu kirim kurir SLA terdekat (*Anti-penalty alert*).
+2. **Pesanan Manual Offline** (`PENDING` / `IN_PRODUCTION`).
+
+* **Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "total_jobs": 5,
+      "total_hours_waiting": 14.5,
+      "urgent_jobs_count": 2,
+      "queue": [
+        {
+          "job_id": "manual-item-1",
+          "source": "MANUAL",
+          "order_identifier": "ORD-20260912-7819",
+          "customer_name": "Budi Santoso",
+          "item_name": "Smiley Night Fury Keychain",
+          "quantity": 2,
+          "weight_grams": 10.89,
+          "print_time_hours": 0.88,
+          "total_print_hours": 1.76,
+          "assigned_machine_name": "Bambu Lab A1",
+          "status": "IN_PRODUCTION",
+          "is_urgent": true
+        }
+      ]
+    }
+  }
+  ```
+
+---
+
+### 2. `POST /api/v1/production/complete-job`
+Eksekusi selesai cetak untuk 1 job item. Backend secara otomatis:
+1. **Memotong stok fisik filamen** (`current_stock_grams` pada spool yang digunakan).
+2. **Menambahkan jam operasional printer** (`total_hours_used` pada mesin).
+3. **Pemeriksaan Suku Cadang & Stok Rendah**: Mengembalikan flag `low_stock_warning` jika filamen $\le 200$g dan `maintenance_warning` jika suku cadang mesin mendekati/melebihi batas jam pakainya.
+
+* **Request Body**:
+  ```json
+  {
+    "source": "MANUAL",
+    "job_id": "manual-item-1"
+  }
+  ```
+
+* **Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "message": "Pekerjaan cetak selesai. Filamen terpotong untuk 2 pcs dan mesin beroperasi +1.76 jam.",
+      "deducted_filaments": [
+        "Hitam PLA+: -21.78g (Sisa: 614.08g)"
+      ],
+      "added_machine_hours": 1.76,
+      "low_stock_warning": false,
+      "maintenance_warning": false
+    }
+  }
+  ```
+
 
 
 
