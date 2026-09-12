@@ -79,6 +79,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, shopeeClient *shopee.Client) *
 			// Pesanan & Keuangan (Escrow)
 			shopeeRoutes.POST("/shops/:shop_id/sync-orders", orderHandler.SyncOrders)
 			shopeeRoutes.GET("/shops/:shop_id/orders", orderHandler.GetOrders)
+			shopeeRoutes.GET("/shops/:shop_id/raw-orders", orderHandler.GetRawOrders)
 			shopeeRoutes.GET("/orders/:order_sn", orderHandler.GetOrderDetail)
 
 			// Logistik & Cetak Label Thermal

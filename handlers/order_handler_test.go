@@ -44,4 +44,14 @@ func TestOrderHandlerInvalidShopID(t *testing.T) {
 	if w2.Code != http.StatusBadRequest {
 		t.Errorf("Diharapkan status 400 Bad Request, didapat %d", w2.Code)
 	}
+
+	// Test 3: raw-orders with non-numeric shop_id
+	router.GET("/api/v1/shopee/shops/:shop_id/raw-orders", handler.GetRawOrders)
+	w3 := httptest.NewRecorder()
+	req3, _ := http.NewRequest("GET", "/api/v1/shopee/shops/invalid_id/raw-orders", nil)
+	router.ServeHTTP(w3, req3)
+
+	if w3.Code != http.StatusBadRequest {
+		t.Errorf("Diharapkan status 400 Bad Request, didapat %d", w3.Code)
+	}
 }

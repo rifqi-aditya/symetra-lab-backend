@@ -168,3 +168,35 @@ func (c *Client) GetOrderDetail(accessToken string, shopID uint64, orderSNList [
 
 	return &result, nil
 }
+
+// CallShopeeAPIRaw memanggil endpoint Shopee apapun dengan method GET dan mengembalikan raw body bytes
+func (c *Client) CallShopeeAPIRaw(path string, accessToken string, shopID uint64, extraParams map[string]string) ([]byte, error) {
+	timestamp := time.Now().Unix()
+	sign := GenerateShopSign(c.PartnerID, path, timestamp, accessToken, shopID, c.PartnerKey)
+
+	params := url.Values{}
+	params.Set("partner_id", fmt.Sprintf("%d", c.PartnerID))
+	params.Set("timestamp", fmt.Sprintf("%d", timestamp))
+	params.Set("access_token", accessToken)
+	params.Set("shop_id", fmt.Sprintf("%d", shopID))
+	params.Set("sign", sign)
+
+	for k, v := range extraParams {
+		params.Set(k, v)
+	}
+
+	fullURL := fmt.Sprintf("%s%s?%s", c.BaseURL, path, params.Encode())
+
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("gagal membuat HTTP request: %w", err)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("gagal menghubungi Shopee API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	return io.ReadAll(resp.Body)
+}

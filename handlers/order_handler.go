@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"symetra-lab-backend/models"
@@ -324,5 +326,91 @@ func (h *OrderHandler) GetOrderDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   order,
+	})
+}
+
+// GetRawOrders mengambil respon mentah (raw JSON) get_order_list & get_order_detail dari Shopee tanpa menyimpan ke database
+// GET /api/v1/shopee/shops/:shop_id/raw-orders
+func (h *OrderHandler) GetRawOrders(c *gin.Context) {
+	shopIDParam := c.Param("shop_id")
+	shopID, err := strconv.ParseUint(shopIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format shop_id tidak valid", "status": "error"})
+		return
+	}
+
+	shop, err := h.getValidShopToken(shopID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error(), "status": "error"})
+		return
+	}
+
+	// 14 hari terakhir (Shopee v2 batas time range maksimal 15 hari)
+	timeTo := time.Now().Unix()
+	timeFrom := time.Now().AddDate(0, 0, -14).Unix()
+
+	// 1. Ambil raw order list
+	orderListRaw, err := h.ShopeeClient.CallShopeeAPIRaw("/api/v2/order/get_order_list", shop.AccessToken, shop.ShopID, map[string]string{
+		"time_range_field":         "create_time",
+		"time_from":                fmt.Sprintf("%d", timeFrom),
+		"time_to":                  fmt.Sprintf("%d", timeTo),
+		"page_size":                "20",
+		"response_optional_fields": "order_status",
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghubungi get_order_list Shopee: " + err.Error(), "status": "error"})
+		return
+	}
+
+	var listJSON map[string]interface{}
+	_ = json.Unmarshal(orderListRaw, &listJSON)
+
+	// Kumpulkan order_sn untuk mengambil detail sampel
+	var orderSNs []string
+	if respMap, ok := listJSON["response"].(map[string]interface{}); ok {
+		if orderList, ok := respMap["order_list"].([]interface{}); ok {
+			for _, o := range orderList {
+				if oMap, ok := o.(map[string]interface{}); ok {
+					if sn, ok := oMap["order_sn"].(string); ok && sn != "" {
+						orderSNs = append(orderSNs, sn)
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Ambil raw order detail sampel (jika ada pesanan)
+	var detailJSON map[string]interface{}
+	var escrowJSON map[string]interface{}
+	if len(orderSNs) > 0 {
+		limit := len(orderSNs)
+		if limit > 5 {
+			limit = 5
+		}
+		detailRaw, _ := h.ShopeeClient.CallShopeeAPIRaw("/api/v2/order/get_order_detail", shop.AccessToken, shop.ShopID, map[string]string{
+			"order_sn_list":            strings.Join(orderSNs[:limit], ","),
+			"response_optional_fields": "buyer_user_id,buyer_username,item_list,recipient_address,shipping_carrier,total_amount,payment_method,estimated_shipping_fee,message_to_seller",
+		})
+		_ = json.Unmarshal(detailRaw, &detailJSON)
+
+		// Ambil 1 sampel rincian escrow fee pesanan pertama
+		escrowRaw, _ := h.ShopeeClient.CallShopeeAPIRaw("/api/v2/payment/get_escrow_detail", shop.AccessToken, shop.ShopID, map[string]string{
+			"order_sn": orderSNs[0],
+		})
+		_ = json.Unmarshal(escrowRaw, &escrowJSON)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":                "success",
+		"mode":                  "RAW_INSPECTION_ONLY (NO DATABASE WRITE)",
+		"shop_id":               shop.ShopID,
+		"time_range": gin.H{
+			"time_from": time.Unix(timeFrom, 0).Format("2006-01-02 15:04:05"),
+			"time_to":   time.Unix(timeTo, 0).Format("2006-01-02 15:04:05"),
+		},
+		"total_orders_found":    len(orderSNs),
+		"shopee_raw_order_list": listJSON,
+		"shopee_raw_order_detail_sample": detailJSON,
+		"shopee_raw_escrow_sample":       escrowJSON,
 	})
 }
