@@ -1,4 +1,4 @@
-package handlers
+package tests
 
 import (
 	"bytes"
@@ -7,31 +7,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"symetra-lab-backend/handlers"
 	"symetra-lab-backend/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/gorm"
 )
-
-func setupTestConfigDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	assert.NoError(t, err)
-
-	err = db.AutoMigrate(
-		&models.ShopConfig{},
-		&models.MarketplacePlatform{},
-	)
-	assert.NoError(t, err)
-
-	return db
-}
 
 func TestConfigHandlerShopAndMarketplaces(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db := setupTestConfigDB(t)
-	handler := NewConfigHandler(db)
+	db := SetupTestDB(t)
+	handler := handlers.NewConfigHandler(db)
 
 	router := gin.New()
 	router.GET("/api/v1/config/shop", handler.GetShopConfig)
@@ -41,7 +27,7 @@ func TestConfigHandlerShopAndMarketplaces(t *testing.T) {
 	router.PUT("/api/v1/config/marketplaces/:id", handler.UpdateMarketplace)
 	router.DELETE("/api/v1/config/marketplaces/:id", handler.DeleteMarketplace)
 
-	// 1. Test GetShopConfig (auto create default if empty)
+	// 1. Test GetShopConfig
 	wGet := httptest.NewRecorder()
 	reqGet, _ := http.NewRequest("GET", "/api/v1/config/shop", nil)
 	router.ServeHTTP(wGet, reqGet)

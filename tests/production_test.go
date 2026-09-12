@@ -1,4 +1,4 @@
-package handlers
+package tests
 
 import (
 	"bytes"
@@ -8,33 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"symetra-lab-backend/handlers"
 	"symetra-lab-backend/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/gorm"
 )
 
-func setupTestProductionDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	assert.NoError(t, err)
-
-	err = db.AutoMigrate(
-		&models.ShopeeOrder{},
-		&models.ShopeeOrderItem{},
-		&models.Order{},
-		&models.OrderItem{},
-		&models.OrderFilament{},
-		&models.Product{},
-		&models.ProductFilament{},
-		&models.FilamentProfile{},
-		&models.Filament{},
-		&models.Machine{},
-		&models.MachineMaintenancePart{},
-		&models.ShopConfig{},
-	)
-	assert.NoError(t, err)
+func TestProductionQueueAndJobCompletion(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := SetupTestDB(t)
 
 	// Machine with 0 hours used
 	brand := "Bambu Lab"
@@ -85,13 +68,7 @@ func setupTestProductionDB(t *testing.T) *gorm.DB {
 		WeightUsedGrams: 10.0,
 	})
 
-	return db
-}
-
-func TestProductionQueueAndJobCompletion(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	db := setupTestProductionDB(t)
-	handler := NewProductionHandler(db)
+	handler := handlers.NewProductionHandler(db)
 
 	router := gin.New()
 	router.GET("/api/v1/production/queue", handler.GetQueue)
@@ -112,7 +89,7 @@ func TestProductionQueueAndJobCompletion(t *testing.T) {
 				ItemName:  "Smiley Keychain Shopee",
 				ModelSKU:  "KEY-SMILNIGH-STD",
 				Quantity:  1,
-				ProductID: stringPtr("prod-prod-01"),
+				ProductID: StringPtr("prod-prod-01"),
 			},
 		},
 	}
@@ -130,12 +107,12 @@ func TestProductionQueueAndJobCompletion(t *testing.T) {
 			{
 				ID:             "manual-item-1",
 				OrderID:        "manual-ord-queue-1",
-				ProductID:      stringPtr("prod-prod-01"),
+				ProductID:      StringPtr("prod-prod-01"),
 				ProductName:    "Smiley Keychain Offline",
 				Quantity:       2,
 				WeightGrams:    10.0,
 				PrintTimeHours: 1.5,
-				MachineID:      stringPtr("mach-prod-01"),
+				MachineID:      StringPtr("mach-prod-01"),
 			},
 		},
 	}
@@ -192,8 +169,4 @@ func TestProductionQueueAndJobCompletion(t *testing.T) {
 	var updatedMach models.Machine
 	db.Where("id = ?", "mach-prod-01").First(&updatedMach)
 	assert.Equal(t, 3.0, updatedMach.TotalHoursUsed)
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

@@ -1,4 +1,4 @@
-package handlers
+package tests
 
 import (
 	"bytes"
@@ -7,48 +7,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"symetra-lab-backend/handlers"
 	"symetra-lab-backend/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/gorm"
 )
 
-func setupTestManualOrderDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	assert.NoError(t, err)
-
-	err = db.AutoMigrate(
-		&models.Order{},
-		&models.OrderItem{},
-		&models.OrderFilament{},
-		&models.OrderComponent{},
-		&models.Product{},
-		&models.ProductFilament{},
-		&models.ProductComponent{},
-		&models.ProductPackagingItem{},
-		&models.FilamentProfile{},
-		&models.Filament{},
-		&models.Machine{},
-		&models.Component{},
-		&models.ShopConfig{},
-		&models.MarketplacePlatform{},
-	)
-	assert.NoError(t, err)
-
-	// Seed shop config
-	db.Create(&models.ShopConfig{
-		ID:                      "cfg-manual",
-		UserID:                  DefaultAdminUserID,
-		FilamentPricePerRoll:    188000,
-		FilamentWeightGrams:     1000,
-		ElectricityTariffPerKwh: 1700,
-		PrinterPowerWatts:       150,
-		PrinterPrice:            7500000,
-		PrinterLifespanHours:    10000,
-		FailureBufferPercent:    10,
-	})
+func TestManualOrderCRUDAndStatusUpdates(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := SetupTestDB(t)
 
 	// Seed machine
 	brand := "Bambu Lab"
@@ -98,13 +66,7 @@ func setupTestManualOrderDB(t *testing.T) *gorm.DB {
 		WeightUsedGrams: 10.0,
 	})
 
-	return db
-}
-
-func TestManualOrderCRUDAndStatusUpdates(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	db := setupTestManualOrderDB(t)
-	handler := NewManualOrderHandler(db)
+	handler := handlers.NewManualOrderHandler(db)
 
 	router := gin.New()
 	router.GET("/api/v1/orders", handler.GetOrders)

@@ -1,4 +1,4 @@
-package handlers
+package tests
 
 import (
 	"bytes"
@@ -7,63 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"symetra-lab-backend/handlers"
 	"symetra-lab-backend/models"
 	"symetra-lab-backend/pkg/costing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/gorm"
 )
-
-func setupTestProductDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	assert.NoError(t, err)
-
-	err = db.AutoMigrate(
-		&models.ProductCategory{},
-		&models.Product{},
-		&models.ProductFilament{},
-		&models.ProductComponent{},
-		&models.ProductPackagingItem{},
-		&models.FilamentProfile{},
-		&models.Filament{},
-		&models.Component{},
-		&models.PackagingItem{},
-		&models.PackagingPreset{},
-		&models.PackagingPresetItem{},
-		&models.Machine{},
-		&models.ShopConfig{},
-		&models.MarketplacePlatform{},
-	)
-	assert.NoError(t, err)
-
-	// Seed shop config & marketplace
-	db.Create(&models.ShopConfig{
-		ID:                      "cfg-1",
-		UserID:                  DefaultAdminUserID,
-		FilamentPricePerRoll:    150000,
-		FilamentWeightGrams:     1000,
-		ElectricityTariffPerKwh: 1700,
-		PrinterPowerWatts:       200,
-		PrinterPrice:            5000000,
-		PrinterLifespanHours:    3000,
-		FailureBufferPercent:    10,
-	})
-
-	db.Create(&models.MarketplacePlatform{
-		ID:                  "shopee-1",
-		UserID:              DefaultAdminUserID,
-		Name:                "Shopee",
-		CommissionPercent:   9.5,
-		PromoFeePercent:     4.5,
-		FreeShippingPercent: 0,
-		OrderFeeIDR:         1250,
-		IsActive:            true,
-	})
-
-	return db
-}
 
 func TestFormatScalableSKU(t *testing.T) {
 	// Skenario 1: Produk single belum punya varian -> otomatis dapat -STD
@@ -113,8 +63,8 @@ func TestCalculateCostBreakdown(t *testing.T) {
 
 func TestProductCRUDAndBySKU(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db := setupTestProductDB(t)
-	handler := NewProductHandler(db)
+	db := SetupTestDB(t)
+	handler := handlers.NewProductHandler(db)
 
 	r := gin.Default()
 	r.GET("/products", handler.ListProducts)
@@ -125,7 +75,7 @@ func TestProductCRUDAndBySKU(t *testing.T) {
 	// 1. Create Product
 	parentSKU := "KEY-TOOTH"
 	sku := "KEY-TOOTH-STD"
-	payload := CreateProductPayload{
+	payload := handlers.CreateProductPayload{
 		Name:                  "Toothless Flexi Keychain",
 		ParentSKU:             &parentSKU,
 		SKU:                   &sku,

@@ -1,4 +1,4 @@
-package handlers
+package tests
 
 import (
 	"bytes"
@@ -8,54 +8,47 @@ import (
 	"testing"
 	"time"
 
+	"symetra-lab-backend/handlers"
 	"symetra-lab-backend/models"
 	"symetra-lab-backend/pkg/costing"
 	"symetra-lab-backend/pkg/shopee"
 
 	"github.com/gin-gonic/gin"
-	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/gorm"
 )
 
-func setupTestOrderDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	assert.NoError(t, err)
+func TestOrderHandlerInvalidShopID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
-	err = db.AutoMigrate(
-		&models.Shop{},
-		&models.ShopeeOrder{},
-		&models.ShopeeOrderItem{},
-		&models.ShopeeOrderEscrow{},
-		&models.ProductCategory{},
-		&models.Product{},
-		&models.ProductFilament{},
-		&models.ProductComponent{},
-		&models.ProductPackagingItem{},
-		&models.FilamentProfile{},
-		&models.Filament{},
-		&models.Component{},
-		&models.PackagingItem{},
-		&models.PackagingPreset{},
-		&models.PackagingPresetItem{},
-		&models.Machine{},
-		&models.ShopConfig{},
-		&models.MarketplacePlatform{},
-	)
-	assert.NoError(t, err)
+	client := shopee.NewClient(123456, "secret", false, "http://localhost/callback")
+	handler := handlers.NewOrderHandler(nil, client)
 
-	// Seed shop config
-	db.Create(&models.ShopConfig{
-		ID:                      "cfg-test",
-		UserID:                  DefaultAdminUserID,
-		FilamentPricePerRoll:    188000,
-		FilamentWeightGrams:     1000,
-		ElectricityTariffPerKwh: 1700,
-		PrinterPowerWatts:       150,
-		PrinterPrice:            7500000,
-		PrinterLifespanHours:    10000,
-		FailureBufferPercent:    10,
-	})
+	router := gin.New()
+	router.POST("/api/v1/shopee/shops/:shop_id/sync-orders", handler.SyncOrders)
+	router.GET("/api/v1/shopee/shops/:shop_id/orders", handler.GetOrders)
+	router.GET("/api/v1/shopee/shops/:shop_id/raw-orders", handler.GetRawOrders)
+
+	// Test 1: sync-orders with non-numeric shop_id
+	w1 := httptest.NewRecorder()
+	req1, _ := http.NewRequest("POST", "/api/v1/shopee/shops/invalid_id/sync-orders", nil)
+	router.ServeHTTP(w1, req1)
+	assert.Equal(t, http.StatusBadRequest, w1.Code)
+
+	// Test 2: get-orders with non-numeric shop_id
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("GET", "/api/v1/shopee/shops/invalid_id/orders", nil)
+	router.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusBadRequest, w2.Code)
+
+	// Test 3: raw-orders with non-numeric shop_id
+	w3 := httptest.NewRecorder()
+	req3, _ := http.NewRequest("GET", "/api/v1/shopee/shops/invalid_id/raw-orders", nil)
+	router.ServeHTTP(w3, req3)
+	assert.Equal(t, http.StatusBadRequest, w3.Code)
+}
+
+func TestAllocateShopeeOrderFinancesAndBuckets(t *testing.T) {
+	db := SetupTestDB(t)
 
 	// Seed Machine
 	brand := "Bambu Lab"
@@ -121,42 +114,6 @@ func setupTestOrderDB(t *testing.T) *gorm.DB {
 		Quantity:    1,
 	})
 
-	return db
-}
-
-func TestOrderHandlerInvalidShopID(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	client := shopee.NewClient(123456, "secret", false, "http://localhost/callback")
-	handler := NewOrderHandler(nil, client)
-
-	router := gin.New()
-	router.POST("/api/v1/shopee/shops/:shop_id/sync-orders", handler.SyncOrders)
-	router.GET("/api/v1/shopee/shops/:shop_id/orders", handler.GetOrders)
-	router.GET("/api/v1/shopee/shops/:shop_id/raw-orders", handler.GetRawOrders)
-
-	// Test 1: sync-orders with non-numeric shop_id
-	w1 := httptest.NewRecorder()
-	req1, _ := http.NewRequest("POST", "/api/v1/shopee/shops/invalid_id/sync-orders", nil)
-	router.ServeHTTP(w1, req1)
-	assert.Equal(t, http.StatusBadRequest, w1.Code)
-
-	// Test 2: get-orders with non-numeric shop_id
-	w2 := httptest.NewRecorder()
-	req2, _ := http.NewRequest("GET", "/api/v1/shopee/shops/invalid_id/orders", nil)
-	router.ServeHTTP(w2, req2)
-	assert.Equal(t, http.StatusBadRequest, w2.Code)
-
-	// Test 3: raw-orders with non-numeric shop_id
-	w3 := httptest.NewRecorder()
-	req3, _ := http.NewRequest("GET", "/api/v1/shopee/shops/invalid_id/raw-orders", nil)
-	router.ServeHTTP(w3, req3)
-	assert.Equal(t, http.StatusBadRequest, w3.Code)
-}
-
-func TestAllocateShopeeOrderFinancesAndBuckets(t *testing.T) {
-	db := setupTestOrderDB(t)
-
 	order := models.ShopeeOrder{
 		OrderSN:     "SN-TEST-001",
 		ShopID:      711996297,
@@ -211,10 +168,70 @@ func TestAllocateShopeeOrderFinancesAndBuckets(t *testing.T) {
 
 func TestOrderHandlerLinkItemSKUAndCashflowSummary(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db := setupTestOrderDB(t)
+	db := SetupTestDB(t)
+
+	// Seed Machine, Filament, Component, Product
+	brand := "Bambu Lab"
+	elecCost := 255.0
+	machine := models.Machine{
+		ID:                     "mach-01",
+		UserID:                 DefaultAdminUserID,
+		Name:                   "Bambu Lab A1",
+		Brand:                  &brand,
+		TotalPurchaseCost:      7500000,
+		LifespanHours:          10000,
+		AvgPowerWatts:          150,
+		ElectricityCostPerHour: &elecCost,
+	}
+	db.Create(&machine)
+
+	filament := models.Filament{
+		ID:           "fil-01",
+		UserID:       DefaultAdminUserID,
+		ColorName:    "Hitam PLA+",
+		PricePerRoll: 188000,
+	}
+	db.Create(&filament)
+
+	comp := models.Component{
+		ID:           "comp-01",
+		UserID:       DefaultAdminUserID,
+		Name:         "Gantungan Kunci",
+		PricePerUnit: 350,
+	}
+	db.Create(&comp)
+
+	testSKU := "KEY-SMILNIGH-STD"
+	testParentSKU := "KEY-SMILNIGH"
+	prod := models.Product{
+		ID:                    "prod-test-01",
+		UserID:                DefaultAdminUserID,
+		Name:                  "Smiley Keychain",
+		ParentSKU:             &testParentSKU,
+		SKU:                   &testSKU,
+		DefaultWeightGrams:    10.0,
+		DefaultPrintTimeHours: 1.0,
+		DefaultMachineID:      &machine.ID,
+		BaseHPP:               3500,
+		BaseSellingPrice:      12000,
+	}
+	db.Create(&prod)
+
+	db.Create(&models.ProductFilament{
+		ID:              "pf-01",
+		ProductID:       prod.ID,
+		FilamentID:      &filament.ID,
+		WeightUsedGrams: 10.0,
+	})
+	db.Create(&models.ProductComponent{
+		ID:          "pc-01",
+		ProductID:   prod.ID,
+		ComponentID: &comp.ID,
+		Quantity:    1,
+	})
 
 	client := shopee.NewClient(123456, "secret", false, "http://localhost/callback")
-	handler := NewOrderHandler(db, client)
+	handler := handlers.NewOrderHandler(db, client)
 
 	router := gin.New()
 	router.POST("/api/v1/shopee/orders/:order_sn/items/:item_id/link-sku", handler.LinkItemSKU)

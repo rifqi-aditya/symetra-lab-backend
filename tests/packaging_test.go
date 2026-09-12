@@ -1,4 +1,4 @@
-package handlers
+package tests
 
 import (
 	"bytes"
@@ -7,13 +7,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"symetra-lab-backend/handlers"
+
 	"github.com/gin-gonic/gin"
 )
 
 func TestPackagingItemCRUD(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db := setupTestDB(t)
-	handler := NewPackagingHandler(db)
+	db := SetupTestDB(t)
+	handler := handlers.NewPackagingHandler(db)
 
 	router := gin.New()
 	v1 := router.Group("/api/v1")
@@ -29,12 +31,11 @@ func TestPackagingItemCRUD(t *testing.T) {
 	}
 
 	// 1. Test Create Packaging Item (POST /api/v1/packaging-items)
-	// Beli 1 pack kardus diecut isi 50 seharga 25.750 -> unit_cost harus 515.0
 	cat := "BOX"
 	unitType := "PCS"
 	qty := 50.0
 	stock := 50.0
-	createReq := CreatePackagingItemRequest{
+	createReq := handlers.CreatePackagingItemRequest{
 		Name:             "Diecut Kecil",
 		Category:         &cat,
 		UnitType:         &unitType,
@@ -90,7 +91,7 @@ func TestPackagingItemCRUD(t *testing.T) {
 
 	// 4. Test Update (PUT /api/v1/packaging-items/:id)
 	newPrice := 30000.0 // 30.000 / 50 = 600
-	updateReq := UpdatePackagingItemRequest{
+	updateReq := handlers.UpdatePackagingItemRequest{
 		PurchasePrice: &newPrice,
 	}
 	updateBytes, _ := json.Marshal(updateReq)
@@ -123,8 +124,8 @@ func TestPackagingItemCRUD(t *testing.T) {
 
 func TestPackagingPresetCRUDAndTotalCost(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db := setupTestDB(t)
-	handler := NewPackagingHandler(db)
+	db := SetupTestDB(t)
+	handler := handlers.NewPackagingHandler(db)
 
 	router := gin.New()
 	v1 := router.Group("/api/v1")
@@ -144,7 +145,7 @@ func TestPackagingPresetCRUDAndTotalCost(t *testing.T) {
 	}
 
 	// 1. Buat 2 item bahan kemasan dulu
-	item1Req := CreatePackagingItemRequest{
+	item1Req := handlers.CreatePackagingItemRequest{
 		Name:          "Plastik Clip Hologram",
 		PurchasePrice: 464,
 	}
@@ -157,7 +158,7 @@ func TestPackagingPresetCRUDAndTotalCost(t *testing.T) {
 	_ = json.Unmarshal(wItem1.Body.Bytes(), &resp1)
 	item1ID := resp1["data"].(map[string]interface{})["id"].(string)
 
-	item2Req := CreatePackagingItemRequest{
+	item2Req := handlers.CreatePackagingItemRequest{
 		Name:          "Mailer Putih",
 		PurchasePrice: 895,
 	}
@@ -175,10 +176,10 @@ func TestPackagingPresetCRUDAndTotalCost(t *testing.T) {
 	// - 1x Mailer Putih (Rp 895)
 	// Total biaya packing harus = 1359.0
 	desc := "Paket packing standar gantungan kunci"
-	createPresetReq := CreatePresetRequest{
+	createPresetReq := handlers.CreatePresetRequest{
 		Name:        "Keychain",
 		Description: &desc,
-		Items: []CreatePresetItemInput{
+		Items: []handlers.CreatePresetItemInput{
 			{PackagingItemID: item1ID, QuantityUsed: 1},
 			{PackagingItemID: item2ID, QuantityUsed: 1},
 		},
