@@ -907,6 +907,103 @@ Membuat preset bundel kemasan baru secara transaksional.
 ### 5. `DELETE /api/v1/packaging-presets/:id`
 Menghapus preset kemasan beserta daftar item di dalamnya (cascade delete).
 
+---
+
+## 7. Modul Master Produk, SKU Scalable & BOM Costing Engine
+
+Modul ini mengelola katalog produk bengkel 3D printing, resep Bill of Materials (BOM), sistem SKU hierarkis modular (`[PARENT_SKU]-[VARIANT_SUFFIX]`), serta kalkulasi otomatis HPP presisi dan rekomendasi harga jual Shopee.
+
+### 1. `GET /api/v1/products`
+Mengambil daftar produk lengkap dengan relasi BOM (filamen, baut/switch, kemasan, mesin) dan rincian `cost_breakdown` (HPP, profit margin, rekomendasi Shopee).
+
+* **Query Parameters**:
+  * `category` (opsional): Filter berdasarkan nama kategori produk.
+  * `search` (opsional): Pencarian parsial berdasarkan nama produk, SKU, atau parent SKU.
+  * `parent_sku` (opsional): Filter produk berdasarkan kode model induk.
+
+* **Contoh Response (200 OK)**:
+  ```json
+  {
+    "data": [
+      {
+        "id": "d0d96fe9-e85a-4a9b-8091-b98344f3628c",
+        "name": "Smiley Night Fury / Toothless Flexi Keychain ( Happy Face )",
+        "category": "Flexi Keychain",
+        "parent_sku": "KEY-SMILNIGH",
+        "sku": "KEY-SMILNIGH-STD",
+        "default_weight_grams": 10.89,
+        "default_print_time_hours": 0.88,
+        "base_hpp": 3601.45,
+        "base_selling_price": 11500,
+        "cost_breakdown": {
+          "filament_cost": 2252.05,
+          "hardware_cost": 465.0,
+          "packaging_cost": 0,
+          "electricity_cost": 224.4,
+          "depreciation_cost": 660.0,
+          "base_hpp": 3601.45,
+          "target_margin_percent": 48,
+          "target_profit_idr": 7898.55,
+          "base_selling_price": 11500,
+          "shopee_recommended_price": 16400
+        }
+      }
+    ],
+    "total": 81
+  }
+  ```
+
+---
+
+### 2. `GET /api/v1/products/by-sku/:sku`
+Pencarian instan produk berdasarkan SKU varian atau Parent SKU. Endpoint ini dirancang khusus untuk integrasi pesanan Shopee (`item_sku` / `model_sku`).
+
+* **URL Parameter**:
+  * `:sku` : Kode SKU produk (contoh: `KEY-SMILNIGH-STD`, `BOX-B18650-4S-BLK`).
+
+---
+
+### 3. `GET /api/v1/products/:id`
+Mengambil detail 1 produk spesifik berdasarkan UUID beserta rincian lengkap seluruh item BOM dan mesin default.
+
+---
+
+### 4. `POST /api/v1/products`
+Membuat produk baru dengan validasi keunikan SKU dan auto-kalkulasi HPP.
+
+* **Format SKU Otomatis**:
+  * Jika `parent_sku` diisi dan `sku` kosong, sistem otomatis membuatkan SKU dengan format `[PARENT_SKU]-STD`.
+  * Suffix dapat disesuaikan untuk varian baru (contoh: `[PARENT_SKU]-4S-BLK`).
+
+* **Contoh Request Body**:
+  ```json
+  {
+    "name": "Box Baterai 18650 2 Slot",
+    "parent_sku": "BOX-B18650",
+    "sku": "BOX-B18650-2S-BLK",
+    "category": "Functional Item",
+    "default_weight_grams": 24.5,
+    "default_print_time_hours": 1.2,
+    "target_margin_percent": 40
+  }
+  ```
+
+---
+
+### 5. `PUT /api/v1/products/:id`
+Memperbarui informasi produk, spesifikasi cetak, atau SKU. Jika parameter cetak atau komponen BOM berubah, HPP dan rekomendasi Shopee akan otomatis dikalkulasi ulang.
+
+---
+
+### 6. `DELETE /api/v1/products/:id`
+Menghapus produk beserta resep BOM secara aman (*safe delete*). Menolak penghapusan (HTTP 409 Conflict) jika produk sudah memiliki riwayat transaksi di `order_items`.
+
+---
+
+### 7. `POST /api/v1/products/generate-skus`
+Fitur otomatisasi untuk men-generate kode SKU modular dan scalable bagi seluruh produk lama yang kolom SKU-nya masih kosong di database.
+
+
 
 
 

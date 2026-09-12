@@ -50,6 +50,11 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		&models.PackagingItem{},
 		&models.PackagingPreset{},
 		&models.PackagingPresetItem{},
+		&models.ProductCategory{},
+		&models.Product{},
+		&models.ProductFilament{},
+		&models.ProductComponent{},
+		&models.ProductPackagingItem{},
 	); err != nil {
 		return nil, fmt.Errorf("gagal migrasi database: %w", err)
 	}
