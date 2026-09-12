@@ -64,6 +64,8 @@ func (h *ManualOrderHandler) GetOrders(c *gin.Context) {
 	var orders []models.Order
 	if err := query.Preload("Items.Product").
 		Preload("Items.Machine").
+		Preload("Items.Filaments.Filament").
+		Preload("Items.Components.Component").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
