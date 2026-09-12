@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"symetra-lab-backend/config"
 	"symetra-lab-backend/models"
@@ -36,29 +37,32 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("gagal terhubung ke database: %w", err)
 	}
 
-	// 4. AutoMigrate: GORM akan otomatis membuat tabel di Supabase jika belum ada
-	if err := db.AutoMigrate(
-		&models.Shop{},
-		&models.ShopeeOrder{},
-		&models.ShopeeOrderItem{},
-		&models.ShopeeOrderEscrow{},
-		&models.FilamentProfile{},
-		&models.Filament{},
-		&models.Machine{},
-		&models.MachineMaintenancePart{},
-		&models.Component{},
-		&models.PackagingItem{},
-		&models.PackagingPreset{},
-		&models.PackagingPresetItem{},
-		&models.ProductCategory{},
-		&models.Product{},
-		&models.ProductFilament{},
-		&models.ProductComponent{},
-		&models.ProductPackagingItem{},
-	); err != nil {
-		return nil, fmt.Errorf("gagal migrasi database: %w", err)
+	// 4. AutoMigrate: Hanya jalankan DDL migrasi otomatis jika di luar lingkungan Vercel serverless
+	// agar tidak menyebabkan cold-start timeout pada serverless request
+	if os.Getenv("VERCEL") == "" {
+		if err := db.AutoMigrate(
+			&models.Shop{},
+			&models.ShopeeOrder{},
+			&models.ShopeeOrderItem{},
+			&models.ShopeeOrderEscrow{},
+			&models.FilamentProfile{},
+			&models.Filament{},
+			&models.Machine{},
+			&models.MachineMaintenancePart{},
+			&models.Component{},
+			&models.PackagingItem{},
+			&models.PackagingPreset{},
+			&models.PackagingPresetItem{},
+			&models.ProductCategory{},
+			&models.Product{},
+			&models.ProductFilament{},
+			&models.ProductComponent{},
+			&models.ProductPackagingItem{},
+		); err != nil {
+			return nil, fmt.Errorf("gagal migrasi database: %w", err)
+		}
 	}
 
-	log.Println("[INFO] Berhasil terhubung ke Supabase PostgreSQL & migrasi selesai")
+	log.Println("[INFO] Berhasil terhubung ke Supabase PostgreSQL & database siap")
 	return db, nil
 }
