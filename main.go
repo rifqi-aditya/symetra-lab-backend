@@ -10,6 +10,8 @@ import (
 )
 
 func main() {
+	log.Println("[INFO] Memulai server Symetra Lab Backend...")
+
 	// 1. Muat konfigurasi
 	cfg := config.LoadConfig()
 
