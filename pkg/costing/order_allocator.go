@@ -21,7 +21,8 @@ func AllocateShopeeOrderFinances(order *models.ShopeeOrder, db *gorm.DB) error {
 	_ = db.First(&cfg).Error
 
 	var totalFilamentCost float64
-	var totalHardwarePackagingCost float64
+	var totalHardwareCost float64
+	var totalPackagingCost float64
 	var totalMachineCost float64
 	var totalOrderHPP float64
 
@@ -94,7 +95,8 @@ func AllocateShopeeOrderFinances(order *models.ShopeeOrder, db *gorm.DB) error {
 			item.BaseHPP = math.Round(breakdown.BaseHPP*qty*100) / 100
 
 			totalFilamentCost += item.FilamentCost
-			totalHardwarePackagingCost += (item.HardwareCost + item.PackagingCost)
+			totalHardwareCost += item.HardwareCost
+			totalPackagingCost += item.PackagingCost
 			totalMachineCost += item.MachineCost
 			totalOrderHPP += item.BaseHPP
 		} else {
@@ -110,9 +112,15 @@ func AllocateShopeeOrderFinances(order *models.ShopeeOrder, db *gorm.DB) error {
 
 	// 3. Hitung alokasi kas pada Escrow (jika data escrow tersedia)
 	if order.Escrow != nil {
+		// Akumulasi seluruh potongan marketplace Shopee
+		totalMarketplaceFee := order.Escrow.CommissionFee + order.Escrow.ServiceFee + order.Escrow.SellerTransactionFee + order.Escrow.SellerOrderProcessingFee + order.Escrow.SellerVoucherDiscount
+		order.Escrow.TotalMarketplaceFee = math.Round(totalMarketplaceFee*100) / 100
+
 		order.Escrow.TotalHPP = math.Round(totalOrderHPP*100) / 100
 		order.Escrow.TotalFilamentCost = math.Round(totalFilamentCost*100) / 100
-		order.Escrow.TotalHardwarePackagingCost = math.Round(totalHardwarePackagingCost*100) / 100
+		order.Escrow.TotalHardwareCost = math.Round(totalHardwareCost*100) / 100
+		order.Escrow.TotalPackagingCost = math.Round(totalPackagingCost*100) / 100
+		order.Escrow.TotalHardwarePackagingCost = math.Round((totalHardwareCost+totalPackagingCost)*100) / 100
 		order.Escrow.TotalMachineCost = math.Round(totalMachineCost*100) / 100
 
 		// Laba Bersih = Dana Bersih Escrow - Total HPP (Filamen + Hardware + Mesin)

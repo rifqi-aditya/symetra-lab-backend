@@ -81,10 +81,13 @@ type ShopeeOrderEscrow struct {
 	SellerOrderProcessingFee float64   `gorm:"type:decimal(15,2)" json:"seller_order_processing_fee"` // Biaya pemrosesan per pesanan (Rp 1.000 / 1.250)
 	SellerVoucherDiscount    float64   `gorm:"type:decimal(15,2)" json:"seller_voucher_discount"`     // Diskon voucher ditanggung seller
 
-	// Alokasi 5 Ember Kas Bengkel (Cashflow Buckets)
+	// Potongan Marketplace & Alokasi Pos Kas Bengkel
+	TotalMarketplaceFee         float64 `gorm:"type:decimal(15,2);default:0" json:"total_marketplace_fee"` // Akumulasi total potongan Shopee
 	TotalHPP                    float64 `gorm:"type:decimal(15,2);default:0" json:"total_hpp"`
 	TotalFilamentCost           float64 `gorm:"type:decimal(15,2);default:0" json:"total_filament_cost"`
-	TotalHardwarePackagingCost  float64 `gorm:"type:decimal(15,2);default:0" json:"total_hardware_packaging_cost"`
+	TotalHardwareCost           float64 `gorm:"type:decimal(15,2);default:0" json:"total_hardware_cost"` // Pos Kas Komponen & Hardware fisik
+	TotalPackagingCost          float64 `gorm:"type:decimal(15,2);default:0" json:"total_packaging_cost"` // Pos Kas Kemasan pengiriman
+	TotalHardwarePackagingCost  float64 `gorm:"type:decimal(15,2);default:0" json:"total_hardware_packaging_cost"` // Kompatibilitas gabungan
 	TotalMachineCost            float64 `gorm:"type:decimal(15,2);default:0" json:"total_machine_cost"`
 	NetProfit                   float64 `gorm:"type:decimal(15,2);default:0" json:"net_profit"`
 	ProfitMarginPercent         float64 `gorm:"type:decimal(5,2);default:0" json:"profit_margin_percent"`
@@ -97,17 +100,25 @@ func (ShopeeOrderEscrow) TableName() string {
 	return "shopee_order_escrows"
 }
 
-// CashflowSummaryResponse merepresentasikan rekap finansial 5 ember kas bengkel
+// CashflowSummaryResponse merepresentasikan rekap finansial Pos Alokasi Kas bengkel
 type CashflowSummaryResponse struct {
 	TotalOrders               int64   `json:"total_orders"`
 	TotalGrossSales           float64 `json:"total_gross_sales"`
 	TotalMarketplaceFees      float64 `json:"total_marketplace_fees"`
 	TotalEscrowNetIn          float64 `json:"total_escrow_net_in"`
 	TotalHPP                  float64 `json:"total_hpp"`
-	BucketFilament            float64 `json:"bucket_filament"`             // Ember 1: Tabungan restock filamen
-	BucketHardwarePackaging   float64 `json:"bucket_hardware_packaging"`   // Ember 2: Penggantian komponen & packing
-	BucketMachineElectricity  float64 `json:"bucket_machine_electricity"`  // Ember 3: Cadangan maintenance & listrik PLN
-	BucketNetProfit           float64 `json:"bucket_net_profit"`           // Ember 5: Keuntungan bersih murni bengkel
+	FundFilament              float64 `json:"fund_filament"`              // Pos Kas 1: Tabungan restock filamen
+	FundHardware              float64 `json:"fund_hardware"`              // Pos Kas 2: Penggantian komponen & hardware
+	FundPackaging             float64 `json:"fund_packaging"`             // Pos Kas 3: Penggantian kemasan & packaging
+	FundMachineElectricity    float64 `json:"fund_machine_electricity"`   // Pos Kas 4: Cadangan maintenance & listrik PLN
+	FundNetProfit             float64 `json:"fund_net_profit"`            // Pos Kas 5: Keuntungan bersih murni bengkel
+
+	// Field penunjang kompatibilitas (alias lama)
+	BucketFilament            float64 `json:"bucket_filament"`
+	BucketHardwarePackaging   float64 `json:"bucket_hardware_packaging"`
+	BucketMachineElectricity  float64 `json:"bucket_machine_electricity"`
+	BucketNetProfit           float64 `json:"bucket_net_profit"`
+
 	AverageProfitMargin       float64 `json:"average_profit_margin"`
 	UnmappedItemsCount        int64   `json:"unmapped_items_count"`
 }

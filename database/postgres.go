@@ -48,8 +48,14 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("gagal terhubung ke database: %w", err)
 	}
 
-	// 4. AutoMigrate: Hanya jalankan DDL jika tabel belum ada atau jika diminta via AUTO_MIGRATE=true.
-	// Ini membuat startup server instan (<1 detik) tanpa harus menunggu ratusan query DDL ke cloud Sydney.
+	// 4. AutoMigrate: Pastikan kolom baru pada tabel shopee_order_escrows tersedia
+	if !db.Migrator().HasColumn(&models.ShopeeOrderEscrow{}, "total_marketplace_fee") {
+		log.Println("[INFO] Menambahkan kolom baru ke shopee_order_escrows...")
+		_ = db.Migrator().AddColumn(&models.ShopeeOrderEscrow{}, "TotalMarketplaceFee")
+		_ = db.Migrator().AddColumn(&models.ShopeeOrderEscrow{}, "TotalHardwareCost")
+		_ = db.Migrator().AddColumn(&models.ShopeeOrderEscrow{}, "TotalPackagingCost")
+	}
+
 	shouldMigrate := os.Getenv("AUTO_MIGRATE") == "true" || !db.Migrator().HasTable(&models.Product{})
 	if shouldMigrate && os.Getenv("VERCEL") == "" {
 		log.Println("[INFO] Memeriksa & memigrasi skema database...")

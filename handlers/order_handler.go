@@ -559,9 +559,12 @@ func (h *OrderHandler) GetCashflowSummary(c *gin.Context) {
 		TotalTxnFee             float64 `gorm:"column:total_txn_fee"`
 		TotalProcessingFee      float64 `gorm:"column:total_processing_fee"`
 		TotalVoucherDiscount    float64 `gorm:"column:total_voucher_discount"`
+		TotalMarketplaceFee     float64 `gorm:"column:total_marketplace_fee"`
 		TotalEscrowNetIn        float64 `gorm:"column:total_escrow_net_in"`
 		TotalHPP                float64 `gorm:"column:total_hpp"`
 		BucketFilament          float64 `gorm:"column:bucket_filament"`
+		FundHardware            float64 `gorm:"column:fund_hardware"`
+		FundPackaging           float64 `gorm:"column:fund_packaging"`
 		BucketHardwarePackaging float64 `gorm:"column:bucket_hardware_packaging"`
 		BucketMachineCost       float64 `gorm:"column:bucket_machine_cost"`
 		BucketNetProfit         float64 `gorm:"column:bucket_net_profit"`
@@ -576,9 +579,12 @@ func (h *OrderHandler) GetCashflowSummary(c *gin.Context) {
 		COALESCE(SUM(shopee_order_escrows.seller_transaction_fee), 0) AS total_txn_fee,
 		COALESCE(SUM(shopee_order_escrows.seller_order_processing_fee), 0) AS total_processing_fee,
 		COALESCE(SUM(shopee_order_escrows.seller_voucher_discount), 0) AS total_voucher_discount,
+		COALESCE(SUM(CASE WHEN shopee_order_escrows.total_marketplace_fee > 0 THEN shopee_order_escrows.total_marketplace_fee ELSE (shopee_order_escrows.commission_fee + shopee_order_escrows.service_fee + shopee_order_escrows.seller_transaction_fee + shopee_order_escrows.seller_order_processing_fee + shopee_order_escrows.seller_voucher_discount) END), 0) AS total_marketplace_fee,
 		COALESCE(SUM(shopee_order_escrows.escrow_amount), 0) AS total_escrow_net_in,
 		COALESCE(SUM(shopee_order_escrows.total_hpp), 0) AS total_hpp,
 		COALESCE(SUM(shopee_order_escrows.total_filament_cost), 0) AS bucket_filament,
+		COALESCE(SUM(shopee_order_escrows.total_hardware_cost), 0) AS fund_hardware,
+		COALESCE(SUM(shopee_order_escrows.total_packaging_cost), 0) AS fund_packaging,
 		COALESCE(SUM(shopee_order_escrows.total_hardware_packaging_cost), 0) AS bucket_hardware_packaging,
 		COALESCE(SUM(shopee_order_escrows.total_machine_cost), 0) AS bucket_machine_cost,
 		COALESCE(SUM(shopee_order_escrows.net_profit), 0) AS bucket_net_profit
@@ -593,8 +599,6 @@ func (h *OrderHandler) GetCashflowSummary(c *gin.Context) {
 	var unmappedCount int64
 	h.DB.Model(&models.ShopeeOrderItem{}).Where("mapping_status = 'UNMAPPED'").Count(&unmappedCount)
 
-	totalMarketplaceFees := res.TotalCommissionFee + res.TotalServiceFee + res.TotalTxnFee + res.TotalProcessingFee + res.TotalVoucherDiscount
-
 	avgMargin := 0.0
 	if res.TotalGrossSales > 0 {
 		avgMargin = (res.BucketNetProfit / res.TotalGrossSales) * 100
@@ -603,9 +607,14 @@ func (h *OrderHandler) GetCashflowSummary(c *gin.Context) {
 	resp := models.CashflowSummaryResponse{
 		TotalOrders:              res.TotalOrders,
 		TotalGrossSales:          res.TotalGrossSales,
-		TotalMarketplaceFees:     math.Round(totalMarketplaceFees*100) / 100,
+		TotalMarketplaceFees:     math.Round(res.TotalMarketplaceFee*100) / 100,
 		TotalEscrowNetIn:         res.TotalEscrowNetIn,
 		TotalHPP:                 res.TotalHPP,
+		FundFilament:             res.BucketFilament,
+		FundHardware:             res.FundHardware,
+		FundPackaging:            res.FundPackaging,
+		FundMachineElectricity:   res.BucketMachineCost,
+		FundNetProfit:            res.BucketNetProfit,
 		BucketFilament:           res.BucketFilament,
 		BucketHardwarePackaging:  res.BucketHardwarePackaging,
 		BucketMachineElectricity: res.BucketMachineCost,

@@ -389,7 +389,7 @@ Menghubungkan item pesanan Shopee yang belum memiliki SKU di Shopee (*unmapped*)
 ---
 
 #### `GET /api/v1/shopee/financial/cashflow-summary`
-Mengambil rekapitulasi performa keuangan dan alokasi **5 Ember Kas Bengkel** dari seluruh pesanan Shopee. Endpoint ini menjadi sumber data utama untuk dashboard cashflow bengkel.
+Mengambil rekapitulasi performa keuangan dan **Pos Alokasi Kas Bengkel** dari seluruh pesanan Shopee. Endpoint ini menjadi sumber data utama untuk dashboard keuangan bengkel (mencakup akumulasi potongan Shopee, modal filamen, modal komponen fisik, biaya kemasan, biaya operasional mesin & listrik, serta laba bersih murni).
 
 * **Query Parameters (Opsional)**:
   | Parameter | Tipe | Default | Keterangan |
@@ -413,6 +413,11 @@ Mengambil rekapitulasi performa keuangan dan alokasi **5 Ember Kas Bengkel** dar
       "total_marketplace_fees": 431250.00,
       "total_escrow_net_in": 3018750.00,
       "total_hpp": 1120500.00,
+      "fund_filament": 580000.00,
+      "fund_hardware": 95000.00,
+      "fund_packaging": 45500.00,
+      "fund_machine_electricity": 400000.00,
+      "fund_net_profit": 1898250.00,
       "bucket_filament": 580000.00,
       "bucket_hardware_packaging": 140500.00,
       "bucket_machine_electricity": 400000.00,

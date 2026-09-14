@@ -155,10 +155,12 @@ func TestAllocateShopeeOrderFinancesAndBuckets(t *testing.T) {
 	assert.Greater(t, item.MachineCost, 0.0)
 	assert.Greater(t, item.BaseHPP, 0.0)
 
-	// Verifikasi Alokasi 5 Ember Kas pada Escrow
+	// Verifikasi Alokasi Pos Kas pada Escrow
 	escrow := order.Escrow
 	assert.Greater(t, escrow.TotalHPP, 0.0)
 	assert.Greater(t, escrow.TotalFilamentCost, 0.0)
+	assert.Greater(t, escrow.TotalHardwareCost, 0.0)
+	assert.Equal(t, 4500.0, escrow.TotalMarketplaceFee) // 2400 + 1200 + 900
 	assert.Greater(t, escrow.TotalMachineCost, 0.0)
 	// Laba bersih = EscrowAmount (25.500) - Total HPP
 	expectedNetProfit := 25500.0 - escrow.TotalHPP
@@ -263,10 +265,14 @@ func TestOrderHandlerLinkItemSKUAndCashflowSummary(t *testing.T) {
 	db.Create(&item)
 
 	escrow := models.ShopeeOrderEscrow{
-		OrderSN:      orderSN,
-		EscrowAmount: 15500,
-		SellingPrice: 18000,
-		CreatedAt:    time.Now(),
+		OrderSN:              orderSN,
+		EscrowAmount:         15500,
+		SellingPrice:         18000,
+		CommissionFee:        1300,
+		ServiceFee:           700,
+		SellerTransactionFee: 500,
+		TotalMarketplaceFee:  2500,
+		CreatedAt:            time.Now(),
 	}
 	db.Create(&escrow)
 
@@ -312,6 +318,10 @@ func TestOrderHandlerLinkItemSKUAndCashflowSummary(t *testing.T) {
 	assert.Equal(t, int64(1), sumResp.Data.TotalOrders)
 	assert.Equal(t, 18000.0, sumResp.Data.TotalGrossSales)
 	assert.Equal(t, 15500.0, sumResp.Data.TotalEscrowNetIn)
+	assert.Equal(t, 2500.0, sumResp.Data.TotalMarketplaceFees) // 1300 + 700 + 500
+	assert.Greater(t, sumResp.Data.FundFilament, 0.0)
+	assert.Greater(t, sumResp.Data.FundHardware, 0.0)
+	assert.Greater(t, sumResp.Data.FundNetProfit, 0.0)
 	assert.Greater(t, sumResp.Data.BucketFilament, 0.0)
 	assert.Greater(t, sumResp.Data.BucketNetProfit, 0.0)
 
