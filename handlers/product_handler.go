@@ -20,25 +20,33 @@ type cachedProductList struct {
 	cachedAt time.Time
 }
 
+type cachedProductDetail struct {
+	data     models.ProductResponse
+	cachedAt time.Time
+}
+
 // ProductHandler menangani request HTTP untuk master produk, BOM, dan kalkulasi HPP
 type ProductHandler struct {
-	db        *gorm.DB
-	cacheMu   sync.RWMutex
-	listCache map[string]cachedProductList
+	db          *gorm.DB
+	cacheMu     sync.RWMutex
+	listCache   map[string]cachedProductList
+	detailCache map[string]cachedProductDetail
 }
 
 // NewProductHandler membuat instance baru dari ProductHandler
 func NewProductHandler(db *gorm.DB) *ProductHandler {
 	return &ProductHandler{
-		db:        db,
-		listCache: make(map[string]cachedProductList),
+		db:          db,
+		listCache:   make(map[string]cachedProductList),
+		detailCache: make(map[string]cachedProductDetail),
 	}
 }
 
-// InvalidateListCache membersihkan cache daftar produk ketika ada data yang berubah
+// InvalidateListCache membersihkan cache daftar dan detail produk ketika ada data yang berubah
 func (h *ProductHandler) InvalidateListCache() {
 	h.cacheMu.Lock()
 	h.listCache = make(map[string]cachedProductList)
+	h.detailCache = make(map[string]cachedProductDetail)
 	h.cacheMu.Unlock()
 }
 
@@ -155,12 +163,23 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	id := c.Param("id")
 	userID := getUserID(c)
 
+	h.cacheMu.RLock()
+	cached, found := h.detailCache[id]
+	h.cacheMu.RUnlock()
+
+	if found && time.Since(cached.cachedAt) < 2*time.Minute {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data":   cached.data,
+		})
+		return
+	}
+
 	var product models.Product
 	err := h.db.
-		Preload("Filaments.Filament.Profile").
+		Preload("Filaments.Filament").
 		Preload("Components.Component").
 		Preload("PackagingItems.PackagingItem").
-		Preload("PackagingPreset.Items.PackagingItem").
 		Preload("DefaultMachine").
 		Where("id = ?", id).
 		First(&product).Error
@@ -170,15 +189,35 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 		return
 	}
 
-	cfg, shopee := h.getActiveConfigAndShopee(userID)
-	breakdown := costing.CalculateCostBreakdown(&product, cfg, shopee)
+	breakdown := models.ProductCostBreakdown{
+		BaseHPP:             product.BaseHPP,
+		BaseSellingPrice:    product.BaseSellingPrice,
+		TargetMarginPercent: product.TargetMarginPercent,
+	}
+
+	if product.BaseHPP == 0 {
+		cfg, shopee := h.getActiveConfigAndShopee(userID)
+		breakdown = costing.CalculateCostBreakdown(&product, cfg, shopee)
+	}
+
+	resp := models.ProductResponse{
+		Product:       product,
+		CostBreakdown: breakdown,
+	}
+
+	h.cacheMu.Lock()
+	if h.detailCache == nil {
+		h.detailCache = make(map[string]cachedProductDetail)
+	}
+	h.detailCache[id] = cachedProductDetail{
+		data:     resp,
+		cachedAt: time.Now(),
+	}
+	h.cacheMu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"data": models.ProductResponse{
-			Product:       product,
-			CostBreakdown: breakdown,
-		},
+		"data":   resp,
 	})
 }
 
