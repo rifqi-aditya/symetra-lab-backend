@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"symetra-lab-backend/models"
 	"symetra-lab-backend/pkg/costing"
@@ -13,14 +15,31 @@ import (
 	"gorm.io/gorm"
 )
 
+type cachedProductList struct {
+	data     []models.ProductResponse
+	cachedAt time.Time
+}
+
 // ProductHandler menangani request HTTP untuk master produk, BOM, dan kalkulasi HPP
 type ProductHandler struct {
-	db *gorm.DB
+	db        *gorm.DB
+	cacheMu   sync.RWMutex
+	listCache map[string]cachedProductList
 }
 
 // NewProductHandler membuat instance baru dari ProductHandler
 func NewProductHandler(db *gorm.DB) *ProductHandler {
-	return &ProductHandler{db: db}
+	return &ProductHandler{
+		db:        db,
+		listCache: make(map[string]cachedProductList),
+	}
+}
+
+// InvalidateListCache membersihkan cache daftar produk ketika ada data yang berubah
+func (h *ProductHandler) InvalidateListCache() {
+	h.cacheMu.Lock()
+	h.listCache = make(map[string]cachedProductList)
+	h.cacheMu.Unlock()
 }
 
 // getActiveConfigAndShopee mengambil konfigurasi bengkel dan parameter fee Shopee
@@ -56,6 +75,21 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	search := c.Query("search")
 	parentSKU := c.Query("parent_sku")
 
+	cacheKey := fmt.Sprintf("%s|%s|%s|%s", userID, category, search, parentSKU)
+
+	h.cacheMu.RLock()
+	cached, found := h.listCache[cacheKey]
+	h.cacheMu.RUnlock()
+
+	if found && time.Since(cached.cachedAt) < 2*time.Minute {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data":   cached.data,
+			"total":  len(cached.data),
+		})
+		return
+	}
+
 	query := h.db.Model(&models.Product{})
 	if userID != "" {
 		query = query.Where("user_id = ?", userID)
@@ -76,11 +110,9 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 
 	var products []models.Product
 	err := query.
-		Preload("Filaments.Filament.Profile").
-		Preload("Components.Component").
-		Preload("PackagingItems.PackagingItem").
-		Preload("PackagingPreset.Items.PackagingItem").
-		Preload("DefaultMachine").
+		Preload("Filaments").
+		Preload("Components").
+		Preload("PackagingItems").
 		Order("created_at DESC").
 		Find(&products).Error
 
@@ -89,16 +121,27 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		return
 	}
 
-	cfg, shopee := h.getActiveConfigAndShopee(userID)
-
 	responses := make([]models.ProductResponse, len(products))
 	for i := range products {
-		breakdown := costing.CalculateCostBreakdown(&products[i], cfg, shopee)
 		responses[i] = models.ProductResponse{
-			Product:       products[i],
-			CostBreakdown: breakdown,
+			Product: products[i],
+			CostBreakdown: models.ProductCostBreakdown{
+				BaseHPP:             products[i].BaseHPP,
+				BaseSellingPrice:    products[i].BaseSellingPrice,
+				TargetMarginPercent: products[i].TargetMarginPercent,
+			},
 		}
 	}
+
+	h.cacheMu.Lock()
+	if h.listCache == nil {
+		h.listCache = make(map[string]cachedProductList)
+	}
+	h.listCache[cacheKey] = cachedProductList{
+		data:     responses,
+		cachedAt: time.Now(),
+	}
+	h.cacheMu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
@@ -341,6 +384,8 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		"base_selling_price": breakdown.BaseSellingPrice,
 	})
 
+	h.InvalidateListCache()
+
 	c.JSON(http.StatusCreated, gin.H{
 		"status":  "success",
 		"message": "Produk berhasil dibuat",
@@ -409,44 +454,59 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 			return err
 		}
 		if payload.Filaments != nil {
-			tx.Where("product_id = ?", id).Delete(&models.ProductFilament{})
-			for _, f := range payload.Filaments {
-				pf := models.ProductFilament{
-					ID:              uuid.New().String(),
-					ProductID:       product.ID,
-					FilamentID:      f.FilamentID,
-					WeightUsedGrams: f.WeightUsedGrams,
+			if err := tx.Where("product_id = ?", id).Delete(&models.ProductFilament{}).Error; err != nil {
+				return err
+			}
+			if len(payload.Filaments) > 0 {
+				pfs := make([]models.ProductFilament, len(payload.Filaments))
+				for i, f := range payload.Filaments {
+					pfs[i] = models.ProductFilament{
+						ID:              uuid.New().String(),
+						ProductID:       product.ID,
+						FilamentID:      f.FilamentID,
+						WeightUsedGrams: f.WeightUsedGrams,
+					}
 				}
-				if err := tx.Create(&pf).Error; err != nil {
+				if err := tx.Create(&pfs).Error; err != nil {
 					return err
 				}
 			}
 		}
 		if payload.Components != nil {
-			tx.Where("product_id = ?", id).Delete(&models.ProductComponent{})
-			for _, comp := range payload.Components {
-				pc := models.ProductComponent{
-					ID:            uuid.New().String(),
-					ProductID:     product.ID,
-					ComponentID:   nilIfEmpty(comp.ComponentID),
-					Quantity:      comp.Quantity,
-					MarkupPercent: comp.MarkupPercent,
+			if err := tx.Where("product_id = ?", id).Delete(&models.ProductComponent{}).Error; err != nil {
+				return err
+			}
+			if len(payload.Components) > 0 {
+				pcs := make([]models.ProductComponent, len(payload.Components))
+				for i, comp := range payload.Components {
+					pcs[i] = models.ProductComponent{
+						ID:            uuid.New().String(),
+						ProductID:     product.ID,
+						ComponentID:   nilIfEmpty(comp.ComponentID),
+						Quantity:      comp.Quantity,
+						MarkupPercent: comp.MarkupPercent,
+					}
 				}
-				if err := tx.Create(&pc).Error; err != nil {
+				if err := tx.Create(&pcs).Error; err != nil {
 					return err
 				}
 			}
 		}
 		if payload.PackagingItems != nil {
-			tx.Where("product_id = ?", id).Delete(&models.ProductPackagingItem{})
-			for _, pack := range payload.PackagingItems {
-				pi := models.ProductPackagingItem{
-					ID:              uuid.New().String(),
-					ProductID:       product.ID,
-					PackagingItemID: pack.PackagingItemID,
-					QuantityUsed:    pack.QuantityUsed,
+			if err := tx.Where("product_id = ?", id).Delete(&models.ProductPackagingItem{}).Error; err != nil {
+				return err
+			}
+			if len(payload.PackagingItems) > 0 {
+				pis := make([]models.ProductPackagingItem, len(payload.PackagingItems))
+				for i, pack := range payload.PackagingItems {
+					pis[i] = models.ProductPackagingItem{
+						ID:              uuid.New().String(),
+						ProductID:       product.ID,
+						PackagingItemID: pack.PackagingItemID,
+						QuantityUsed:    pack.QuantityUsed,
+					}
 				}
-				if err := tx.Create(&pi).Error; err != nil {
+				if err := tx.Create(&pis).Error; err != nil {
 					return err
 				}
 			}
@@ -477,6 +537,8 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		"base_hpp":           breakdown.BaseHPP,
 		"base_selling_price": breakdown.BaseSellingPrice,
 	})
+
+	h.InvalidateListCache()
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
@@ -520,6 +582,8 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus produk: " + err.Error()})
 		return
 	}
+
+	h.InvalidateListCache()
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Produk beserta resep BOM berhasil dihapus",
