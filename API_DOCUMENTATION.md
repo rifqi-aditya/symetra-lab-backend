@@ -25,6 +25,7 @@ Backend manajemen toko yang terintegrasi dengan **Shopee Open Platform (Open API
 | `POST` | `/api/v1/shopee/shops/:shop_id/refresh` | Manual refresh access token toko |
 | `POST` | `/api/v1/shopee/shops/:shop_id/sync-orders` | Sinkronisasi pesanan Shopee, auto-match SKU, dan alokasi kas 5 ember |
 | `GET` | `/api/v1/shopee/shops/:shop_id/orders` | Mengambil daftar pesanan toko (filter status, search, deadline SLA) |
+| `GET` | `/api/v1/shopee/shops/:shop_id/raw-orders` | Mengambil data mentah (raw JSON) pesanan langsung dari API Shopee tanpa simpan ke database |
 | `GET` | `/api/v1/shopee/orders/:order_sn` | Mengambil detail lengkap 1 pesanan (item, link produk master, alokasi kas) |
 | `POST` | `/api/v1/shopee/orders/:order_sn/items/:item_id/link-sku` | Hubungkan item pesanan Shopee tanpa SKU ke Master Produk fisik |
 | `GET` | `/api/v1/shopee/financial/cashflow-summary` | Rekapitulasi 5 Ember Kas Bengkel (Filamen, Packing, Mesin, Net Profit) |
@@ -325,6 +326,27 @@ Mengambil daftar pesanan dari database lokal Supabase untuk ditampilkan di dashb
       "total_pages": 1
     }
   }
+  ```
+
+---
+
+#### `GET /api/v1/shopee/shops/:shop_id/raw-orders`
+Mengambil respon mentah (**raw JSON**) langsung dari Shopee Open Platform API (`get_order_list`, `get_order_detail`, dan `get_escrow_detail`) **tanpa menyimpan ke database**. Endpoint ini sangat berguna untuk keperluan inspeksi payload asli, debugging, atau audit rincian potongan Shopee yang belum diproses.
+
+* **Query Parameters (Opsional)**:
+  | Parameter | Tipe | Keterangan |
+  | :--- | :--- | :--- |
+  | `status` | `string` | Filter status pesanan dari Shopee (`READY_TO_SHIP`, `PROCESSED`, `SHIPPED`, `COMPLETED`, `CANCELLED`) |
+  | `order_sn` | `string` | Cek detail mentah 1 pesanan spesifik (mengembalikan objek lengkap `order_detail` dan `escrow_detail` langsung dari Shopee) |
+
+* **Request Contoh (Inspeksi Raw Pesanan Tertentu)**:
+  ```bash
+  curl -X GET "https://symetra-lab-backend.vercel.app/api/v1/shopee/shops/227895003/raw-orders?order_sn=260912T07VRYRJ"
+  ```
+
+* **Request Contoh (Ambil Seluruh Raw Pesanan Ready to Ship)**:
+  ```bash
+  curl -X GET "https://symetra-lab-backend.vercel.app/api/v1/shopee/shops/227895003/raw-orders?status=READY_TO_SHIP"
   ```
 
 ---
