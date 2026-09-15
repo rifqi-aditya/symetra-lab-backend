@@ -39,7 +39,7 @@ func LoadConfig() *Config {
 		ShopeeIsProduction: isProd,
 		ShopeeRedirectURL:  getEnv("SHOPEE_REDIRECT_URL", "http://localhost:8080/api/v1/shopee/callback"),
 		SupabaseURL:        getEnv("SUPABASE_URL", "https://gllqnxgvllxkmrywrnbu.supabase.co"),
-		SupabaseAnonKey:    getEnv("SUPABASE_ANON_KEY", ""),
+		SupabaseAnonKey:    getEnv("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsbHFueGd2bGx4a21yeXdybmJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjQzMjcsImV4cCI6MjA5NzEwMDMyN30.Oa9YL0Xkqqu-y4OfuJsXgYiKD0r4VKRfAovnMAOe_cY"),
 	}
 }
 
