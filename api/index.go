@@ -34,15 +34,21 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Saat di-rewrite oleh Vercel dari /health -> /api/index, r.URL.Path menjadi "/api/index"
-	// Vercel menyimpan path asli user di header "x-matched-path" atau "x-vercel-matched-path"
-	if origPath := r.Header.Get("x-matched-path"); origPath != "" {
-		r.URL.Path = origPath
-		r.RequestURI = origPath
+	// Dapatkan path asli yang diminta
+	requestedPath := ""
+	if qPath := r.URL.Query().Get("path"); qPath != "" {
+		requestedPath = qPath
+	} else if origPath := r.Header.Get("x-matched-path"); origPath != "" {
+		requestedPath = origPath
 	} else if origPath := r.Header.Get("x-vercel-matched-path"); origPath != "" {
-		r.URL.Path = origPath
-		r.RequestURI = origPath
+		requestedPath = origPath
 	}
 
+	if requestedPath != "" {
+		r.URL.Path = requestedPath
+		r.RequestURI = requestedPath
+	}
+
+	log.Printf("[Vercel Handler] Routing request: %s %s", r.Method, r.URL.Path)
 	engine.ServeHTTP(w, r)
 }

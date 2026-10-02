@@ -30,3 +30,5 @@ go.work
 # Logs & temp
 *.log
 tmp/
+
+.vercel
