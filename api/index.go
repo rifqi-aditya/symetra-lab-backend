@@ -59,10 +59,41 @@ func getEchoEngine() (*echo.Echo, error) {
 
 // Handler adalah entry point standar Serverless Function untuk Vercel Go runtime
 func Handler(w http.ResponseWriter, r *http.Request) {
+	// Dapatkan path asli yang diminta
+	requestedPath := ""
+	if qPath := r.URL.Query().Get("path"); qPath != "" {
+		requestedPath = qPath
+	} else if origPath := r.Header.Get("x-matched-path"); origPath != "" {
+		requestedPath = origPath
+	} else if origPath := r.Header.Get("x-vercel-matched-path"); origPath != "" {
+		requestedPath = origPath
+	}
+
+	// Respon cepat untuk /health check
+	if requestedPath == "/health" || r.URL.Path == "/health" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy","version":"2.0.0","runtime":"vercel"}`))
+		return
+	}
+
 	engine, err := getEchoEngine()
 	if err != nil {
 		http.Error(w, "Internal Server Error: Failed to initialize application ("+err.Error()+")", http.StatusInternalServerError)
 		return
+	}
+
+	if requestedPath != "" {
+		q := r.URL.Query()
+		q.Del("path")
+		r.URL.Path = requestedPath
+		r.URL.RawPath = requestedPath
+		r.URL.RawQuery = q.Encode()
+		if q.Encode() != "" {
+			r.RequestURI = requestedPath + "?" + q.Encode()
+		} else {
+			r.RequestURI = requestedPath
+		}
 	}
 
 	engine.ServeHTTP(w, r)
