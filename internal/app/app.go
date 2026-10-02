@@ -223,6 +223,36 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 	e := echo.New()
 	e.HideBanner = true
 
+	// Pre-middleware untuk menangani rewrite path dari proxy/Vercel (query param path atau header)
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			req := c.Request()
+			requestedPath := ""
+
+			if qPath := req.URL.Query().Get("path"); qPath != "" {
+				requestedPath = qPath
+			} else if origPath := req.Header.Get("x-matched-path"); origPath != "" {
+				requestedPath = origPath
+			} else if origPath := req.Header.Get("x-vercel-matched-path"); origPath != "" {
+				requestedPath = origPath
+			}
+
+			if requestedPath != "" {
+				q := req.URL.Query()
+				q.Del("path")
+				req.URL.Path = requestedPath
+				req.URL.RawPath = requestedPath
+				req.URL.RawQuery = q.Encode()
+				if q.Encode() != "" {
+					req.RequestURI = requestedPath + "?" + q.Encode()
+				} else {
+					req.RequestURI = requestedPath
+				}
+			}
+			return next(c)
+		}
+	})
+
 	deliveryHTTP.SetupRouter(e, deliveryHTTP.RouterConfig{
 		AppConfig:         cfg,
 		AuthHandler:       authHandler,
