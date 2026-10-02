@@ -1,0 +1,1846 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Symetra Lab Backend API",
+    "description": "Dokumentasi Resmi REST API untuk Workshop Management System Symetra Lab.\\n\\nMencakup manajemen inventori 3D printing (filamen, mesin cetak, sparepart, komponen hardware, packaging), kalkulasi HPP dan margin berbasis **7 Pos Kas**, integrasi Shopee Open Platform v2, pesanan manual, serta antrean produksi otomatis.",
+    "version": "2.0.0",
+    "contact": {
+      "name": "Symetra Lab Team",
+      "url": "https://symetralab.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/api/v1",
+      "description": "Local Development Server (v1 standard)"
+    },
+    {
+      "url": "http://localhost:8080/api/v2",
+      "description": "Local Development Server (v2 alias)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "System",
+      "description": "Status server dan health check"
+    },
+    {
+      "name": "Authentication",
+      "description": "Autentikasi Supabase JWT, profil, refresh, dan sesi"
+    },
+    {
+      "name": "Categories",
+      "description": "Manajemen kategori produk workshop"
+    },
+    {
+      "name": "Products",
+      "description": "Katalog produk, resep BOM, 7 Pos Kas HPP, dan SKU generator"
+    },
+    {
+      "name": "Filaments",
+      "description": "Inventori spool filamen, profil teknis, dan tarif per gram"
+    },
+    {
+      "name": "Machines",
+      "description": "Armada 3D printer, suku cadang perawatan, dan jam operasional"
+    },
+    {
+      "name": "Components",
+      "description": "Komponen hardware non-3D print (baut, bearing, switch)"
+    },
+    {
+      "name": "Packaging",
+      "description": "Bahan kemasan dan preset packaging"
+    },
+    {
+      "name": "Orders",
+      "description": "Direct / Manual orders hub, status pengerjaan, dan pembayaran"
+    },
+    {
+      "name": "Shop Config",
+      "description": "Tarif listrik, depresiasi mesin, dan skema fee marketplace"
+    },
+    {
+      "name": "Shopee",
+      "description": "Integrasi Shopee Open Platform v2 & pembagian escrow 7 Pos Kas"
+    },
+    {
+      "name": "Production Queue",
+      "description": "Papan antrean cetak terpadu & auto-deduct inventori/jam mesin"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Masukkan Supabase JWT Access Token"
+      },
+      "UserIDHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-User-ID",
+        "description": "Header alternatif ID pengguna untuk local development / testing"
+      }
+    },
+    "schemas": {
+      "StandardResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Operasi berhasil dilakukan"
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "status": {
+            "type": "string",
+            "example": "error"
+          },
+          "message": {
+            "type": "string",
+            "example": "Deskripsi error"
+          },
+          "error": {
+            "type": "string",
+            "example": "Detail teknis error"
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Desk Accessories"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Ergonomic Mechanical Keyboard Stand"
+          },
+          "sku": {
+            "type": "string",
+            "example": "KB-STAND-V1"
+          },
+          "category": {
+            "type": "string",
+            "example": "Accessories"
+          },
+          "material_type": {
+            "type": "string",
+            "example": "PLA"
+          },
+          "default_weight_grams": {
+            "type": "number",
+            "example": 85.5
+          },
+          "default_print_time_hours": {
+            "type": "number",
+            "example": 2.5
+          },
+          "target_margin_percent": {
+            "type": "integer",
+            "example": 35
+          },
+          "base_hpp": {
+            "type": "number",
+            "example": 28500
+          },
+          "base_selling_price": {
+            "type": "number",
+            "example": 45000
+          },
+          "cost_breakdown": {
+            "type": "object",
+            "properties": {
+              "filament_cost": {
+                "type": "number",
+                "example": 16500
+              },
+              "hardware_cost": {
+                "type": "number",
+                "example": 4000
+              },
+              "packaging_cost": {
+                "type": "number",
+                "example": 2500
+              },
+              "electricity_cost": {
+                "type": "number",
+                "example": 1200
+              },
+              "maintenance_cost": {
+                "type": "number",
+                "example": 2150
+              },
+              "depreciation_cost": {
+                "type": "number",
+                "example": 2150
+              },
+              "base_hpp": {
+                "type": "number",
+                "example": 28500
+              },
+              "target_profit_idr": {
+                "type": "number",
+                "example": 16500
+              },
+              "base_selling_price": {
+                "type": "number",
+                "example": 45000
+              },
+              "shopee_recommended_price": {
+                "type": "number",
+                "example": 54000
+              }
+            }
+          }
+        }
+      },
+      "Filament": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "color_name": {
+            "type": "string",
+            "example": "Matte White"
+          },
+          "color_hex": {
+            "type": "string",
+            "example": "#FFFFFF"
+          },
+          "price_per_roll": {
+            "type": "number",
+            "example": 165000
+          },
+          "current_stock_grams": {
+            "type": "number",
+            "example": 850.0
+          },
+          "low_stock_threshold_grams": {
+            "type": "number",
+            "example": 200.0
+          }
+        }
+      },
+      "Machine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Bambu Lab A1"
+          },
+          "brand": {
+            "type": "string",
+            "example": "Bambu Lab"
+          },
+          "total_hours_used": {
+            "type": "number",
+            "example": 142.5
+          },
+          "current_state": {
+            "type": "string",
+            "enum": [
+              "IDLE",
+              "PRINTING",
+              "MAINTENANCE",
+              "OFFLINE"
+            ],
+            "example": "IDLE"
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order_number": {
+            "type": "string",
+            "example": "ORD-20260929-1024"
+          },
+          "customer_name": {
+            "type": "string",
+            "example": "Studio Budi"
+          },
+          "total_revenue": {
+            "type": "number",
+            "example": 150000
+          },
+          "total_hpp": {
+            "type": "number",
+            "example": 60000
+          },
+          "total_profit": {
+            "type": "number",
+            "example": 90000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "IN_PRODUCTION",
+              "COMPLETED",
+              "DELIVERED",
+              "CANCELLED"
+            ],
+            "example": "PENDING"
+          },
+          "payment_status": {
+            "type": "string",
+            "enum": [
+              "PAID",
+              "UNPAID"
+            ],
+            "example": "PAID"
+          }
+        }
+      },
+      "ProductionQueueItem": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "example": "0aedbcc9-64f5-40cf-8768-d32063195bba"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "SHOPEE",
+              "MANUAL"
+            ],
+            "example": "MANUAL"
+          },
+          "order_identifier": {
+            "type": "string",
+            "example": "ORD-20260929-1024"
+          },
+          "customer_name": {
+            "type": "string",
+            "example": "Studio Budi"
+          },
+          "item_name": {
+            "type": "string",
+            "example": "Ergonomic Mechanical Keyboard Stand"
+          },
+          "quantity": {
+            "type": "integer",
+            "example": 2
+          },
+          "total_print_hours": {
+            "type": "number",
+            "example": 5.0
+          },
+          "assigned_machine_name": {
+            "type": "string",
+            "example": "Bambu Lab A1"
+          },
+          "status": {
+            "type": "string",
+            "example": "PENDING"
+          },
+          "is_urgent": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "CashflowSummary": {
+        "type": "object",
+        "properties": {
+          "total_orders": {
+            "type": "integer",
+            "example": 256
+          },
+          "total_gross_sales": {
+            "type": "number",
+            "example": 15420000
+          },
+          "total_escrow_net_in": {
+            "type": "number",
+            "example": 13878000
+          },
+          "total_hpp": {
+            "type": "number",
+            "example": 5200000
+          },
+          "kas_filamen": {
+            "type": "number",
+            "example": 2800000
+          },
+          "kas_komponen": {
+            "type": "number",
+            "example": 850000
+          },
+          "kas_packing": {
+            "type": "number",
+            "example": 600000
+          },
+          "kas_listrik": {
+            "type": "number",
+            "example": 350000
+          },
+          "kas_maintenance": {
+            "type": "number",
+            "example": 300000
+          },
+          "kas_depresiasi": {
+            "type": "number",
+            "example": 300000
+          },
+          "kas_laba_bersih": {
+            "type": "number",
+            "example": 8678000
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Login Pengguna via Supabase",
+        "description": "Mengautentikasi pengguna menggunakan email dan password Supabase Auth.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "admin@symetralab.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "example": "rahasia123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Email atau password salah",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Profil Pengguna Aktif",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profil pengguna ditemukan"
+          },
+          "401": {
+            "description": "Token kedaluwarsa atau tidak valid"
+          }
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Daftar Kategori Produk",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar seluruh kategori produk workshop"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Tambah Kategori Baru",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Drone Parts"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Kategori berhasil dibuat"
+          }
+        }
+      }
+    },
+    "/categories/{id}": {
+      "put": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Ubah Nama Kategori",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Kategori berhasil diubah"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Hapus Kategori",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kategori berhasil dihapus"
+          }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Daftar Produk & Kalkulasi 7 Pos Kas",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar produk dengan cost breakdown lengkap"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Buat Produk & Resep BOM Baru",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "category",
+                  "material_type"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Articulated Dragon Toy"
+                  },
+                  "category": {
+                    "type": "string",
+                    "example": "Toys"
+                  },
+                  "material_type": {
+                    "type": "string",
+                    "example": "PLA Silk"
+                  },
+                  "default_weight_grams": {
+                    "type": "number",
+                    "example": 140.0
+                  },
+                  "default_print_time_hours": {
+                    "type": "number",
+                    "example": 4.5
+                  },
+                  "target_margin_percent": {
+                    "type": "integer",
+                    "example": 40
+                  },
+                  "base_selling_price": {
+                    "type": "number",
+                    "example": 75000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Produk berhasil dibuat"
+          }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Detail Produk & Komponen BOM",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detail produk lengkap"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Perbarui Spesifikasi Produk",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produk berhasil diperbarui"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Hapus Produk",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produk berhasil dihapus"
+          }
+        }
+      }
+    },
+    "/products/by-sku/{sku}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Cari Produk Berdasarkan SKU",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produk ditemukan"
+          }
+        }
+      }
+    },
+    "/products/auto-generate-skus": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Otomatisasi Penetapan SKU Baru",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SKU berhasil dibuat untuk produk yang belum memiliki SKU"
+          }
+        }
+      }
+    },
+    "/filaments": {
+      "get": {
+        "tags": [
+          "Filaments"
+        ],
+        "summary": "Daftar Spool Filamen",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar filamen dengan profil teknis preloaded"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Filaments"
+        ],
+        "summary": "Daftarkan Spool Filamen Baru",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "color_name",
+                  "price_per_roll"
+                ],
+                "properties": {
+                  "brand": {
+                    "type": "string",
+                    "example": "eSUN"
+                  },
+                  "material_type": {
+                    "type": "string",
+                    "example": "PLA+"
+                  },
+                  "color_name": {
+                    "type": "string",
+                    "example": "Pine Green"
+                  },
+                  "color_hex": {
+                    "type": "string",
+                    "example": "#2E5834"
+                  },
+                  "price_per_roll": {
+                    "type": "number",
+                    "example": 175000
+                  },
+                  "current_stock_grams": {
+                    "type": "number",
+                    "example": 1000
+                  },
+                  "low_stock_threshold_grams": {
+                    "type": "number",
+                    "example": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Spool filamen berhasil didaftarkan"
+          }
+        }
+      }
+    },
+    "/filaments/{id}/stock": {
+      "patch": {
+        "tags": [
+          "Filaments"
+        ],
+        "summary": "Update / Timbang Fisik Stok Filamen",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "current_stock_grams"
+                ],
+                "properties": {
+                  "current_stock_grams": {
+                    "type": "number",
+                    "example": 782.5
+                  },
+                  "is_weighed": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stok filamen berhasil diperbarui"
+          }
+        }
+      }
+    },
+    "/machines": {
+      "get": {
+        "tags": [
+          "Machines"
+        ],
+        "summary": "Daftar Armada 3D Printer",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar printer dan suku cadang maintenance"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Machines"
+        ],
+        "summary": "Daftarkan Printer Baru",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "total_purchase_cost"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Bambu Lab P1S"
+                  },
+                  "brand": {
+                    "type": "string",
+                    "example": "Bambu Lab"
+                  },
+                  "total_purchase_cost": {
+                    "type": "number",
+                    "example": 11500000
+                  },
+                  "lifespan_hours": {
+                    "type": "integer",
+                    "example": 10000
+                  },
+                  "avg_power_watts": {
+                    "type": "integer",
+                    "example": 220
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Printer berhasil ditambahkan"
+          }
+        }
+      }
+    },
+    "/machines/{id}/state": {
+      "patch": {
+        "tags": [
+          "Machines"
+        ],
+        "summary": "Ubah Status Operasional Mesin",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "IDLE",
+                      "PRINTING",
+                      "MAINTENANCE",
+                      "OFFLINE"
+                    ],
+                    "example": "PRINTING"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status mesin diperbarui"
+          }
+        }
+      }
+    },
+    "/machines/{id}/parts": {
+      "get": {
+        "tags": [
+          "Machines"
+        ],
+        "summary": "Daftar Suku Cadang Perawatan Printer",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar sparepart printer"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Machines"
+        ],
+        "summary": "Tambah Suku Cadang Mesin",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "part_name",
+                  "lifespan_hours"
+                ],
+                "properties": {
+                  "part_name": {
+                    "type": "string",
+                    "example": "Hardened Steel Nozzle 0.4"
+                  },
+                  "lifespan_hours": {
+                    "type": "number",
+                    "example": 1500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sparepart berhasil ditambahkan"
+          }
+        }
+      }
+    },
+    "/machines/parts/{part_id}/replace": {
+      "post": {
+        "tags": [
+          "Machines"
+        ],
+        "summary": "Reset Jam Pakai Sparepart (Setelah Diganti)",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Jam operasional suku cadang di-reset ke 0"
+          }
+        }
+      }
+    },
+    "/components": {
+      "get": {
+        "tags": [
+          "Components"
+        ],
+        "summary": "Daftar Komponen Hardware",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar komponen hardware (baut, bearing)"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Components"
+        ],
+        "summary": "Tambah Komponen Hardware",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "price_per_unit"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Stainless Steel Bolt M3x12"
+                  },
+                  "price_per_unit": {
+                    "type": "number",
+                    "example": 350
+                  },
+                  "markup_percent": {
+                    "type": "number",
+                    "example": 20
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "DIN 912 Hex Socket"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Komponen berhasil dibuat"
+          }
+        }
+      }
+    },
+    "/packaging-items": {
+      "get": {
+        "tags": [
+          "Packaging"
+        ],
+        "summary": "Daftar Bahan Kemasan Individual",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar kardus, bubble wrap, polymailer"
+          }
+        }
+      }
+    },
+    "/packaging-presets": {
+      "get": {
+        "tags": [
+          "Packaging"
+        ],
+        "summary": "Daftar Bundel Preset Kemasan",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar preset packaging"
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Daftar Pesanan Manual",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar pesanan manual lengkap dengan items"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Buat Pesanan Manual Baru",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "customer_name",
+                  "items"
+                ],
+                "properties": {
+                  "customer_name": {
+                    "type": "string",
+                    "example": "Pak Hendra"
+                  },
+                  "customer_contact": {
+                    "type": "string",
+                    "example": "081234567890"
+                  },
+                  "source": {
+                    "type": "string",
+                    "example": "DIRECT_WHATSAPP"
+                  },
+                  "payment_status": {
+                    "type": "string",
+                    "enum": [
+                      "PAID",
+                      "UNPAID"
+                    ],
+                    "example": "PAID"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "product_name",
+                        "quantity",
+                        "selling_price"
+                      ],
+                      "properties": {
+                        "product_name": {
+                          "type": "string",
+                          "example": "Custom Drone Arm"
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "example": 4
+                        },
+                        "selling_price": {
+                          "type": "number",
+                          "example": 45000
+                        },
+                        "weight_grams": {
+                          "type": "number",
+                          "example": 35.0
+                        },
+                        "print_time_hours": {
+                          "type": "number",
+                          "example": 1.5
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pesanan manual dibuat dengan ORD-YYYYMMDD-XXXX"
+          }
+        }
+      }
+    },
+    "/orders/{id}/status": {
+      "patch": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Ubah Status Pengerjaan Pesanan",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "PENDING",
+                      "IN_PRODUCTION",
+                      "COMPLETED",
+                      "DELIVERED",
+                      "CANCELLED"
+                    ],
+                    "example": "IN_PRODUCTION"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status pesanan berhasil diperbarui"
+          }
+        }
+      }
+    },
+    "/config/shop": {
+      "get": {
+        "tags": [
+          "Shop Config"
+        ],
+        "summary": "Konfigurasi Tarif & Parameter Workshop",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tarif listrik, depresiasi printer, buffer kegagalan"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Shop Config"
+        ],
+        "summary": "Perbarui Parameter Operasional Workshop",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "electricity_tariff_per_kwh": {
+                    "type": "number",
+                    "example": 1750
+                  },
+                  "failure_buffer_percent": {
+                    "type": "number",
+                    "example": 10
+                  },
+                  "printer_price": {
+                    "type": "number",
+                    "example": 5500000
+                  },
+                  "printer_lifespan_hours": {
+                    "type": "number",
+                    "example": 3500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Konfigurasi bengkel berhasil diperbarui"
+          }
+        }
+      }
+    },
+    "/shopee/auth-url": {
+      "get": {
+        "tags": [
+          "Shopee"
+        ],
+        "summary": "Dapatkan URL Autentikasi Shopee OAuth",
+        "description": "Menghasilkan URL login seller Shopee dengan signature HMAC-SHA256.",
+        "responses": {
+          "200": {
+            "description": "URL OAuth Shopee"
+          }
+        }
+      }
+    },
+    "/shopee/orders": {
+      "get": {
+        "tags": [
+          "Shopee"
+        ],
+        "summary": "Daftar Pesanan Shopee Online",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar pesanan Shopee beserta breakdown keuangan 7 Pos Kas"
+          }
+        }
+      }
+    },
+    "/shopee/financial/cashflow-summary": {
+      "get": {
+        "tags": [
+          "Shopee"
+        ],
+        "summary": "Rekapitulasi Saldo Keuangan 7 Pos Kas",
+        "description": "Menghitung agregasi saldo real-time untuk 7 pos kas: Filamen, Komponen, Packing, Listrik, Maintenance, Depresiasi, dan Laba Bersih.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ringkasan saldo 7 Pos Kas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashflowSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shopee/financial/recalculate": {
+      "post": {
+        "tags": [
+          "Shopee"
+        ],
+        "summary": "Kalkulasi Ulang Seluruh Escrow Finansial",
+        "description": "Menjalankan eksekusi query vektor teroptimasi untuk rekalkulasi seluruh laba bersih escrow pesanan.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Seluruh escrow berhasil dihitung ulang"
+          }
+        }
+      }
+    },
+    "/production/queue": {
+      "get": {
+        "tags": [
+          "Production Queue"
+        ],
+        "summary": "Papan Antrean Cetak Terpadu",
+        "description": "Menggabungkan pesanan Shopee (PROCESSED/READY_TO_SHIP) dan pesanan manual (PENDING/IN_PRODUCTION), otomatis diurutkan berdasarkan prioritas SLA deadline (<24 jam = URGENT).",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar antrean cetak, total antrean jam, dan jumlah pekerjaan mendesak"
+          }
+        }
+      }
+    },
+    "/production/complete-job": {
+      "post": {
+        "tags": [
+          "Production Queue"
+        ],
+        "summary": "Selesaikan Pekerjaan Cetak (Auto-Deduct Inventori)",
+        "description": "Menandai 1 job cetak selesai. Otomatis memotong stok filamen pada database, menambahkan jam operasional printer, mengecek peringatan batas usia pakai suku cadang, dan mengupdate status pesanan.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "UserIDHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "job_id"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "MANUAL",
+                      "SHOPEE"
+                    ],
+                    "example": "MANUAL"
+                  },
+                  "job_id": {
+                    "type": "string",
+                    "example": "0aedbcc9-64f5-40cf-8768-d32063195bba"
+                  },
+                  "machine_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "07f899c6-248b-44da-8f4d-7e329ea787de"
+                  },
+                  "filament_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "1e18b2b4-e0e7-4e4c-9995-22b192a94329"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pekerjaan selesai, filamen terpotong, jam mesin bertambah",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "status": "success",
+                  "data": {
+                    "status": "success",
+                    "message": "Pekerjaan cetak selesai. Filamen terpotong untuk 2 pcs dan mesin beroperasi +3.00 jam.",
+                    "deducted_filaments": [
+                      "White: -90.00g (Sisa: 910.00g)"
+                    ],
+                    "added_machine_hours": 3.0,
+                    "low_stock_warning": false,
+                    "maintenance_warning": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
