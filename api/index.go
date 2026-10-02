@@ -45,10 +45,19 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if requestedPath != "" {
+		// Bersihkan query param 'path' dari URL query jika ada
+		q := r.URL.Query()
+		q.Del("path")
+		newRawQuery := q.Encode()
+
 		r.URL.Path = requestedPath
-		r.RequestURI = requestedPath
+		r.URL.RawQuery = newRawQuery
+		if newRawQuery != "" {
+			r.RequestURI = requestedPath + "?" + newRawQuery
+		} else {
+			r.RequestURI = requestedPath
+		}
 	}
 
-	log.Printf("[Vercel Handler] Routing request: %s %s", r.Method, r.URL.Path)
 	engine.ServeHTTP(w, r)
 }
