@@ -159,3 +159,41 @@ func ToProductResponse(p *product.Product, totalSold int, cb costing.ProductCost
 		TotalSold:             totalSold,
 	}
 }
+
+type ProductListItemResponse struct {
+	ID                    uuid.UUID `json:"id"`
+	Name                  string    `json:"name"`
+	ParentSKU             *string   `json:"parent_sku"`
+	SKU                   *string   `json:"sku"`
+	Category              string    `json:"category"`
+	ThumbnailURL          *string   `json:"thumbnail_url"`
+	MaterialType          string    `json:"material_type"`
+	DefaultWeightGrams    float64   `json:"default_weight_grams"`
+	DefaultPrintTimeHours float64   `json:"default_print_time_hours"`
+	BatchSize             int       `json:"batch_size"`
+	BaseHPP               float64   `json:"base_hpp"`
+	BaseSellingPrice      float64   `json:"base_selling_price"`
+	TargetMarginPercent   int       `json:"target_margin_percent"`
+	TotalSold             int       `json:"total_sold"`
+	CreatedAt             time.Time `json:"created_at"`
+}
+
+func ToProductListItemResponse(p *product.Product, totalSold int) ProductListItemResponse {
+	return ProductListItemResponse{
+		ID:                    p.ID(),
+		Name:                  p.Name(),
+		ParentSKU:             p.ParentSKU(),
+		SKU:                   p.SKU(),
+		Category:              p.Category(),
+		ThumbnailURL:          p.ThumbnailURL(),
+		MaterialType:          p.MaterialType(),
+		DefaultWeightGrams:    p.DefaultWeightGrams(),
+		DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
+		BatchSize:             p.BatchSize(),
+		BaseHPP:               p.BaseHPP(),
+		BaseSellingPrice:      p.BaseSellingPrice(),
+		TargetMarginPercent:   p.TargetMarginPercent(),
+		TotalSold:             totalSold,
+		CreatedAt:             p.CreatedAt(),
+	}
+}

@@ -94,9 +94,9 @@ func (h *ProductHandler) List(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dto.Fail("Failed to retrieve products", err.Error()))
 	}
 
-	items := make([]dto.ProductResponse, len(output.Items))
+	items := make([]dto.ProductListItemResponse, len(output.Items))
 	for i, item := range output.Items {
-		items[i] = dto.ToProductResponse(item.Product, item.TotalSold, item.CostBreakdown)
+		items[i] = dto.ToProductListItemResponse(item.Product, item.TotalSold)
 	}
 
 	if isPaginated {
