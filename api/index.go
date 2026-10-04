@@ -73,7 +73,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	if requestedPath == "/health" || r.URL.Path == "/health" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"healthy","version":"2.0.0","runtime":"vercel"}`))
+		w.Write([]byte(`{"status":"healthy","version":"1.0.0","runtime":"vercel"}`))
 		return
 	}
 

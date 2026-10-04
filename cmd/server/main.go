@@ -12,7 +12,7 @@ func main() {
 		log.Fatalf("Failed to initialize app: %v", err)
 	}
 
-	log.Printf("[Symetra Lab v2] Server listening on http://localhost:%s", cfg.Port)
+	log.Printf("[Symetra Lab] Server listening on http://localhost:%s", cfg.Port)
 	if err := e.Start(":" + cfg.Port); err != nil {
 		log.Fatalf("Server shutdown: %v", err)
 	}
