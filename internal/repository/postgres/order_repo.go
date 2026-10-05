@@ -150,6 +150,22 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		profit = g.TotalProfit
 	}
 
+	totRev := g.TotalRevenue
+	if totRev == 0 {
+		totRev = gross
+	}
+	if totRev == 0 {
+		totRev = net
+	}
+	totHpp := g.TotalHPP
+	if totHpp == 0 {
+		totHpp = cogs
+	}
+	totProf := g.TotalProfit
+	if totProf == 0 {
+		totProf = profit
+	}
+
 	return order.ReconstructOrder(
 		g.ID,
 		g.UserID,
@@ -169,9 +185,9 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		g.FundMaintenance,
 		g.FundDepreciation,
 		g.FundNetProfit,
-		g.TotalRevenue,
-		g.TotalHPP,
-		g.TotalProfit,
+		totRev,
+		totHpp,
+		totProf,
 		g.Status,
 		g.Notes,
 		g.Source,

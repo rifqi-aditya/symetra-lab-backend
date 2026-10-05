@@ -186,6 +186,38 @@ func ToOrderResponse(o *order.Order) OrderResponse {
 		items[i] = ToOrderItemResponse(&itCopy)
 	}
 
+	gross := o.GrossAmount()
+	if gross == 0 {
+		gross = o.TotalRevenue()
+	}
+	net := o.NetAmount()
+	if net == 0 {
+		net = gross
+	}
+	totRev := o.TotalRevenue()
+	if totRev == 0 {
+		totRev = gross
+	}
+	if totRev == 0 {
+		totRev = net
+	}
+	cogs := o.CogsAmount()
+	if cogs == 0 {
+		cogs = o.TotalHPP()
+	}
+	totHpp := o.TotalHPP()
+	if totHpp == 0 {
+		totHpp = cogs
+	}
+	profit := o.NetProfit()
+	if profit == 0 {
+		profit = o.TotalProfit()
+	}
+	totProfit := o.TotalProfit()
+	if totProfit == 0 {
+		totProfit = profit
+	}
+
 	return OrderResponse{
 		ID:               o.ID(),
 		UserID:           o.UserID(),
@@ -193,11 +225,11 @@ func ToOrderResponse(o *order.Order) OrderResponse {
 		CustomerName:     o.CustomerName(),
 		CustomerContact:  o.CustomerContact(),
 		Channel:          o.Channel(),
-		GrossAmount:      o.GrossAmount(),
+		GrossAmount:      gross,
 		ChannelFee:       o.ChannelFee(),
-		NetAmount:        o.NetAmount(),
-		CogsAmount:       o.CogsAmount(),
-		NetProfit:        o.NetProfit(),
+		NetAmount:        net,
+		CogsAmount:       cogs,
+		NetProfit:        profit,
 		FundFilament:     o.FundFilament(),
 		FundComponent:    o.FundComponent(),
 		FundPackaging:    o.FundPackaging(),
@@ -205,9 +237,9 @@ func ToOrderResponse(o *order.Order) OrderResponse {
 		FundMaintenance:  o.FundMaintenance(),
 		FundDepreciation: o.FundDepreciation(),
 		FundNetProfit:    o.FundNetProfit(),
-		TotalRevenue:     o.TotalRevenue(),
-		TotalHPP:         o.TotalHPP(),
-		TotalProfit:      o.TotalProfit(),
+		TotalRevenue:     totRev,
+		TotalHPP:         totHpp,
+		TotalProfit:      totProfit,
 		Status:           o.Status(),
 		Notes:            o.Notes(),
 		Source:           o.Source(),
