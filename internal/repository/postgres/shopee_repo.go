@@ -29,92 +29,90 @@ func (shopGORM) TableName() string {
 	return "shops"
 }
 
-type shopeeOrderEscrowGORM struct {
-	OrderSN                  string    `gorm:"column:order_sn;primaryKey"`
-	EscrowAmount             float64   `gorm:"column:escrow_amount"`
-	SellingPrice             float64   `gorm:"column:selling_price"`
-	CommissionFee            float64   `gorm:"column:commission_fee"`
-	CommissionRuleName       string    `gorm:"column:commission_rule_name"`
-	CommissionPercentage     float64   `gorm:"column:commission_percentage"`
-	ServiceFee               float64   `gorm:"column:service_fee"`
-	ServiceRuleName          string    `gorm:"column:service_rule_name"`
-	ServicePercentage        float64   `gorm:"column:service_percentage"`
-	SellerTransactionFee     float64   `gorm:"column:seller_transaction_fee"`
-	SellerOrderProcessingFee float64   `gorm:"column:seller_order_processing_fee"`
-	SellerVoucherDiscount    float64   `gorm:"column:seller_voucher_discount"`
-	TotalMarketplaceFee      float64   `gorm:"column:total_marketplace_fee"`
-	TotalHPP                 float64   `gorm:"column:total_hpp"`
-	KasFilamen               float64   `gorm:"column:kas_filamen"`
-	KasKomponen              float64   `gorm:"column:kas_komponen"`
-	KasPacking               float64   `gorm:"column:kas_packing"`
-	KasListrik               float64   `gorm:"column:kas_listrik"`
-	KasMaintenance           float64   `gorm:"column:kas_maintenance"`
-	KasDepresiasi            float64   `gorm:"column:kas_depresiasi"`
-	KasLabaBersih            float64   `gorm:"column:kas_laba_bersih"`
-	FinancialStatus          string    `gorm:"column:financial_status"`
-	CreatedAt                time.Time `gorm:"column:created_at"`
-	UpdatedAt                time.Time `gorm:"column:updated_at"`
+type shopeeOrderMarketplaceGORM struct {
+	OrderID                  uuid.UUID  `gorm:"column:order_id;primaryKey;type:uuid"`
+	Channel                  string     `gorm:"column:channel"`
+	ShopID                   uint64     `gorm:"column:shop_id"`
+	OrderSN                  string     `gorm:"column:order_sn;uniqueIndex"`
+	BuyerUserID              uint64     `gorm:"column:buyer_user_id"`
+	BuyerUsername            string     `gorm:"column:buyer_username"`
+	MessageToSeller          string     `gorm:"column:message_to_seller"`
+	ShippingCarrier          string     `gorm:"column:shipping_carrier"`
+	TrackingNumber           string     `gorm:"column:tracking_number"`
+	ShipByDate               int64      `gorm:"column:ship_by_date"`
+	ShipByDateTime           *time.Time `gorm:"column:ship_by_date_time"`
+	CommissionFee            float64    `gorm:"column:commission_fee"`
+	ServiceFee               float64    `gorm:"column:service_fee"`
+	SellerTransactionFee     float64    `gorm:"column:seller_transaction_fee"`
+	SellerOrderProcessingFee float64    `gorm:"column:seller_order_processing_fee"`
+	SellerVoucherDiscount    float64    `gorm:"column:seller_voucher_discount"`
+	TotalMarketplaceFee      float64    `gorm:"column:total_marketplace_fee"`
+	EscrowAmount             float64    `gorm:"column:escrow_amount"`
+	FinancialStatus          string     `gorm:"column:financial_status"`
+	CreatedAt                time.Time  `gorm:"column:created_at"`
+	UpdatedAt                time.Time  `gorm:"column:updated_at"`
 }
 
-func (shopeeOrderEscrowGORM) TableName() string {
-	return "shopee_order_escrows"
+func (shopeeOrderMarketplaceGORM) TableName() string {
+	return "order_marketplace_details"
 }
 
-type shopeeOrderItemTableGORM struct {
-	ID               uint64     `gorm:"column:id;primaryKey;autoIncrement"`
-	OrderSN          string     `gorm:"column:order_sn;not null;index"`
-	ItemID           uint64     `gorm:"column:item_id"`
-	ItemName         string     `gorm:"column:item_name"`
+type shopeeUnifiedItemGORM struct {
+	ID               uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
+	OrderID          uuid.UUID  `gorm:"column:order_id;type:uuid"`
+	ChannelItemID    uint64     `gorm:"column:channel_item_id"`
+	ChannelModelID   uint64     `gorm:"column:channel_model_id"`
+	ProductName      string     `gorm:"column:product_name"`
 	ItemSKU          string     `gorm:"column:item_sku"`
-	ModelID          uint64     `gorm:"column:model_id"`
-	ModelName        string     `gorm:"column:model_name"`
-	ModelSKU         string     `gorm:"column:model_sku"`
-	Quantity         int        `gorm:"column:quantity"`
-	OriginalPrice    float64    `gorm:"column:original_price"`
-	DiscountedPrice  float64    `gorm:"column:discounted_price"`
-	ProductID        *uuid.UUID `gorm:"column:product_id;type:uuid"`
 	MatchedSKU       string     `gorm:"column:matched_sku"`
 	MappingStatus    string     `gorm:"column:mapping_status"`
+	Quantity         int        `gorm:"column:quantity"`
+	SellingPrice     float64    `gorm:"column:selling_price"`
+	HPP              float64    `gorm:"column:hpp"`
 	FilamentCost     float64    `gorm:"column:filament_cost"`
-	HardwareCost     float64    `gorm:"column:hardware_cost"`
+	ComponentCost    float64    `gorm:"column:component_cost"`
 	PackagingCost    float64    `gorm:"column:packaging_cost"`
-	MachineCost      float64    `gorm:"column:machine_cost"`
-	BaseHPP          float64    `gorm:"column:base_hpp"`
-	NetProfit        float64    `gorm:"column:net_profit"`
-	ElectricityCost  float64    `gorm:"column:electricity_cost"`
+	EnergyCost       float64    `gorm:"column:energy_cost"`
 	MaintenanceCost  float64    `gorm:"column:maintenance_cost"`
 	DepreciationCost float64    `gorm:"column:depreciation_cost"`
+	TotalCOGS        float64    `gorm:"column:total_cogs"`
+	NetProfit        float64    `gorm:"column:net_profit"`
+	ProductID        *uuid.UUID `gorm:"column:product_id;type:uuid"`
 	CreatedAt        time.Time  `gorm:"column:created_at"`
 	UpdatedAt        time.Time  `gorm:"column:updated_at"`
 }
 
-func (shopeeOrderItemTableGORM) TableName() string {
-	return "shopee_order_items"
+func (shopeeUnifiedItemGORM) TableName() string {
+	return "order_items"
 }
 
-type shopeeOrderTableGORM struct {
-	OrderSN           string                      `gorm:"column:order_sn;primaryKey"`
-	ShopID            uint64                      `gorm:"column:shop_id;not null"`
-	OrderStatus       string                      `gorm:"column:order_status;not null"`
-	BuyerUserID       uint64                      `gorm:"column:buyer_user_id"`
-	BuyerUsername     string                      `gorm:"column:buyer_username"`
-	MessageToSeller   string                      `gorm:"column:message_to_seller"`
-	ShipByDate        int64                       `gorm:"column:ship_by_date"`
-	ShipByDateTime    *time.Time                  `gorm:"column:ship_by_date_time"`
-	ShippingCarrier   string                      `gorm:"column:shipping_carrier"`
-	TrackingNumber    string                      `gorm:"column:tracking_number"`
-	TotalAmount       float64                     `gorm:"column:total_amount"`
-	BuyerCancelReason string                      `gorm:"column:buyer_cancel_reason"`
-	CreateTimeShopee  int64                       `gorm:"column:create_time_shopee"`
-	UpdateTimeShopee  int64                       `gorm:"column:update_time_shopee"`
-	CreatedAt         time.Time                   `gorm:"column:created_at"`
-	UpdatedAt         time.Time                   `gorm:"column:updated_at"`
-	Items             []shopeeOrderItemTableGORM  `gorm:"foreignKey:OrderSN;references:OrderSN;constraint:OnDelete:CASCADE"`
-	Escrow            *shopeeOrderEscrowGORM      `gorm:"foreignKey:OrderSN;references:OrderSN;constraint:OnDelete:CASCADE"`
+type shopeeUnifiedOrderGORM struct {
+	ID               uuid.UUID                   `gorm:"column:id;primaryKey;type:uuid"`
+	OrderNumber      string                      `gorm:"column:order_number;index"`
+	CustomerName     string                      `gorm:"column:customer_name"`
+	Status           string                      `gorm:"column:status"`
+	Channel          string                      `gorm:"column:channel"`
+	PaymentStatus    string                      `gorm:"column:payment_status"`
+	GrossAmount      float64                     `gorm:"column:gross_amount"`
+	ChannelFee       float64                     `gorm:"column:channel_fee"`
+	NetAmount        float64                     `gorm:"column:net_amount"`
+	COGSAmount       float64                     `gorm:"column:cogs_amount"`
+	NetProfit        float64                     `gorm:"column:net_profit"`
+	FundFilament     float64                     `gorm:"column:fund_filament"`
+	FundComponent    float64                     `gorm:"column:fund_component"`
+	FundPackaging    float64                     `gorm:"column:fund_packaging"`
+	FundElectricity  float64                     `gorm:"column:fund_electricity"`
+	FundMaintenance  float64                     `gorm:"column:fund_maintenance"`
+	FundDepreciation float64                     `gorm:"column:fund_depreciation"`
+	FundNetProfit    float64                     `gorm:"column:fund_net_profit"`
+	CreatedAt        time.Time                   `gorm:"column:created_at"`
+	UpdatedAt        time.Time                   `gorm:"column:updated_at"`
+	Marketplace      *shopeeOrderMarketplaceGORM `gorm:"foreignKey:OrderID;references:ID"`
+	Items            []shopeeUnifiedItemGORM     `gorm:"foreignKey:OrderID;references:ID"`
 }
 
-func (shopeeOrderTableGORM) TableName() string {
-	return "shopee_orders"
+func (shopeeUnifiedOrderGORM) TableName() string {
+	return "orders"
 }
 
 type ShopeeRepository struct {
@@ -143,35 +141,36 @@ func mapShopGORMToDomain(s *shopGORM) *shopee.ShopeeShop {
 	)
 }
 
-func mapShopeeOrderGORMToDomain(o *shopeeOrderTableGORM) *shopee.ShopeeOrder {
+func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.ShopeeOrder {
 	if o == nil {
 		return nil
 	}
 
 	items := make([]shopee.ShopeeOrderItem, len(o.Items))
 	for i, it := range o.Items {
+		var dummyID uint64 = uint64(i + 1)
 		items[i] = shopee.ReconstructOrderItem(
-			it.ID,
-			it.OrderSN,
-			it.ItemID,
-			it.ItemName,
+			dummyID,
+			o.OrderNumber,
+			it.ChannelItemID,
+			it.ProductName,
 			it.ItemSKU,
-			it.ModelID,
-			it.ModelName,
-			it.ModelSKU,
+			it.ChannelModelID,
+			"",
+			it.ItemSKU,
 			it.Quantity,
-			it.OriginalPrice,
-			it.DiscountedPrice,
+			it.SellingPrice,
+			it.SellingPrice,
 			it.ProductID,
 			it.MatchedSKU,
 			it.MappingStatus,
 			it.FilamentCost,
-			it.HardwareCost,
+			it.ComponentCost,
 			it.PackagingCost,
-			it.MachineCost,
-			it.BaseHPP,
+			0, // machineCost
+			it.TotalCOGS,
 			it.NetProfit,
-			it.ElectricityCost,
+			it.EnergyCost,
 			it.MaintenanceCost,
 			it.DepreciationCost,
 			it.CreatedAt,
@@ -180,51 +179,66 @@ func mapShopeeOrderGORMToDomain(o *shopeeOrderTableGORM) *shopee.ShopeeOrder {
 	}
 
 	var escrow *shopee.ShopeeOrderEscrow
-	if o.Escrow != nil {
-		e := o.Escrow
+	if o.Marketplace != nil {
+		m := o.Marketplace
 		escrow = shopee.ReconstructOrderEscrow(
-			e.OrderSN,
-			e.EscrowAmount,
-			e.SellingPrice,
-			e.CommissionFee,
-			e.CommissionRuleName,
-			e.CommissionPercentage,
-			e.ServiceFee,
-			e.ServiceRuleName,
-			e.ServicePercentage,
-			e.SellerTransactionFee,
-			e.SellerOrderProcessingFee,
-			e.SellerVoucherDiscount,
-			e.TotalMarketplaceFee,
-			e.TotalHPP,
-			e.KasFilamen,
-			e.KasKomponen,
-			e.KasPacking,
-			e.KasListrik,
-			e.KasMaintenance,
-			e.KasDepresiasi,
-			e.KasLabaBersih,
-			e.FinancialStatus,
-			e.CreatedAt,
-			e.UpdatedAt,
+			o.OrderNumber,
+			o.NetAmount,
+			o.GrossAmount,
+			m.CommissionFee,
+			"",
+			0,
+			m.ServiceFee,
+			"",
+			0,
+			m.SellerTransactionFee,
+			m.SellerOrderProcessingFee,
+			m.SellerVoucherDiscount,
+			o.ChannelFee,
+			o.COGSAmount,
+			o.FundFilament,
+			o.FundComponent,
+			o.FundPackaging,
+			o.FundElectricity,
+			o.FundMaintenance,
+			o.FundDepreciation,
+			o.FundNetProfit,
+			m.FinancialStatus,
+			m.CreatedAt,
+			m.UpdatedAt,
 		)
 	}
 
+	var shopID, buyerUserID uint64
+	var msg, carrier, tracking string
+	var shipByDate int64
+	var shipByDateTime *time.Time
+	if o.Marketplace != nil {
+		m := o.Marketplace
+		shopID = m.ShopID
+		buyerUserID = m.BuyerUserID
+		msg = m.MessageToSeller
+		carrier = m.ShippingCarrier
+		tracking = m.TrackingNumber
+		shipByDate = m.ShipByDate
+		shipByDateTime = m.ShipByDateTime
+	}
+
 	return shopee.ReconstructOrder(
-		o.OrderSN,
-		o.ShopID,
-		o.OrderStatus,
-		o.BuyerUserID,
-		o.BuyerUsername,
-		o.MessageToSeller,
-		o.ShipByDate,
-		o.ShipByDateTime,
-		o.ShippingCarrier,
-		o.TrackingNumber,
-		o.TotalAmount,
-		o.BuyerCancelReason,
-		o.CreateTimeShopee,
-		o.UpdateTimeShopee,
+		o.OrderNumber,
+		shopID,
+		o.Status,
+		buyerUserID,
+		o.CustomerName,
+		msg,
+		shipByDate,
+		shipByDateTime,
+		carrier,
+		tracking,
+		o.GrossAmount,
+		"",
+		0,
+		0,
 		items,
 		escrow,
 		o.CreatedAt,
@@ -234,8 +248,7 @@ func mapShopeeOrderGORMToDomain(o *shopeeOrderTableGORM) *shopee.ShopeeOrder {
 
 func (r *ShopeeRepository) FindShop(ctx context.Context, shopID uint64) (*shopee.ShopeeShop, error) {
 	var s shopGORM
-	err := r.db.WithContext(ctx).Where("shop_id = ?", shopID).First(&s).Error
-	if err != nil {
+	if err := r.db.WithContext(ctx).Where("shop_id = ?", shopID).First(&s).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, shopee.ErrShopNotFound
 		}
@@ -246,8 +259,7 @@ func (r *ShopeeRepository) FindShop(ctx context.Context, shopID uint64) (*shopee
 
 func (r *ShopeeRepository) FindDefaultShop(ctx context.Context) (*shopee.ShopeeShop, error) {
 	var s shopGORM
-	err := r.db.WithContext(ctx).Order("created_at ASC").First(&s).Error
-	if err != nil {
+	if err := r.db.WithContext(ctx).First(&s).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, shopee.ErrShopNotFound
 		}
@@ -258,8 +270,7 @@ func (r *ShopeeRepository) FindDefaultShop(ctx context.Context) (*shopee.ShopeeS
 
 func (r *ShopeeRepository) FindAllShops(ctx context.Context) ([]*shopee.ShopeeShop, error) {
 	var list []shopGORM
-	err := r.db.WithContext(ctx).Order("created_at ASC").Find(&list).Error
-	if err != nil {
+	if err := r.db.WithContext(ctx).Find(&list).Error; err != nil {
 		return nil, err
 	}
 	results := make([]*shopee.ShopeeShop, len(list))
@@ -270,8 +281,7 @@ func (r *ShopeeRepository) FindAllShops(ctx context.Context) ([]*shopee.ShopeeSh
 }
 
 func (r *ShopeeRepository) SaveShop(ctx context.Context, s *shopee.ShopeeShop) error {
-	m := shopGORM{
-		ID:                    s.ID(),
+	record := shopGORM{
 		ShopID:                s.ShopID(),
 		ShopName:              s.ShopName(),
 		Region:                s.Region(),
@@ -282,18 +292,19 @@ func (r *ShopeeRepository) SaveShop(ctx context.Context, s *shopee.ShopeeShop) e
 		CreatedAt:             s.CreatedAt(),
 		UpdatedAt:             s.UpdatedAt(),
 	}
+
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "shop_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"shop_name", "region", "access_token", "refresh_token", "access_token_expires_at", "refresh_token_expires_at", "updated_at"}),
-	}).Create(&m).Error
+		DoUpdates: clause.AssignmentColumns([]string{"access_token", "refresh_token", "access_token_expires_at", "refresh_token_expires_at", "updated_at"}),
+	}).Create(&record).Error
 }
 
 func (r *ShopeeRepository) FindOrder(ctx context.Context, orderSN string) (*shopee.ShopeeOrder, error) {
-	var o shopeeOrderTableGORM
+	var o shopeeUnifiedOrderGORM
 	err := r.db.WithContext(ctx).
 		Preload("Items").
-		Preload("Escrow").
-		Where("order_sn = ?", orderSN).
+		Preload("Marketplace").
+		Where("order_number = ? AND channel = 'SHOPEE'", orderSN).
 		First(&o).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -301,132 +312,185 @@ func (r *ShopeeRepository) FindOrder(ctx context.Context, orderSN string) (*shop
 		}
 		return nil, err
 	}
-	return mapShopeeOrderGORMToDomain(&o), nil
+	return mapShopeeUnifiedOrderGORMToDomain(&o), nil
 }
 
 func (r *ShopeeRepository) FindOrders(ctx context.Context, status, carrier, search string) ([]*shopee.ShopeeOrder, error) {
-	query := r.db.WithContext(ctx).Model(&shopeeOrderTableGORM{}).
+	query := r.db.WithContext(ctx).Model(&shopeeUnifiedOrderGORM{}).
 		Preload("Items").
-		Preload("Escrow")
+		Preload("Marketplace").
+		Where("channel = 'SHOPEE'")
 
 	if status != "" {
-		query = query.Where("order_status = ?", status)
+		query = query.Where("status = ?", status)
 	}
 	if carrier != "" {
-		query = query.Where("shipping_carrier ILIKE ?", "%"+carrier+"%")
+		query = query.Joins("JOIN order_marketplace_details ON order_marketplace_details.order_id = orders.id").
+			Where("order_marketplace_details.shipping_carrier ILIKE ?", "%"+carrier+"%")
 	}
 	if search != "" {
-		query = query.Where("order_sn ILIKE ? OR buyer_username ILIKE ?", "%"+search+"%", "%"+search+"%")
+		query = query.Where("orders.order_number ILIKE ? OR orders.customer_name ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
-	var list []shopeeOrderTableGORM
-	if err := query.Order("created_at DESC").Find(&list).Error; err != nil {
+	var list []shopeeUnifiedOrderGORM
+	if err := query.Order("orders.created_at DESC").Find(&list).Error; err != nil {
 		return nil, err
 	}
 
 	results := make([]*shopee.ShopeeOrder, len(list))
 	for i := range list {
-		results[i] = mapShopeeOrderGORMToDomain(&list[i])
+		results[i] = mapShopeeUnifiedOrderGORMToDomain(&list[i])
 	}
 	return results, nil
 }
 
 func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		orderG := shopeeOrderTableGORM{
-			OrderSN:           o.OrderSN(),
-			ShopID:            o.ShopID(),
-			OrderStatus:       o.OrderStatus(),
-			BuyerUserID:       o.BuyerUserID(),
-			BuyerUsername:     o.BuyerUsername(),
-			MessageToSeller:   o.MessageToSeller(),
-			ShipByDate:        o.ShipByDate(),
-			ShipByDateTime:    o.ShipByDateTime(),
-			ShippingCarrier:   o.ShippingCarrier(),
-			TrackingNumber:    o.TrackingNumber(),
-			TotalAmount:       o.TotalAmount(),
-			BuyerCancelReason: o.BuyerCancelReason(),
-			CreateTimeShopee:  o.CreateTimeShopee(),
-			UpdateTimeShopee:  o.UpdateTimeShopee(),
-			CreatedAt:         o.CreatedAt(),
-			UpdatedAt:         o.UpdatedAt(),
+		var existingOrder shopeeUnifiedOrderGORM
+		err := tx.Where("order_number = ?", o.OrderSN()).First(&existingOrder).Error
+		orderID := existingOrder.ID
+		if err != nil || orderID == uuid.Nil {
+			orderID = uuid.New()
 		}
 
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "order_sn"}},
-			DoUpdates: clause.AssignmentColumns([]string{"order_status", "ship_by_date", "ship_by_date_time", "shipping_carrier", "tracking_number", "total_amount", "buyer_cancel_reason", "update_time_shopee", "updated_at"}),
-		}).Create(&orderG).Error; err != nil {
-			return err
-		}
-
-		for _, item := range o.Items() {
-			itemG := shopeeOrderItemTableGORM{
-				ID:               item.ID(),
-				OrderSN:          item.OrderSN(),
-				ItemID:           item.ItemID(),
-				ItemName:         item.ItemName(),
-				ItemSKU:          item.ItemSKU(),
-				ModelID:          item.ModelID(),
-				ModelName:        item.ModelName(),
-				ModelSKU:         item.ModelSKU(),
-				Quantity:         item.Quantity(),
-				OriginalPrice:    item.OriginalPrice(),
-				DiscountedPrice:  item.DiscountedPrice(),
-				ProductID:        item.ProductID(),
-				MatchedSKU:       item.MatchedSKU(),
-				MappingStatus:    item.MappingStatus(),
-				FilamentCost:     item.FilamentCost(),
-				HardwareCost:     item.HardwareCost(),
-				PackagingCost:    item.PackagingCost(),
-				MachineCost:      item.MachineCost(),
-				BaseHPP:          item.BaseHPP(),
-				NetProfit:        item.NetProfit(),
-				ElectricityCost:  item.ElectricityCost(),
-				MaintenanceCost:  item.MaintenanceCost(),
-				DepreciationCost: item.DepreciationCost(),
-				CreatedAt:        item.CreatedAt(),
-				UpdatedAt:        item.UpdatedAt(),
-			}
-			if err := tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "id"}},
-				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "filament_cost", "hardware_cost", "packaging_cost", "machine_cost", "base_hpp", "net_profit", "electricity_cost", "maintenance_cost", "depreciation_cost", "updated_at"}),
-			}).Create(&itemG).Error; err != nil {
-				return err
-			}
-		}
+		var grossAmount, netAmount, channelFee, cogsAmount, netProfit float64
+		var fFilament, fComponent, fPackaging, fElectricity, fMaintenance, fDepreciation, fNetProfit float64
+		paymentStatus := "UNPAID"
 
 		if o.Escrow() != nil {
 			e := o.Escrow()
-			escrowG := shopeeOrderEscrowGORM{
-				OrderSN:                  e.OrderSN(),
-				EscrowAmount:             e.EscrowAmount(),
-				SellingPrice:             e.SellingPrice(),
-				CommissionFee:            e.CommissionFee(),
-				CommissionRuleName:       e.CommissionRuleName(),
-				CommissionPercentage:     e.CommissionPercentage(),
-				ServiceFee:               e.ServiceFee(),
-				ServiceRuleName:          e.ServiceRuleName(),
-				ServicePercentage:        e.ServicePercentage(),
-				SellerTransactionFee:     e.SellerTransactionFee(),
-				SellerOrderProcessingFee: e.SellerOrderProcessingFee(),
-				SellerVoucherDiscount:    e.SellerVoucherDiscount(),
-				TotalMarketplaceFee:      e.TotalMarketplaceFee(),
-				TotalHPP:                 e.TotalHPP(),
-				KasFilamen:               e.KasFilamen(),
-				KasKomponen:              e.KasKomponen(),
-				KasPacking:               e.KasPacking(),
-				KasListrik:               e.KasListrik(),
-				KasMaintenance:           e.KasMaintenance(),
-				KasDepresiasi:            e.KasDepresiasi(),
-				KasLabaBersih:            e.KasLabaBersih(),
-				FinancialStatus:          e.FinancialStatus(),
-				CreatedAt:                e.CreatedAt(),
-				UpdatedAt:                e.UpdatedAt(),
+			grossAmount = e.SellingPrice()
+			netAmount = e.EscrowAmount()
+			channelFee = e.TotalMarketplaceFee()
+			fFilament = e.KasFilamen()
+			fComponent = e.KasKomponen()
+			fPackaging = e.KasPacking()
+			fElectricity = e.KasListrik()
+			fMaintenance = e.KasMaintenance()
+			fDepreciation = e.KasDepresiasi()
+			cogsAmount = fFilament + fComponent + fPackaging + fElectricity + fMaintenance + fDepreciation
+			// Selisih antara pencairan escrow dengan pos biaya dialokasikan ke laba bersih:
+			fNetProfit = netAmount - cogsAmount
+			netProfit = fNetProfit
+			if e.FinancialStatus() == "RELEASED" {
+				paymentStatus = "PAID"
 			}
+		} else {
+			grossAmount = o.TotalAmount()
+		}
+
+		orderCreatedAt := o.CreatedAt()
+		if o.CreateTimeShopee() > 0 {
+			orderCreatedAt = time.Unix(o.CreateTimeShopee(), 0)
+		}
+		orderUpdatedAt := o.UpdatedAt()
+		if o.UpdateTimeShopee() > 0 {
+			orderUpdatedAt = time.Unix(o.UpdateTimeShopee(), 0)
+		}
+
+		orderRecord := shopeeUnifiedOrderGORM{
+			ID:               orderID,
+			OrderNumber:      o.OrderSN(),
+			CustomerName:     o.BuyerUsername(),
+			Status:           o.OrderStatus(),
+			Channel:          "SHOPEE",
+			PaymentStatus:    paymentStatus,
+			GrossAmount:      grossAmount,
+			ChannelFee:       channelFee,
+			NetAmount:        netAmount,
+			COGSAmount:       cogsAmount,
+			NetProfit:        netProfit,
+			FundFilament:     fFilament,
+			FundComponent:    fComponent,
+			FundPackaging:    fPackaging,
+			FundElectricity:  fElectricity,
+			FundMaintenance:  fMaintenance,
+			FundDepreciation: fDepreciation,
+			FundNetProfit:    fNetProfit,
+			CreatedAt:        orderCreatedAt,
+			UpdatedAt:        orderUpdatedAt,
+		}
+
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"customer_name", "status", "payment_status", "gross_amount", "channel_fee", "net_amount", "cogs_amount", "net_profit", "fund_filament", "fund_component", "fund_packaging", "fund_electricity", "fund_maintenance", "fund_depreciation", "fund_net_profit", "updated_at"}),
+		}).Create(&orderRecord).Error; err != nil {
+			return err
+		}
+
+		// Marketplace details
+		mDetails := shopeeOrderMarketplaceGORM{
+			OrderID:         orderID,
+			Channel:         "SHOPEE",
+			ShopID:          o.ShopID(),
+			OrderSN:         o.OrderSN(),
+			BuyerUserID:     o.BuyerUserID(),
+			BuyerUsername:   o.BuyerUsername(),
+			MessageToSeller: o.MessageToSeller(),
+			ShippingCarrier: o.ShippingCarrier(),
+			TrackingNumber:  o.TrackingNumber(),
+			ShipByDate:      o.ShipByDate(),
+			ShipByDateTime:  o.ShipByDateTime(),
+			CreatedAt:       orderCreatedAt,
+			UpdatedAt:       orderUpdatedAt,
+		}
+		if o.Escrow() != nil {
+			e := o.Escrow()
+			mDetails.CommissionFee = e.CommissionFee()
+			mDetails.ServiceFee = e.ServiceFee()
+			mDetails.SellerTransactionFee = e.SellerTransactionFee()
+			mDetails.SellerOrderProcessingFee = e.SellerOrderProcessingFee()
+			mDetails.SellerVoucherDiscount = e.SellerVoucherDiscount()
+			mDetails.TotalMarketplaceFee = e.TotalMarketplaceFee()
+			mDetails.EscrowAmount = e.EscrowAmount()
+			mDetails.FinancialStatus = e.FinancialStatus()
+		}
+
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "order_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"shipping_carrier", "tracking_number", "ship_by_date", "ship_by_date_time", "commission_fee", "service_fee", "seller_transaction_fee", "seller_order_processing_fee", "seller_voucher_discount", "total_marketplace_fee", "escrow_amount", "financial_status", "updated_at"}),
+		}).Create(&mDetails).Error; err != nil {
+			return err
+		}
+
+		// Items
+		for _, item := range o.Items() {
+			var existingItem shopeeUnifiedItemGORM
+			_ = tx.Where("order_id = ? AND channel_item_id = ?", orderID, item.ItemID()).First(&existingItem).Error
+			itemID := existingItem.ID
+			if itemID == uuid.Nil {
+				itemID = uuid.New()
+			}
+
+			itemG := shopeeUnifiedItemGORM{
+				ID:               itemID,
+				OrderID:          orderID,
+				ChannelItemID:    item.ItemID(),
+				ChannelModelID:   item.ModelID(),
+				ProductName:      item.ItemName(),
+				ItemSKU:          item.ItemSKU(),
+				MatchedSKU:       item.MatchedSKU(),
+				MappingStatus:    item.MappingStatus(),
+				Quantity:         item.Quantity(),
+				SellingPrice:     item.DiscountedPrice(),
+				HPP:              item.BaseHPP(),
+				TotalCOGS:        item.BaseHPP(),
+				FilamentCost:     item.FilamentCost(),
+				ComponentCost:    item.HardwareCost(),
+				PackagingCost:    item.PackagingCost(),
+				EnergyCost:       item.ElectricityCost(),
+				MaintenanceCost:  item.MaintenanceCost(),
+				DepreciationCost: item.DepreciationCost(),
+				NetProfit:        item.NetProfit(),
+				ProductID:        item.ProductID(),
+				CreatedAt:        orderCreatedAt,
+				UpdatedAt:        orderUpdatedAt,
+			}
+
 			if err := tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "order_sn"}},
-				DoUpdates: clause.AssignmentColumns([]string{"escrow_amount", "selling_price", "commission_fee", "service_fee", "seller_transaction_fee", "seller_order_processing_fee", "total_marketplace_fee", "total_hpp", "kas_filamen", "kas_komponen", "kas_packing", "kas_listrik", "kas_maintenance", "kas_depresiasi", "kas_laba_bersih", "financial_status", "updated_at"}),
-			}).Create(&escrowG).Error; err != nil {
+				Columns:   []clause.Column{{Name: "id"}},
+				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "selling_price", "hpp", "total_cogs", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "net_profit", "updated_at"}),
+			}).Create(&itemG).Error; err != nil {
 				return err
 			}
 		}
@@ -442,9 +506,9 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 		"updated_at":     time.Now(),
 	}
 
-	query := r.db.WithContext(ctx).Model(&shopeeOrderItemTableGORM{}).Where("item_id = ?", itemID)
+	query := r.db.WithContext(ctx).Table("order_items").Where("channel_item_id = ?", itemID)
 	if modelID > 0 {
-		query = query.Where("model_id = ?", modelID)
+		query = query.Where("channel_model_id = ?", modelID)
 	}
 
 	return query.Updates(updates).Error
@@ -457,35 +521,34 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 		TotalMarketplaceFees float64 `gorm:"column:total_marketplace_fees"`
 		TotalEscrowNetIn     float64 `gorm:"column:total_escrow_net_in"`
 		TotalHPP             float64 `gorm:"column:total_hpp"`
-		KasFilamen           float64 `gorm:"column:kas_filamen"`
-		KasKomponen          float64 `gorm:"column:kas_komponen"`
-		KasPacking           float64 `gorm:"column:kas_packing"`
-		KasListrik           float64 `gorm:"column:kas_listrik"`
-		KasMaintenance       float64 `gorm:"column:kas_maintenance"`
-		KasDepresiasi        float64 `gorm:"column:kas_depresiasi"`
-		KasLabaBersih        float64 `gorm:"column:kas_laba_bersih"`
+		FundFilament         float64 `gorm:"column:fund_filament"`
+		FundComponent        float64 `gorm:"column:fund_component"`
+		FundPackaging        float64 `gorm:"column:fund_packaging"`
+		FundElectricity      float64 `gorm:"column:fund_electricity"`
+		FundMaintenance      float64 `gorm:"column:fund_maintenance"`
+		FundDepreciation     float64 `gorm:"column:fund_depreciation"`
+		FundNetProfit        float64 `gorm:"column:fund_net_profit"`
 		UnmappedCount        int64   `gorm:"column:unmapped_count"`
 	}
 
 	var agg AggResult
 	sql := `
 		SELECT 
-			COALESCE(COUNT(o.order_sn), 0) AS total_orders,
-			COALESCE(SUM(o.total_amount), 0) AS total_gross_sales,
-			COALESCE(SUM(e.total_marketplace_fee), 0) AS total_marketplace_fees,
-			COALESCE(SUM(e.escrow_amount), 0) AS total_escrow_net_in,
-			COALESCE(SUM(e.total_hpp), 0) AS total_hpp,
-			COALESCE(SUM(e.kas_filamen), 0) AS kas_filamen,
-			COALESCE(SUM(e.kas_komponen), 0) AS kas_komponen,
-			COALESCE(SUM(e.kas_packing), 0) AS kas_packing,
-			COALESCE(SUM(e.kas_listrik), 0) AS kas_listrik,
-			COALESCE(SUM(e.kas_maintenance), 0) AS kas_maintenance,
-			COALESCE(SUM(e.kas_depresiasi), 0) AS kas_depresiasi,
-			COALESCE(SUM(e.kas_laba_bersih), 0) AS kas_laba_bersih,
-			(SELECT COUNT(*) FROM shopee_order_items WHERE mapping_status = 'UNMAPPED') AS unmapped_count
-		FROM shopee_orders o
-		JOIN shopee_order_escrows e ON e.order_sn = o.order_sn
-		WHERE o.order_status = 'COMPLETED' AND e.financial_status = 'RELEASED'
+			COALESCE(COUNT(id), 0) AS total_orders,
+			COALESCE(SUM(gross_amount), 0) AS total_gross_sales,
+			COALESCE(SUM(channel_fee), 0) AS total_marketplace_fees,
+			COALESCE(SUM(net_amount), 0) AS total_escrow_net_in,
+			COALESCE(SUM(cogs_amount), 0) AS total_hpp,
+			COALESCE(SUM(fund_filament), 0) AS fund_filament,
+			COALESCE(SUM(fund_component), 0) AS fund_component,
+			COALESCE(SUM(fund_packaging), 0) AS fund_packaging,
+			COALESCE(SUM(fund_electricity), 0) AS fund_electricity,
+			COALESCE(SUM(fund_maintenance), 0) AS fund_maintenance,
+			COALESCE(SUM(fund_depreciation), 0) AS fund_depreciation,
+			COALESCE(SUM(fund_net_profit), 0) AS fund_net_profit,
+			(SELECT COUNT(*) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.channel = 'SHOPEE' AND oi.mapping_status = 'UNMAPPED') AS unmapped_count
+		FROM orders
+		WHERE channel = 'SHOPEE' AND status = 'COMPLETED'
 	`
 
 	if err := r.db.WithContext(ctx).Raw(sql).Scan(&agg).Error; err != nil {
@@ -494,7 +557,7 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 
 	avgMargin := 0.0
 	if agg.TotalGrossSales > 0 {
-		avgMargin = (agg.KasLabaBersih / agg.TotalGrossSales) * 100.0
+		avgMargin = (agg.FundNetProfit / agg.TotalGrossSales) * 100.0
 	}
 
 	return &shopee.CashflowSummary{
@@ -504,20 +567,27 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 		TotalMarketplaceFees: agg.TotalMarketplaceFees,
 		TotalEscrowNetIn:     agg.TotalEscrowNetIn,
 		TotalHPP:             agg.TotalHPP,
-		KasFilamen:           agg.KasFilamen,
-		KasKomponen:          agg.KasKomponen,
-		KasPacking:           agg.KasPacking,
-		KasListrik:           agg.KasListrik,
-		KasMaintenance:       agg.KasMaintenance,
-		KasDepresiasi:        agg.KasDepresiasi,
-		KasLabaBersih:        agg.KasLabaBersih,
+		KasFilamen:           agg.FundFilament,
+		KasKomponen:          agg.FundComponent,
+		KasPacking:           agg.FundPackaging,
+		KasListrik:           agg.FundElectricity,
+		KasMaintenance:       agg.FundMaintenance,
+		KasDepresiasi:        agg.FundDepreciation,
+		KasLabaBersih:        agg.FundNetProfit,
 		AverageProfitMargin:  avgMargin,
 		UnmappedItemsCount:   agg.UnmappedCount,
 	}, nil
 }
 
 func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error) {
-	res := r.db.WithContext(ctx).Exec("UPDATE shopee_order_escrows SET kas_laba_bersih = GREATEST(escrow_amount - total_hpp, 0), updated_at = NOW()")
+	res := r.db.WithContext(ctx).Exec(`
+		UPDATE orders 
+		SET fund_net_profit = net_amount - (fund_filament + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation),
+		    net_profit = net_amount - (fund_filament + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation),
+		    cogs_amount = (fund_filament + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation),
+		    updated_at = NOW() 
+		WHERE payment_status = 'PAID'
+	`)
 	if res.Error != nil {
 		return 0, res.Error
 	}

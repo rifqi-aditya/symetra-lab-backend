@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"symetra-lab-backend-v2/config"
+	"symetra-lab-backend-v2/internal/domain/finance"
 	"symetra-lab-backend-v2/internal/domain/shopee"
 	pkgShopee "symetra-lab-backend-v2/pkg/shopee"
 )
@@ -16,13 +17,20 @@ type ShopeeUseCases struct {
 	cfg          *config.Config
 	repo         shopee.Repository
 	shopeeClient *pkgShopee.Client
+	financeRepo  finance.Repository
 }
 
-func NewShopeeUseCases(cfg *config.Config, repo shopee.Repository, client *pkgShopee.Client) *ShopeeUseCases {
+func NewShopeeUseCases(
+	cfg *config.Config,
+	repo shopee.Repository,
+	client *pkgShopee.Client,
+	financeRepo finance.Repository,
+) *ShopeeUseCases {
 	return &ShopeeUseCases{
 		cfg:          cfg,
 		repo:         repo,
 		shopeeClient: client,
+		financeRepo:  financeRepo,
 	}
 }
 
@@ -216,8 +224,8 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 			o.UpdateTime,
 			items,
 			nil,
-			time.Now(),
-			time.Now(),
+			time.Unix(o.CreateTime, 0),
+			time.Unix(o.UpdateTime, 0),
 		)
 
 		if err := uc.repo.SaveOrder(ctx, domainOrder); err == nil {
@@ -345,8 +353,8 @@ func (uc *ShopeeUseCases) SyncSingleOrder(ctx context.Context, shopID uint64, or
 		o.UpdateTime,
 		items,
 		escrow,
-		time.Now(),
-		time.Now(),
+		time.Unix(o.CreateTime, 0),
+		time.Unix(o.UpdateTime, 0),
 	)
 
 	if err := uc.repo.SaveOrder(ctx, domainOrder); err != nil {
@@ -363,6 +371,29 @@ func (uc *ShopeeUseCases) HandleOrderStatusPush(ctx context.Context, shopID uint
 	if err != nil {
 		return nil, err
 	}
+
+	// Auto-create finance_transaction saat pesanan COMPLETED
+	if ord != nil && ord.OrderStatus() == "COMPLETED" && ord.Escrow() != nil && uc.financeRepo != nil {
+		orderDate := ord.CreatedAt()
+		if ord.CreateTimeShopee() > 0 {
+			orderDate = time.Unix(ord.CreateTimeShopee(), 0)
+		}
+		tx, txErr := finance.NewFinanceTransaction(
+			finance.TypeIncome,
+			finance.CategorySalesShopee,
+			ord.Escrow().EscrowAmount(),
+			"Escrow Shopee - Order "+orderSN,
+			orderDate,
+			"SHOPEE_ESCROW",
+			orderSN,
+			"",
+		)
+		if txErr == nil {
+			// CreateTransactionIfNotExists: skip jika order_sn sudah ada (idempotent)
+			_ = uc.financeRepo.CreateTransactionIfNotExists(ctx, tx)
+		}
+	}
+
 	return ord, nil
 }
 

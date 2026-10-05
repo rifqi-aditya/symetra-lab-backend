@@ -1,8 +1,9 @@
-﻿package product
+package product
 
 import (
 	"context"
 	"sort"
+	"sync"
 
 	"github.com/google/uuid"
 
@@ -32,14 +33,34 @@ func NewListProductsUseCase(pRepo product.Repository) *ListProductsUseCase {
 }
 
 func (uc *ListProductsUseCase) Execute(ctx context.Context, userID uuid.UUID, filter product.Filter) (*ListProductsOutput, error) {
-	products, total, err := uc.productRepo.FindAll(ctx, userID, filter)
-	if err != nil {
-		return nil, err
-	}
+	var (
+		products []*product.Product
+		total    int64
+		errProd  error
+		soldMap  map[uuid.UUID]int
+	)
 
-	soldMap, err := uc.productRepo.GetTotalSoldMap(ctx, userID)
-	if err != nil {
-		soldMap = make(map[uuid.UUID]int)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		products, total, errProd = uc.productRepo.FindAll(ctx, userID, filter)
+	}()
+
+	go func() {
+		defer wg.Done()
+		var errSold error
+		soldMap, errSold = uc.productRepo.GetTotalSoldMap(ctx, userID)
+		if errSold != nil {
+			soldMap = make(map[uuid.UUID]int)
+		}
+	}()
+
+	wg.Wait()
+
+	if errProd != nil {
+		return nil, errProd
 	}
 
 	items := make([]ProductItemOutput, len(products))

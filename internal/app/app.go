@@ -16,6 +16,7 @@ import (
 	categoryUC "symetra-lab-backend-v2/internal/usecase/category"
 	componentUC "symetra-lab-backend-v2/internal/usecase/component"
 	filamentUC "symetra-lab-backend-v2/internal/usecase/filament"
+	financeUC "symetra-lab-backend-v2/internal/usecase/finance"
 	machineUC "symetra-lab-backend-v2/internal/usecase/machine"
 	orderUC "symetra-lab-backend-v2/internal/usecase/order"
 	packagingUC "symetra-lab-backend-v2/internal/usecase/packaging"
@@ -57,6 +58,7 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 	packagingRepo := postgresRepo.NewPackagingRepository(db)
 	shopeeRepo := postgresRepo.NewShopeeRepository(db)
 	productionRepo := postgresRepo.NewProductionRepository(db)
+	financeRepo := postgresRepo.NewFinanceRepository(db)
 
 	shopeeClient := pkgShopee.NewClient(
 		cfg.ShopeePartnerID,
@@ -64,7 +66,20 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		cfg.ShopeeIsProduction,
 		cfg.ShopeeRedirectURL,
 	)
-	shopeeUseCases := shopeeUC.NewShopeeUseCases(cfg, shopeeRepo, shopeeClient)
+	shopeeUseCases := shopeeUC.NewShopeeUseCases(cfg, shopeeRepo, shopeeClient, financeRepo)
+
+	listTransactionsUC := financeUC.NewListTransactionsUseCase(financeRepo)
+	createTransactionUC := financeUC.NewCreateTransactionUseCase(financeRepo)
+	deleteTransactionUC := financeUC.NewDeleteTransactionUseCase(financeRepo)
+	getSummaryUC := financeUC.NewGetSummaryUseCase(financeRepo)
+	createPurchaseOrderUC := financeUC.NewCreatePurchaseOrderUseCase(financeRepo)
+	listPurchaseOrdersUC := financeUC.NewListPurchaseOrdersUseCase(financeRepo)
+	getPurchaseOrderUC := financeUC.NewGetPurchaseOrderUseCase(financeRepo)
+	deletePurchaseOrderUC := financeUC.NewDeletePurchaseOrderUseCase(financeRepo)
+	createCapitalRecordUC := financeUC.NewCreateCapitalRecordUseCase(financeRepo)
+	listCapitalRecordsUC := financeUC.NewListCapitalRecordsUseCase(financeRepo)
+	getTotalCapitalUC := financeUC.NewGetTotalCapitalUseCase(financeRepo)
+	getOrderAllocUC := financeUC.NewGetOrderAllocationUseCase(orderRepo)
 
 	listProductsUC := productUC.NewListProductsUseCase(productRepo)
 	getProductUC := productUC.NewGetProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo)
@@ -220,6 +235,21 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		deletePresetUC,
 	)
 
+	financeHandler := handler.NewFinanceHandler(
+		listTransactionsUC,
+		createTransactionUC,
+		deleteTransactionUC,
+		getSummaryUC,
+		createPurchaseOrderUC,
+		listPurchaseOrdersUC,
+		getPurchaseOrderUC,
+		deletePurchaseOrderUC,
+		createCapitalRecordUC,
+		listCapitalRecordsUC,
+		getTotalCapitalUC,
+		getOrderAllocUC,
+	)
+
 	e := echo.New()
 	e.HideBanner = true
 
@@ -266,6 +296,7 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		ShopeeHandler:     shopeeHandler,
 		ShopConfigHandler: shopConfigHandler,
 		ProductionHandler: productionHandler,
+		FinanceHandler:    financeHandler,
 	})
 
 	log.Println("[Symetra Lab v2] Echo application initialized successfully.")

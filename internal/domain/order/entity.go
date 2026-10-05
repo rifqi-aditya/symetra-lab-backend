@@ -9,23 +9,36 @@ import (
 )
 
 type Order struct {
-	id              uuid.UUID
-	userID          uuid.UUID
-	orderNumber     string
-	customerName    string
-	customerContact string
-	totalRevenue    float64
-	totalHPP        float64
-	totalProfit     float64
-	status          string // PENDING, IN_PRODUCTION, COMPLETED, DELIVERED, CANCELLED
-	notes           string
-	source          string // MANUAL, DIRECT_WHATSAPP, OFFLINE
-	paymentStatus   string // PAID, UNPAID
-	startedAt       *time.Time
-	completedAt     *time.Time
-	items           []OrderItem
-	createdAt       time.Time
-	updatedAt       time.Time
+	id               uuid.UUID
+	userID           uuid.UUID
+	orderNumber      string
+	customerName     string
+	customerContact  string
+	channel          string // MANUAL, SHOPEE, TOKOPEDIA
+	grossAmount      float64
+	channelFee       float64
+	netAmount        float64
+	cogsAmount       float64
+	netProfit        float64
+	fundFilament     float64
+	fundComponent    float64
+	fundPackaging    float64
+	fundElectricity  float64
+	fundMaintenance  float64
+	fundDepreciation float64
+	fundNetProfit    float64
+	totalRevenue     float64
+	totalHPP         float64
+	totalProfit      float64
+	status           string // PENDING, IN_PRODUCTION, COMPLETED, DELIVERED, CANCELLED
+	notes            string
+	source           string // MANUAL, DIRECT_WHATSAPP, OFFLINE, SHOPEE
+	paymentStatus    string // PAID, UNPAID
+	startedAt        *time.Time
+	completedAt      *time.Time
+	items            []OrderItem
+	createdAt        time.Time
+	updatedAt        time.Time
 }
 
 type OrderItem struct {
@@ -33,16 +46,27 @@ type OrderItem struct {
 	orderID          uuid.UUID
 	productID        *uuid.UUID
 	productName      string
+	itemSKU          string
 	quantity         int
 	sellingPrice     float64
 	hpp              float64
 	weightGrams      float64
 	printTimeHours   float64
 	machineID        *uuid.UUID
-	energyCost       float64
-	depreciationCost float64
+	filamentCost     float64
+	componentCost    float64
+	packagingCost    float64
+	electricityCost  float64
 	maintenanceCost  float64
+	depreciationCost float64
+	totalCogs        float64
+	netProfit        float64
+	energyCost       float64
 	packingFee       float64
+	channelItemID    int64
+	channelModelID   int64
+	mappingStatus    string
+	matchedSKU       string
 	createdAt        time.Time
 }
 
@@ -72,56 +96,109 @@ func NewOrder(
 	orderNumber := fmt.Sprintf("ORD-%s-%04d", time.Now().Format("20060102"), rand.Intn(10000))
 
 	var totalRev, totalHPP float64
+	var totalFilament, totalComponent, totalPackaging, totalElectricity, totalMaintenance, totalDepreciation float64
 	assignedItems := make([]OrderItem, len(items))
 	for i, item := range items {
 		itemID := item.id
 		if itemID == uuid.Nil {
 			itemID = uuid.New()
 		}
+
+		fil := item.filamentCost
+		comp := item.componentCost
+		pack := item.packagingCost
+		if pack == 0 && item.packingFee > 0 {
+			pack = item.packingFee
+		}
+		elec := item.electricityCost
+		if elec == 0 && item.energyCost > 0 {
+			elec = item.energyCost
+		}
+		maint := item.maintenanceCost
+		depr := item.depreciationCost
+
+		if fil == 0 && item.hpp > 0 {
+			fil = item.hpp - (pack + elec + maint + depr + comp)
+			if fil < 0 {
+				fil = 0
+			}
+		}
+
 		assignedItems[i] = OrderItem{
 			id:               itemID,
 			orderID:          orderID,
 			productID:        item.productID,
 			productName:      item.productName,
+			itemSKU:          item.itemSKU,
 			quantity:         item.quantity,
 			sellingPrice:     item.sellingPrice,
 			hpp:              item.hpp,
 			weightGrams:      item.weightGrams,
 			printTimeHours:   item.printTimeHours,
 			machineID:        item.machineID,
-			energyCost:       item.energyCost,
-			depreciationCost: item.depreciationCost,
-			maintenanceCost:  item.maintenanceCost,
-			packingFee:       item.packingFee,
+			filamentCost:     fil,
+			componentCost:    comp,
+			packagingCost:    pack,
+			electricityCost:  elec,
+			energyCost:       elec,
+			depreciationCost: depr,
+			maintenanceCost:  maint,
+			packingFee:       pack,
+			totalCogs:        item.hpp,
+			netProfit:        item.sellingPrice - item.hpp,
+			mappingStatus:    "MATCHED",
 			createdAt:        time.Now(),
 		}
-		totalRev += item.sellingPrice * float64(item.quantity)
-		totalHPP += item.hpp * float64(item.quantity)
+		q := float64(item.quantity)
+		totalRev += item.sellingPrice * q
+		totalHPP += item.hpp * q
+		totalFilament += fil * q
+		totalComponent += comp * q
+		totalPackaging += pack * q
+		totalElectricity += elec * q
+		totalMaintenance += maint * q
+		totalDepreciation += depr * q
 	}
 
+	netProfit := totalRev - totalHPP
 	now := time.Now()
 	return &Order{
-		id:              orderID,
-		userID:          userID,
-		orderNumber:     orderNumber,
-		customerName:    customerName,
-		customerContact: customerContact,
-		totalRevenue:    totalRev,
-		totalHPP:        totalHPP,
-		totalProfit:     totalRev - totalHPP,
-		status:          "PENDING",
-		notes:           notes,
-		source:          source,
-		paymentStatus:   paymentStatus,
-		items:           assignedItems,
-		createdAt:       now,
-		updatedAt:       now,
+		id:               orderID,
+		userID:           userID,
+		orderNumber:      orderNumber,
+		customerName:     customerName,
+		customerContact:  customerContact,
+		channel:          source,
+		grossAmount:      totalRev,
+		channelFee:       0,
+		netAmount:        totalRev,
+		cogsAmount:       totalHPP,
+		netProfit:        netProfit,
+		fundFilament:     totalFilament,
+		fundComponent:    totalComponent,
+		fundPackaging:    totalPackaging,
+		fundElectricity:  totalElectricity,
+		fundMaintenance:  totalMaintenance,
+		fundDepreciation: totalDepreciation,
+		fundNetProfit:    netProfit,
+		totalRevenue:     totalRev,
+		totalHPP:         totalHPP,
+		totalProfit:      netProfit,
+		status:           "PENDING",
+		notes:            notes,
+		source:           source,
+		paymentStatus:    paymentStatus,
+		items:            assignedItems,
+		createdAt:        now,
+		updatedAt:        now,
 	}, nil
 }
 
 func ReconstructOrder(
 	id, userID uuid.UUID,
-	orderNumber, customerName, customerContact string,
+	orderNumber, customerName, customerContact, channel string,
+	grossAmount, channelFee, netAmount, cogsAmount, netProfit float64,
+	fundFilament, fundComponent, fundPackaging, fundElectricity, fundMaintenance, fundDepreciation, fundNetProfit float64,
 	totalRevenue, totalHPP, totalProfit float64,
 	status, notes, source, paymentStatus string,
 	startedAt, completedAt *time.Time,
@@ -129,23 +206,36 @@ func ReconstructOrder(
 	createdAt, updatedAt time.Time,
 ) *Order {
 	return &Order{
-		id:              id,
-		userID:          userID,
-		orderNumber:     orderNumber,
-		customerName:    customerName,
-		customerContact: customerContact,
-		totalRevenue:    totalRevenue,
-		totalHPP:        totalHPP,
-		totalProfit:     totalProfit,
-		status:          status,
-		notes:           notes,
-		source:          source,
-		paymentStatus:   paymentStatus,
-		startedAt:       startedAt,
-		completedAt:     completedAt,
-		items:           items,
-		createdAt:       createdAt,
-		updatedAt:       updatedAt,
+		id:               id,
+		userID:           userID,
+		orderNumber:      orderNumber,
+		customerName:     customerName,
+		customerContact:  customerContact,
+		channel:          channel,
+		grossAmount:      grossAmount,
+		channelFee:       channelFee,
+		netAmount:        netAmount,
+		cogsAmount:       cogsAmount,
+		netProfit:        netProfit,
+		fundFilament:     fundFilament,
+		fundComponent:    fundComponent,
+		fundPackaging:    fundPackaging,
+		fundElectricity:  fundElectricity,
+		fundMaintenance:  fundMaintenance,
+		fundDepreciation: fundDepreciation,
+		fundNetProfit:    fundNetProfit,
+		totalRevenue:     totalRevenue,
+		totalHPP:         totalHPP,
+		totalProfit:      totalProfit,
+		status:           status,
+		notes:            notes,
+		source:           source,
+		paymentStatus:    paymentStatus,
+		startedAt:        startedAt,
+		completedAt:      completedAt,
+		items:            items,
+		createdAt:        createdAt,
+		updatedAt:        updatedAt,
 	}
 }
 
@@ -171,9 +261,56 @@ func ReconstructOrderItem(
 		printTimeHours:   printTimeHours,
 		machineID:        machineID,
 		energyCost:       energyCost,
+		electricityCost:  energyCost,
 		depreciationCost: depreciationCost,
 		maintenanceCost:  maintenanceCost,
 		packingFee:       packingFee,
+		packagingCost:    packingFee,
+		totalCogs:        hpp,
+		netProfit:        sellingPrice - hpp,
+		mappingStatus:    "MATCHED",
+		createdAt:        createdAt,
+	}
+}
+
+func ReconstructOrderItemFull(
+	id, orderID uuid.UUID,
+	productID *uuid.UUID,
+	productName, itemSKU string,
+	quantity int,
+	sellingPrice, hpp, weightGrams, printTimeHours float64,
+	machineID *uuid.UUID,
+	filamentCost, componentCost, packagingCost, electricityCost, maintenanceCost, depreciationCost, totalCogs, netProfit float64,
+	channelItemID, channelModelID int64,
+	mappingStatus, matchedSKU string,
+	createdAt time.Time,
+) OrderItem {
+	return OrderItem{
+		id:               id,
+		orderID:          orderID,
+		productID:        productID,
+		productName:      productName,
+		itemSKU:          itemSKU,
+		quantity:         quantity,
+		sellingPrice:     sellingPrice,
+		hpp:              hpp,
+		weightGrams:      weightGrams,
+		printTimeHours:   printTimeHours,
+		machineID:        machineID,
+		filamentCost:     filamentCost,
+		componentCost:    componentCost,
+		packagingCost:    packagingCost,
+		electricityCost:  electricityCost,
+		maintenanceCost:  maintenanceCost,
+		depreciationCost: depreciationCost,
+		totalCogs:        totalCogs,
+		netProfit:        netProfit,
+		energyCost:       electricityCost,
+		packingFee:       packagingCost,
+		channelItemID:    channelItemID,
+		channelModelID:   channelModelID,
+		mappingStatus:    mappingStatus,
+		matchedSKU:       matchedSKU,
 		createdAt:        createdAt,
 	}
 }
@@ -202,6 +339,19 @@ func (o *Order) UserID() uuid.UUID          { return o.userID }
 func (o *Order) OrderNumber() string        { return o.orderNumber }
 func (o *Order) CustomerName() string       { return o.customerName }
 func (o *Order) CustomerContact() string    { return o.customerContact }
+func (o *Order) Channel() string            { return o.channel }
+func (o *Order) GrossAmount() float64       { return o.grossAmount }
+func (o *Order) ChannelFee() float64        { return o.channelFee }
+func (o *Order) NetAmount() float64         { return o.netAmount }
+func (o *Order) CogsAmount() float64        { return o.cogsAmount }
+func (o *Order) NetProfit() float64         { return o.netProfit }
+func (o *Order) FundFilament() float64      { return o.fundFilament }
+func (o *Order) FundComponent() float64     { return o.fundComponent }
+func (o *Order) FundPackaging() float64     { return o.fundPackaging }
+func (o *Order) FundElectricity() float64   { return o.fundElectricity }
+func (o *Order) FundMaintenance() float64   { return o.fundMaintenance }
+func (o *Order) FundDepreciation() float64  { return o.fundDepreciation }
+func (o *Order) FundNetProfit() float64     { return o.fundNetProfit }
 func (o *Order) TotalRevenue() float64      { return o.totalRevenue }
 func (o *Order) TotalHPP() float64          { return o.totalHPP }
 func (o *Order) TotalProfit() float64       { return o.totalProfit }
@@ -219,14 +369,25 @@ func (item *OrderItem) ID() uuid.UUID               { return item.id }
 func (item *OrderItem) OrderID() uuid.UUID          { return item.orderID }
 func (item *OrderItem) ProductID() *uuid.UUID       { return item.productID }
 func (item *OrderItem) ProductName() string         { return item.productName }
+func (item *OrderItem) ItemSKU() string             { return item.itemSKU }
 func (item *OrderItem) Quantity() int               { return item.quantity }
 func (item *OrderItem) SellingPrice() float64       { return item.sellingPrice }
 func (item *OrderItem) HPP() float64                { return item.hpp }
 func (item *OrderItem) WeightGrams() float64        { return item.weightGrams }
 func (item *OrderItem) PrintTimeHours() float64     { return item.printTimeHours }
 func (item *OrderItem) MachineID() *uuid.UUID       { return item.machineID }
-func (item *OrderItem) EnergyCost() float64         { return item.energyCost }
-func (item *OrderItem) DepreciationCost() float64   { return item.depreciationCost }
+func (item *OrderItem) FilamentCost() float64       { return item.filamentCost }
+func (item *OrderItem) ComponentCost() float64      { return item.componentCost }
+func (item *OrderItem) PackagingCost() float64      { return item.packagingCost }
+func (item *OrderItem) ElectricityCost() float64    { return item.electricityCost }
 func (item *OrderItem) MaintenanceCost() float64    { return item.maintenanceCost }
+func (item *OrderItem) DepreciationCost() float64   { return item.depreciationCost }
+func (item *OrderItem) TotalCogs() float64          { return item.totalCogs }
+func (item *OrderItem) NetProfit() float64          { return item.netProfit }
+func (item *OrderItem) EnergyCost() float64         { return item.energyCost }
 func (item *OrderItem) PackingFee() float64         { return item.packingFee }
+func (item *OrderItem) ChannelItemID() int64        { return item.channelItemID }
+func (item *OrderItem) ChannelModelID() int64       { return item.channelModelID }
+func (item *OrderItem) MappingStatus() string       { return item.mappingStatus }
+func (item *OrderItem) MatchedSKU() string          { return item.matchedSKU }
 func (item *OrderItem) CreatedAt() time.Time        { return item.createdAt }

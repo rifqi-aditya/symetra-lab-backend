@@ -135,11 +135,10 @@ func (r *ProductRepository) FindAll(ctx context.Context, userID uuid.UUID, filte
 		query = query.Where("parent_sku = ?", filter.ParentSKU)
 	}
 
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
 	if filter.Limit > 0 {
+		if err := query.Count(&total).Error; err != nil {
+			return nil, 0, err
+		}
 		query = query.Limit(filter.Limit)
 	}
 	if filter.Offset > 0 {
@@ -150,6 +149,10 @@ func (r *ProductRepository) FindAll(ctx context.Context, userID uuid.UUID, filte
 
 	if err := query.Find(&gormProducts).Error; err != nil {
 		return nil, 0, err
+	}
+
+	if filter.Limit <= 0 {
+		total = int64(len(gormProducts))
 	}
 
 	entities := make([]*product.Product, len(gormProducts))
@@ -359,23 +362,7 @@ func (r *ProductRepository) GetTotalSoldMap(ctx context.Context, userID uuid.UUI
 
 	result := make(map[uuid.UUID]int)
 
-	var shopeeSold []SoldResult
-	shopeeQuery := `
-		SELECT soi.product_id, COALESCE(SUM(soi.quantity), 0)::integer as total_sold
-		FROM shopee_order_items soi
-		JOIN shopee_orders so ON so.order_sn = soi.order_sn
-		WHERE so.order_status NOT IN ('CANCELLED', 'IN_CANCEL')
-		  AND soi.product_id IS NOT NULL
-		GROUP BY soi.product_id
-	`
-	if err := r.db.WithContext(ctx).Raw(shopeeQuery).Scan(&shopeeSold).Error; err == nil {
-		for _, s := range shopeeSold {
-			result[s.ProductID] += s.TotalSold
-		}
-	}
-
-	var manualSold []SoldResult
-	manualQuery := `
+	query := `
 		SELECT oi.product_id, COALESCE(SUM(oi.quantity), 0)::integer as total_sold
 		FROM order_items oi
 		JOIN orders o ON o.id = oi.order_id
@@ -383,9 +370,10 @@ func (r *ProductRepository) GetTotalSoldMap(ctx context.Context, userID uuid.UUI
 		  AND oi.product_id IS NOT NULL
 		GROUP BY oi.product_id
 	`
-	if err := r.db.WithContext(ctx).Raw(manualQuery).Scan(&manualSold).Error; err == nil {
-		for _, m := range manualSold {
-			result[m.ProductID] += m.TotalSold
+	var soldResults []SoldResult
+	if err := r.db.WithContext(ctx).Raw(query).Scan(&soldResults).Error; err == nil {
+		for _, s := range soldResults {
+			result[s.ProductID] = s.TotalSold
 		}
 	}
 

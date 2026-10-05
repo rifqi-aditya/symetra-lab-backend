@@ -481,7 +481,73 @@ Marks 1 job complete. Automatically:
 
 ---
 
-## 6. Running Locally
+## 6. Finance Module
+
+The Finance module tracks cashflow, procurement expenses, capital investments, and automatically records escrow income when Shopee orders are completed.
+
+### A. Summary & Cashflow
+- **`GET /api/v1/finance/summary?date_from=2026-01-01&date_to=2026-12-31`**
+  Returns total income, total expense, total capital in, net cashflow (`total_income - total_expense`), and totals broken down by category.
+
+### B. Cashflow Transactions
+- **`GET /api/v1/finance/transactions?type=EXPENSE&category=FILAMENT&date_from=2026-01-01&date_to=2026-12-31`**
+  Filter by type (`INCOME`, `EXPENSE`, `CAPITAL_IN`), category, or date range.
+- **`POST /api/v1/finance/transactions`**
+  Record manual transaction.
+  ```json
+  {
+    "type": "EXPENSE",
+    "category": "ELECTRICITY",
+    "amount": 250000,
+    "description": "Tagihan listrik workshop bulan ini",
+    "transaction_date": "2026-10-04",
+    "notes": "Token PLN"
+  }
+  ```
+- **`DELETE /api/v1/finance/transactions/:id`**
+  Delete transaction.
+
+### C. Purchase Orders (Procurement & Auto-Expense)
+- **`GET /api/v1/finance/purchase-orders`** - List all purchase orders with items.
+- **`GET /api/v1/finance/purchase-orders/:id`** - Get purchase order detail.
+- **`POST /api/v1/finance/purchase-orders`**
+  Creates a purchase order and **automatically generates a linked `EXPENSE` transaction** in `finance_transactions`.
+  ```json
+  {
+    "supplier_name": "Sunlu Official Store",
+    "purchase_date": "2026-10-04",
+    "notes": "Restock filamen",
+    "items": [
+      {
+        "item_type": "FILAMENT",
+        "item_name": "PLA+ Black 1kg",
+        "quantity": 3,
+        "unit": "roll",
+        "unit_price": 135000
+      }
+    ]
+  }
+  ```
+- **`DELETE /api/v1/finance/purchase-orders/:id`** - Delete purchase order.
+
+### D. Capital Management (Modal & Auto-Capital In)
+- **`GET /api/v1/finance/capital`** - List all capital records.
+- **`POST /api/v1/finance/capital`**
+  Records capital injection (`INITIAL` or `ADDITION`) and **automatically creates a linked `CAPITAL_IN` transaction**.
+  ```json
+  {
+    "type": "INITIAL",
+    "amount": 10000000,
+    "description": "Modal awal pembukaan workshop",
+    "record_date": "2026-10-04",
+    "notes": "Setoran dari rekening pribadi"
+  }
+  ```
+- **`GET /api/v1/finance/capital/total`** - Get total injected capital.
+
+---
+
+## 7. Running Locally
 
 ```bash
 # 1. Navigate to backend directory

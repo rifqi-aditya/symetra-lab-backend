@@ -24,6 +24,7 @@ type RouterConfig struct {
 	ShopeeHandler    *handler.ShopeeHandler
 	ShopConfigHandler *handler.ShopConfigHandler
 	ProductionHandler *handler.ProductionHandler
+	FinanceHandler    *handler.FinanceHandler
 }
 
 func SetupRouter(e *echo.Echo, cfg RouterConfig) {
@@ -237,6 +238,23 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		prodGroup := protected.Group("/production")
 		prodGroup.GET("/queue", cfg.ProductionHandler.GetQueue)
 		prodGroup.POST("/complete-job", cfg.ProductionHandler.CompleteJob)
+	}
+
+	// Finance Module
+	if cfg.FinanceHandler != nil {
+		financeGroup := protected.Group("/finance")
+		financeGroup.GET("/summary", cfg.FinanceHandler.GetSummary)
+		financeGroup.GET("/allocations", cfg.FinanceHandler.GetOrderAllocations)
+		financeGroup.GET("/transactions", cfg.FinanceHandler.ListTransactions)
+		financeGroup.POST("/transactions", cfg.FinanceHandler.CreateTransaction)
+		financeGroup.DELETE("/transactions/:id", cfg.FinanceHandler.DeleteTransaction)
+		financeGroup.GET("/purchase-orders", cfg.FinanceHandler.ListPurchaseOrders)
+		financeGroup.GET("/purchase-orders/:id", cfg.FinanceHandler.GetPurchaseOrder)
+		financeGroup.POST("/purchase-orders", cfg.FinanceHandler.CreatePurchaseOrder)
+		financeGroup.DELETE("/purchase-orders/:id", cfg.FinanceHandler.DeletePurchaseOrder)
+		financeGroup.GET("/capital", cfg.FinanceHandler.ListCapitalRecords)
+		financeGroup.POST("/capital", cfg.FinanceHandler.CreateCapitalRecord)
+		financeGroup.GET("/capital/total", cfg.FinanceHandler.GetTotalCapital)
 	}
 
 	}

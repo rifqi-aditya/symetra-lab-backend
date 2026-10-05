@@ -8,27 +8,41 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"symetra-lab-backend-v2/internal/domain/finance"
 	"symetra-lab-backend-v2/internal/domain/order"
 )
 
 type orderGORM struct {
-	ID              uuid.UUID       `gorm:"column:id;primaryKey;type:uuid"`
-	UserID          uuid.UUID       `gorm:"column:user_id;type:uuid"`
-	OrderNumber     string          `gorm:"column:order_number"`
-	CustomerName    string          `gorm:"column:customer_name"`
-	CustomerContact string          `gorm:"column:customer_contact"`
-	TotalRevenue    float64         `gorm:"column:total_revenue"`
-	TotalHPP        float64         `gorm:"column:total_hpp"`
-	TotalProfit     float64         `gorm:"column:total_profit"`
-	Status          string          `gorm:"column:status"`
-	Notes           string          `gorm:"column:notes"`
-	Source          string          `gorm:"column:source"`
-	PaymentStatus   string          `gorm:"column:payment_status"`
-	StartedAt       *time.Time      `gorm:"column:started_at"`
-	CompletedAt     *time.Time      `gorm:"column:completed_at"`
-	CreatedAt       time.Time       `gorm:"column:created_at"`
-	UpdatedAt       time.Time       `gorm:"column:updated_at"`
-	Items           []orderItemGORM `gorm:"foreignKey:OrderID;references:ID;constraint:OnDelete:CASCADE"`
+	ID               uuid.UUID       `gorm:"column:id;primaryKey;type:uuid"`
+	UserID           uuid.UUID       `gorm:"column:user_id;type:uuid"`
+	OrderNumber      string          `gorm:"column:order_number"`
+	CustomerName     string          `gorm:"column:customer_name"`
+	CustomerContact  string          `gorm:"column:customer_contact"`
+	Channel          string          `gorm:"column:channel"`
+	GrossAmount      float64         `gorm:"column:gross_amount"`
+	ChannelFee       float64         `gorm:"column:channel_fee"`
+	NetAmount        float64         `gorm:"column:net_amount"`
+	CogsAmount       float64         `gorm:"column:cogs_amount"`
+	NetProfit        float64         `gorm:"column:net_profit"`
+	FundFilament     float64         `gorm:"column:fund_filament"`
+	FundComponent    float64         `gorm:"column:fund_component"`
+	FundPackaging    float64         `gorm:"column:fund_packaging"`
+	FundElectricity  float64         `gorm:"column:fund_electricity"`
+	FundMaintenance  float64         `gorm:"column:fund_maintenance"`
+	FundDepreciation float64         `gorm:"column:fund_depreciation"`
+	FundNetProfit    float64         `gorm:"column:fund_net_profit"`
+	TotalRevenue     float64         `gorm:"column:total_revenue"`
+	TotalHPP         float64         `gorm:"column:total_hpp"`
+	TotalProfit      float64         `gorm:"column:total_profit"`
+	Status           string          `gorm:"column:status"`
+	Notes            string          `gorm:"column:notes"`
+	Source           string          `gorm:"column:source"`
+	PaymentStatus    string          `gorm:"column:payment_status"`
+	StartedAt        *time.Time      `gorm:"column:started_at"`
+	CompletedAt      *time.Time      `gorm:"column:completed_at"`
+	CreatedAt        time.Time       `gorm:"column:created_at"`
+	UpdatedAt        time.Time       `gorm:"column:updated_at"`
+	Items            []orderItemGORM `gorm:"foreignKey:OrderID;references:ID;constraint:OnDelete:CASCADE"`
 }
 
 func (orderGORM) TableName() string {
@@ -40,16 +54,27 @@ type orderItemGORM struct {
 	OrderID          uuid.UUID  `gorm:"column:order_id;type:uuid"`
 	ProductID        *uuid.UUID `gorm:"column:product_id;type:uuid"`
 	ProductName      string     `gorm:"column:product_name"`
+	ItemSKU          string     `gorm:"column:item_sku"`
 	Quantity         int        `gorm:"column:quantity"`
 	SellingPrice     float64    `gorm:"column:selling_price"`
 	HPP              float64    `gorm:"column:hpp"`
 	WeightGrams      float64    `gorm:"column:weight_grams"`
 	PrintTimeHours   float64    `gorm:"column:print_time_hours"`
 	MachineID        *uuid.UUID `gorm:"column:machine_id;type:uuid"`
-	EnergyCost       float64    `gorm:"column:energy_cost"`
-	DepreciationCost float64    `gorm:"column:depreciation_cost"`
+	FilamentCost     float64    `gorm:"column:filament_cost"`
+	ComponentCost    float64    `gorm:"column:component_cost"`
+	PackagingCost    float64    `gorm:"column:packaging_cost"`
+	ElectricityCost  float64    `gorm:"column:electricity_cost"`
 	MaintenanceCost  float64    `gorm:"column:maintenance_cost"`
+	DepreciationCost float64    `gorm:"column:depreciation_cost"`
+	TotalCogs        float64    `gorm:"column:total_cogs"`
+	NetProfit        float64    `gorm:"column:net_profit"`
+	EnergyCost       float64    `gorm:"column:energy_cost"`
 	PackingFee       float64    `gorm:"column:packing_fee"`
+	ChannelItemID    int64      `gorm:"column:channel_item_id"`
+	ChannelModelID   int64      `gorm:"column:channel_model_id"`
+	MappingStatus    string     `gorm:"column:mapping_status"`
+	MatchedSKU       string     `gorm:"column:matched_sku"`
 	CreatedAt        time.Time  `gorm:"column:created_at"`
 }
 
@@ -72,23 +97,57 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 
 	items := make([]order.OrderItem, len(g.Items))
 	for i, it := range g.Items {
-		items[i] = order.ReconstructOrderItem(
+		items[i] = order.ReconstructOrderItemFull(
 			it.ID,
 			it.OrderID,
 			it.ProductID,
 			it.ProductName,
+			it.ItemSKU,
 			it.Quantity,
 			it.SellingPrice,
 			it.HPP,
 			it.WeightGrams,
 			it.PrintTimeHours,
 			it.MachineID,
-			it.EnergyCost,
-			it.DepreciationCost,
+			it.FilamentCost,
+			it.ComponentCost,
+			it.PackagingCost,
+			it.ElectricityCost,
 			it.MaintenanceCost,
-			it.PackingFee,
+			it.DepreciationCost,
+			it.TotalCogs,
+			it.NetProfit,
+			it.ChannelItemID,
+			it.ChannelModelID,
+			it.MappingStatus,
+			it.MatchedSKU,
 			it.CreatedAt,
 		)
+	}
+
+	ch := g.Channel
+	if ch == "" {
+		ch = g.Source
+	}
+	if ch == "" {
+		ch = "MANUAL"
+	}
+
+	gross := g.GrossAmount
+	if gross == 0 {
+		gross = g.TotalRevenue
+	}
+	net := g.NetAmount
+	if net == 0 {
+		net = g.TotalRevenue
+	}
+	cogs := g.CogsAmount
+	if cogs == 0 {
+		cogs = g.TotalHPP
+	}
+	profit := g.NetProfit
+	if profit == 0 {
+		profit = g.TotalProfit
 	}
 
 	return order.ReconstructOrder(
@@ -97,6 +156,19 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		g.OrderNumber,
 		g.CustomerName,
 		g.CustomerContact,
+		ch,
+		gross,
+		g.ChannelFee,
+		net,
+		cogs,
+		profit,
+		g.FundFilament,
+		g.FundComponent,
+		g.FundPackaging,
+		g.FundElectricity,
+		g.FundMaintenance,
+		g.FundDepreciation,
+		g.FundNetProfit,
 		g.TotalRevenue,
 		g.TotalHPP,
 		g.TotalProfit,
@@ -148,22 +220,35 @@ func (r *OrderRepository) FindByID(ctx context.Context, userID, id uuid.UUID) (*
 func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		g := orderGORM{
-			ID:              o.ID(),
-			UserID:          o.UserID(),
-			OrderNumber:     o.OrderNumber(),
-			CustomerName:    o.CustomerName(),
-			CustomerContact: o.CustomerContact(),
-			TotalRevenue:    o.TotalRevenue(),
-			TotalHPP:        o.TotalHPP(),
-			TotalProfit:     o.TotalProfit(),
-			Status:          o.Status(),
-			Notes:           o.Notes(),
-			Source:          o.Source(),
-			PaymentStatus:   o.PaymentStatus(),
-			StartedAt:       o.StartedAt(),
-			CompletedAt:     o.CompletedAt(),
-			CreatedAt:       o.CreatedAt(),
-			UpdatedAt:       o.UpdatedAt(),
+			ID:               o.ID(),
+			UserID:           o.UserID(),
+			OrderNumber:      o.OrderNumber(),
+			CustomerName:     o.CustomerName(),
+			CustomerContact:  o.CustomerContact(),
+			Channel:          o.Channel(),
+			GrossAmount:      o.GrossAmount(),
+			ChannelFee:       o.ChannelFee(),
+			NetAmount:        o.NetAmount(),
+			CogsAmount:       o.CogsAmount(),
+			NetProfit:        o.NetProfit(),
+			FundFilament:     o.FundFilament(),
+			FundComponent:    o.FundComponent(),
+			FundPackaging:    o.FundPackaging(),
+			FundElectricity:  o.FundElectricity(),
+			FundMaintenance:  o.FundMaintenance(),
+			FundDepreciation: o.FundDepreciation(),
+			FundNetProfit:    o.FundNetProfit(),
+			TotalRevenue:     o.TotalRevenue(),
+			TotalHPP:         o.TotalHPP(),
+			TotalProfit:      o.TotalProfit(),
+			Status:           o.Status(),
+			Notes:            o.Notes(),
+			Source:           o.Source(),
+			PaymentStatus:    o.PaymentStatus(),
+			StartedAt:        o.StartedAt(),
+			CompletedAt:      o.CompletedAt(),
+			CreatedAt:        o.CreatedAt(),
+			UpdatedAt:        o.UpdatedAt(),
 		}
 
 		if err := tx.Create(&g).Error; err != nil {
@@ -176,16 +261,27 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 				OrderID:          o.ID(),
 				ProductID:        it.ProductID(),
 				ProductName:      it.ProductName(),
+				ItemSKU:          it.ItemSKU(),
 				Quantity:         it.Quantity(),
 				SellingPrice:     it.SellingPrice(),
 				HPP:              it.HPP(),
 				WeightGrams:      it.WeightGrams(),
 				PrintTimeHours:   it.PrintTimeHours(),
 				MachineID:        it.MachineID(),
-				EnergyCost:       it.EnergyCost(),
-				DepreciationCost: it.DepreciationCost(),
+				FilamentCost:     it.FilamentCost(),
+				ComponentCost:    it.ComponentCost(),
+				PackagingCost:    it.PackagingCost(),
+				ElectricityCost:  it.ElectricityCost(),
 				MaintenanceCost:  it.MaintenanceCost(),
+				DepreciationCost: it.DepreciationCost(),
+				TotalCogs:        it.TotalCogs(),
+				NetProfit:        it.NetProfit(),
+				EnergyCost:       it.EnergyCost(),
 				PackingFee:       it.PackingFee(),
+				ChannelItemID:    it.ChannelItemID(),
+				ChannelModelID:   it.ChannelModelID(),
+				MappingStatus:    it.MappingStatus(),
+				MatchedSKU:       it.MatchedSKU(),
 				CreatedAt:        it.CreatedAt(),
 			}
 			if err := tx.Create(&itemGORM).Error; err != nil {
@@ -198,21 +294,23 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 }
 
 func (r *OrderRepository) UpdateStatus(ctx context.Context, userID, id uuid.UUID, status string) error {
-	now := time.Now()
 	updates := map[string]interface{}{
 		"status":     status,
-		"updated_at": now,
+		"updated_at": time.Now(),
 	}
+	now := time.Now()
 	if status == "IN_PRODUCTION" {
-		updates["started_at"] = now
+		updates["started_at"] = &now
 	}
 	if status == "COMPLETED" {
-		updates["completed_at"] = now
+		updates["completed_at"] = &now
 	}
 
-	res := r.db.WithContext(ctx).Model(&orderGORM{}).
+	res := r.db.WithContext(ctx).
+		Model(&orderGORM{}).
 		Where("id = ? AND user_id = ?", id, userID).
 		Updates(updates)
+
 	if res.Error != nil {
 		return res.Error
 	}
@@ -223,12 +321,14 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, userID, id uuid.UUID
 }
 
 func (r *OrderRepository) UpdatePaymentStatus(ctx context.Context, userID, id uuid.UUID, paymentStatus string) error {
-	res := r.db.WithContext(ctx).Model(&orderGORM{}).
+	res := r.db.WithContext(ctx).
+		Model(&orderGORM{}).
 		Where("id = ? AND user_id = ?", id, userID).
 		Updates(map[string]interface{}{
 			"payment_status": paymentStatus,
 			"updated_at":     time.Now(),
 		})
+
 	if res.Error != nil {
 		return res.Error
 	}
@@ -239,17 +339,175 @@ func (r *OrderRepository) UpdatePaymentStatus(ctx context.Context, userID, id uu
 }
 
 func (r *OrderRepository) Delete(ctx context.Context, userID, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("order_id = ?", id).Delete(&orderItemGORM{}).Error; err != nil {
-			return err
+	res := r.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		Delete(&orderGORM{})
+
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return order.ErrOrderNotFound
+	}
+	return nil
+}
+
+// GetOrderAllocationSummary executes a fast unified aggregation across all channels
+func (r *OrderRepository) GetOrderAllocationSummary(
+	ctx context.Context,
+	userID uuid.UUID,
+	channel string,
+	dateFrom, dateTo *time.Time,
+) (*finance.OrderAllocationSummary, error) {
+	type aggResult struct {
+		TotalOrders        int64   `gorm:"column:total_orders"`
+		TotalGrossSales    float64 `gorm:"column:total_gross_sales"`
+		TotalChannelFees   float64 `gorm:"column:total_channel_fees"`
+		TotalNetRevenue    float64 `gorm:"column:total_net_revenue"`
+		TotalCOGS          float64 `gorm:"column:total_cogs"`
+		TotalNetProfit     float64 `gorm:"column:total_net_profit"`
+		FundFilament       float64 `gorm:"column:fund_filament"`
+		FundComponent      float64 `gorm:"column:fund_component"`
+		FundPackaging      float64 `gorm:"column:fund_packaging"`
+		FundElectricity    float64 `gorm:"column:fund_electricity"`
+		FundMaintenance    float64 `gorm:"column:fund_maintenance"`
+		FundDepreciation   float64 `gorm:"column:fund_depreciation"`
+		FundNetProfit      float64 `gorm:"column:fund_net_profit"`
+		UnmappedItemsCount int64   `gorm:"column:unmapped_items_count"`
+	}
+
+	query := `
+		SELECT 
+			COUNT(*) AS total_orders,
+			COALESCE(SUM(gross_amount), 0) AS total_gross_sales,
+			COALESCE(SUM(channel_fee), 0) AS total_channel_fees,
+			COALESCE(SUM(net_amount), 0) AS total_net_revenue,
+			COALESCE(SUM(cogs_amount), 0) AS total_cogs,
+			COALESCE(SUM(net_profit), 0) AS total_net_profit,
+			COALESCE(SUM(fund_filament), 0) AS fund_filament,
+			COALESCE(SUM(fund_component), 0) AS fund_component,
+			COALESCE(SUM(fund_packaging), 0) AS fund_packaging,
+			COALESCE(SUM(fund_electricity), 0) AS fund_electricity,
+			COALESCE(SUM(fund_maintenance), 0) AS fund_maintenance,
+			COALESCE(SUM(fund_depreciation), 0) AS fund_depreciation,
+			COALESCE(SUM(fund_net_profit), 0) AS fund_net_profit,
+			COALESCE((
+				SELECT COUNT(*) 
+				FROM order_items oi
+				JOIN orders o2 ON o2.id = oi.order_id
+				WHERE o2.user_id = ? AND oi.mapping_status = 'UNMAPPED'
+			), 0) AS unmapped_items_count
+		FROM orders
+		WHERE user_id = ? 
+		  AND payment_status = 'PAID'
+		  AND (? = 'ALL' OR channel = ?)
+		  AND (?::timestamptz IS NULL OR created_at >= ?)
+		  AND (?::timestamptz IS NULL OR created_at <= ?)
+	`
+
+	ch := channel
+	if ch == "" {
+		ch = "ALL"
+	}
+
+	var agg aggResult
+	err := r.db.WithContext(ctx).Raw(
+		query,
+		userID,
+		userID,
+		ch, ch,
+		dateFrom, dateFrom,
+		dateTo, dateTo,
+	).Scan(&agg).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	avgMargin := 0.0
+	if agg.TotalGrossSales > 0 {
+		avgMargin = (agg.TotalNetProfit / agg.TotalGrossSales) * 100.0
+	}
+
+	// 2. Query actual expenses from finance_transactions to compute real running fund balances
+	type expenseResult struct {
+		Category   string  `gorm:"column:category"`
+		TotalSpent float64 `gorm:"column:total_spent"`
+	}
+	var expenses []expenseResult
+	expQuery := `
+		SELECT category, COALESCE(SUM(amount), 0) AS total_spent
+		FROM finance_transactions
+		WHERE type = 'EXPENSE'
+		  AND (?::timestamptz IS NULL OR transaction_date >= ?)
+		  AND (?::timestamptz IS NULL OR transaction_date <= ?)
+		GROUP BY category
+	`
+	_ = r.db.WithContext(ctx).Raw(expQuery, dateFrom, dateFrom, dateTo, dateTo).Scan(&expenses).Error
+
+	var spentFilament, spentComponent, spentPackaging, spentElectricity, spentMaintenance, spentDepreciation, spentNetProfit float64
+	for _, e := range expenses {
+		switch e.Category {
+		case "FILAMENT":
+			spentFilament += e.TotalSpent
+		case "HARDWARE":
+			spentComponent += e.TotalSpent
+		case "PACKAGING":
+			spentPackaging += e.TotalSpent
+		case "ELECTRICITY":
+			spentElectricity += e.TotalSpent
+		case "MACHINE_MAINTENANCE":
+			spentMaintenance += e.TotalSpent
+		case "MACHINE_PURCHASE":
+			spentDepreciation += e.TotalSpent
+		default:
+			// OTHER_EXPENSE, RENT, MARKETING, INTERNET, SHIPPING_COST, etc.
+			spentNetProfit += e.TotalSpent
 		}
-		res := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&orderGORM{})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return order.ErrOrderNotFound
-		}
-		return nil
-	})
+	}
+
+	// Net Available Fund Balances: Real running balance (Inflow Alokasi - Outflow Belanja)
+	fundFilament := agg.FundFilament - spentFilament
+	fundComponent := agg.FundComponent - spentComponent
+	fundPackaging := agg.FundPackaging - spentPackaging
+	fundElectricity := agg.FundElectricity - spentElectricity
+	fundMaintenance := agg.FundMaintenance - spentMaintenance
+	fundDepreciation := agg.FundDepreciation - spentDepreciation
+	fundNetProfit := agg.FundNetProfit - spentNetProfit
+
+	return &finance.OrderAllocationSummary{
+		TotalOrders:           agg.TotalOrders,
+		TotalGrossSales:       agg.TotalGrossSales,
+		TotalChannelFees:      agg.TotalChannelFees,
+		TotalNetRevenue:       agg.TotalNetRevenue,
+		TotalCOGS:             agg.TotalCOGS,
+		TotalNetProfit:        agg.TotalNetProfit,
+
+		FundFilament:          fundFilament,
+		FundComponent:         fundComponent,
+		FundPackaging:         fundPackaging,
+		FundElectricity:       fundElectricity,
+		FundMaintenance:       fundMaintenance,
+		FundDepreciation:      fundDepreciation,
+		FundNetProfit:         fundNetProfit,
+
+		AllocatedFilament:     agg.FundFilament,
+		AllocatedComponent:    agg.FundComponent,
+		AllocatedPackaging:    agg.FundPackaging,
+		AllocatedElectricity:  agg.FundElectricity,
+		AllocatedMaintenance:  agg.FundMaintenance,
+		AllocatedDepreciation: agg.FundDepreciation,
+		AllocatedNetProfit:    agg.FundNetProfit,
+
+		SpentFilament:         spentFilament,
+		SpentComponent:        spentComponent,
+		SpentPackaging:        spentPackaging,
+		SpentElectricity:      spentElectricity,
+		SpentMaintenance:      spentMaintenance,
+		SpentDepreciation:     spentDepreciation,
+		SpentNetProfit:        spentNetProfit,
+
+		AverageProfitMargin:   avgMargin,
+		UnmappedItemsCount:    agg.UnmappedItemsCount,
+	}, nil
 }

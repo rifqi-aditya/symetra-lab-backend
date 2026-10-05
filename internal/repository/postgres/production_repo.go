@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,6 +80,8 @@ type prodOrderItemGORM struct {
 	WeightGrams    float64                 `gorm:"column:weight_grams"`
 	PrintTimeHours float64                 `gorm:"column:print_time_hours"`
 	MachineID      *uuid.UUID              `gorm:"column:machine_id;type:uuid"`
+	MatchedSKU     string                  `gorm:"column:matched_sku"`
+	ItemSKU        string                  `gorm:"column:item_sku"`
 	Product        *prodProductGORM        `gorm:"foreignKey:ProductID;references:ID"`
 	Machine        *prodMachineGORM        `gorm:"foreignKey:MachineID;references:ID"`
 	Filaments      []prodOrderFilamentGORM `gorm:"foreignKey:OrderItemID;references:ID"`
@@ -90,47 +91,31 @@ func (prodOrderItemGORM) TableName() string {
 	return "order_items"
 }
 
+type prodMarketplaceGORM struct {
+	OrderID        uuid.UUID  `gorm:"column:order_id;primaryKey;type:uuid"`
+	OrderSN        string     `gorm:"column:order_sn"`
+	BuyerUsername  string     `gorm:"column:buyer_username"`
+	ShipByDateTime *time.Time `gorm:"column:ship_by_date_time"`
+}
+
+func (prodMarketplaceGORM) TableName() string {
+	return "order_marketplace_details"
+}
+
 type prodOrderGORM struct {
-	ID           uuid.UUID           `gorm:"column:id;primaryKey;type:uuid"`
-	OrderNumber  string              `gorm:"column:order_number"`
-	CustomerName string              `gorm:"column:customer_name"`
-	Status       string              `gorm:"column:status"`
-	CreatedAt    time.Time           `gorm:"column:created_at"`
-	CompletedAt  *time.Time          `gorm:"column:completed_at"`
-	Items        []prodOrderItemGORM `gorm:"foreignKey:OrderID;references:ID"`
+	ID           uuid.UUID            `gorm:"column:id;primaryKey;type:uuid"`
+	OrderNumber  string               `gorm:"column:order_number"`
+	CustomerName string               `gorm:"column:customer_name"`
+	Status       string               `gorm:"column:status"`
+	Channel      string               `gorm:"column:channel"`
+	CreatedAt    time.Time            `gorm:"column:created_at"`
+	CompletedAt  *time.Time           `gorm:"column:completed_at"`
+	Items        []prodOrderItemGORM  `gorm:"foreignKey:OrderID;references:ID"`
+	Marketplace  *prodMarketplaceGORM `gorm:"foreignKey:OrderID;references:ID"`
 }
 
 func (prodOrderGORM) TableName() string {
 	return "orders"
-}
-
-type prodShopeeItemGORM struct {
-	ID         uint64           `gorm:"column:id;primaryKey"`
-	OrderSN    string           `gorm:"column:order_sn"`
-	ItemName   string           `gorm:"column:item_name"`
-	ModelName  string           `gorm:"column:model_name"`
-	ModelSKU   string           `gorm:"column:model_sku"`
-	MatchedSKU string           `gorm:"column:matched_sku"`
-	Quantity   int              `gorm:"column:quantity"`
-	ProductID  *uuid.UUID       `gorm:"column:product_id;type:uuid"`
-	Product    *prodProductGORM `gorm:"foreignKey:ProductID;references:ID"`
-}
-
-func (prodShopeeItemGORM) TableName() string {
-	return "shopee_order_items"
-}
-
-type prodShopeeOrderGORM struct {
-	OrderSN        string               `gorm:"column:order_sn;primaryKey"`
-	OrderStatus    string               `gorm:"column:order_status"`
-	BuyerUsername  string               `gorm:"column:buyer_username"`
-	ShipByDateTime *time.Time           `gorm:"column:ship_by_date_time"`
-	CreatedAt      time.Time            `gorm:"column:created_at"`
-	Items          []prodShopeeItemGORM `gorm:"foreignKey:OrderSN;references:OrderSN"`
-}
-
-func (prodShopeeOrderGORM) TableName() string {
-	return "shopee_orders"
 }
 
 type ProductionRepository struct {
@@ -145,141 +130,108 @@ func (r *ProductionRepository) GetUnifiedQueue() ([]*production.ProductionQueueI
 	var queue []*production.ProductionQueueItem
 	now := time.Now()
 
-	// 1. Shopee Orders (READY_TO_SHIP or PROCESSED)
-	var shopeeOrders []prodShopeeOrderGORM
-	if err := r.db.Preload("Items.Product.DefaultMachine").
-		Where("order_status IN ('READY_TO_SHIP', 'PROCESSED')").
-		Find(&shopeeOrders).Error; err == nil {
-
-		for _, so := range shopeeOrders {
-			for _, it := range so.Items {
-				var weight float64 = 20.0
-				var printHours float64 = 1.0
-				var machineID *string
-				var machineName string
-
-				if it.Product != nil {
-					if it.Product.DefaultWeightGrams > 0 {
-						weight = it.Product.DefaultWeightGrams
-					}
-					if it.Product.DefaultPrintTimeHours > 0 {
-						printHours = it.Product.DefaultPrintTimeHours
-					}
-					if it.Product.DefaultMachineID != nil {
-						midStr := it.Product.DefaultMachineID.String()
-						machineID = &midStr
-						if it.Product.DefaultMachine != nil {
-							machineName = it.Product.DefaultMachine.Name
-						}
-					}
-				}
-
-				totalHours := math.Round(printHours*float64(it.Quantity)*100) / 100
-
-				var deadline *time.Time = so.ShipByDateTime
-				isUrgent := false
-				if deadline != nil {
-					if deadline.Sub(now) < 24*time.Hour {
-						isUrgent = true
-					}
-				}
-
-				variant := it.ModelName
-				if it.MatchedSKU != "" {
-					variant = it.MatchedSKU
-				} else if it.ModelSKU != "" {
-					variant = it.ModelSKU
-				}
-
-				queue = append(queue, &production.ProductionQueueItem{
-					JobID:             fmt.Sprintf("%d", it.ID),
-					Source:            "SHOPEE",
-					OrderIdentifier:   so.OrderSN,
-					CustomerName:      so.BuyerUsername,
-					ItemName:          it.ItemName,
-					VariantSKU:        variant,
-					Quantity:          it.Quantity,
-					WeightGrams:       weight,
-					PrintTimeHours:    printHours,
-					TotalPrintHours:   totalHours,
-					AssignedMachineID: machineID,
-					AssignedMachine:   machineName,
-					Status:            so.OrderStatus,
-					Deadline:          deadline,
-					IsUrgent:          isUrgent,
-					CreatedAt:         so.CreatedAt,
-				})
-			}
-		}
-	}
-
-	// 2. Manual Orders (PENDING or IN_PRODUCTION)
-	var manualOrders []prodOrderGORM
+	var activeOrders []prodOrderGORM
 	if err := r.db.Preload("Items.Product.DefaultMachine").
 		Preload("Items.Machine").
-		Where("status IN ('PENDING', 'IN_PRODUCTION')").
-		Find(&manualOrders).Error; err == nil {
+		Preload("Marketplace").
+		Where("status IN ('PENDING', 'IN_PRODUCTION', 'READY_TO_SHIP', 'PROCESSED')").
+		Find(&activeOrders).Error; err != nil {
+		return nil, err
+	}
 
-		for _, mo := range manualOrders {
-			for _, it := range mo.Items {
-				var machineID *string
-				var machineName string
-				if it.MachineID != nil {
-					mid := it.MachineID.String()
-					machineID = &mid
-				}
-				if it.Machine != nil {
-					machineName = it.Machine.Name
-				} else if it.Product != nil && it.Product.DefaultMachine != nil {
-					mid := it.Product.DefaultMachineID.String()
-					machineID = &mid
-					machineName = it.Product.DefaultMachine.Name
-				}
+	for _, o := range activeOrders {
+		channel := o.Channel
+		if channel == "" {
+			channel = "MANUAL"
+		}
 
-				weight := it.WeightGrams
-				if weight <= 0 && it.Product != nil {
-					weight = it.Product.DefaultWeightGrams
-				}
-				printHours := it.PrintTimeHours
-				if printHours <= 0 && it.Product != nil {
-					printHours = it.Product.DefaultPrintTimeHours
-				}
-				totalHours := math.Round(printHours*float64(it.Quantity)*100) / 100
-
-				orderDeadline := mo.CreatedAt.Add(48 * time.Hour)
-				isUrgent := false
-				if orderDeadline.Sub(now) < 24*time.Hour {
-					isUrgent = true
-				}
-
-				variant := ""
-				if it.Product != nil && it.Product.SKU != nil {
-					variant = *it.Product.SKU
-				}
-
-				queue = append(queue, &production.ProductionQueueItem{
-					JobID:             it.ID.String(),
-					Source:            "MANUAL",
-					OrderIdentifier:   mo.OrderNumber,
-					CustomerName:      mo.CustomerName,
-					ItemName:          it.ProductName,
-					VariantSKU:        variant,
-					Quantity:          it.Quantity,
-					WeightGrams:       weight,
-					PrintTimeHours:    printHours,
-					TotalPrintHours:   totalHours,
-					AssignedMachineID: machineID,
-					AssignedMachine:   machineName,
-					Status:            mo.Status,
-					Deadline:          &orderDeadline,
-					IsUrgent:          isUrgent,
-					CreatedAt:         mo.CreatedAt,
-				})
+		for _, it := range o.Items {
+			var machineID *string
+			var machineName string
+			if it.MachineID != nil {
+				mid := it.MachineID.String()
+				machineID = &mid
 			}
+			if it.Machine != nil {
+				machineName = it.Machine.Name
+			} else if it.Product != nil && it.Product.DefaultMachine != nil {
+				mid := it.Product.DefaultMachineID.String()
+				machineID = &mid
+				machineName = it.Product.DefaultMachine.Name
+			}
+
+			weight := it.WeightGrams
+			if weight <= 0 && it.Product != nil {
+				weight = it.Product.DefaultWeightGrams
+			}
+			if weight <= 0 {
+				weight = 20.0
+			}
+
+			printHours := it.PrintTimeHours
+			if printHours <= 0 && it.Product != nil {
+				printHours = it.Product.DefaultPrintTimeHours
+			}
+			if printHours <= 0 {
+				printHours = 1.0
+			}
+
+			totalHours := math.Round(printHours*float64(it.Quantity)*100) / 100
+
+			var deadline *time.Time
+			isUrgent := false
+
+			if channel == "SHOPEE" && o.Marketplace != nil && o.Marketplace.ShipByDateTime != nil {
+				deadline = o.Marketplace.ShipByDateTime
+			} else {
+				orderDeadline := o.CreatedAt.Add(48 * time.Hour)
+				deadline = &orderDeadline
+			}
+
+			if deadline != nil && deadline.Sub(now) < 24*time.Hour {
+				isUrgent = true
+			}
+
+			variant := it.ItemSKU
+			if it.MatchedSKU != "" {
+				variant = it.MatchedSKU
+			} else if it.Product != nil && it.Product.SKU != nil {
+				variant = *it.Product.SKU
+			}
+
+			orderIdentifier := o.OrderNumber
+			customerName := o.CustomerName
+			if o.Marketplace != nil {
+				if o.Marketplace.OrderSN != "" {
+					orderIdentifier = o.Marketplace.OrderSN
+				}
+				if o.Marketplace.BuyerUsername != "" {
+					customerName = o.Marketplace.BuyerUsername
+				}
+			}
+
+			queue = append(queue, &production.ProductionQueueItem{
+				JobID:             it.ID.String(),
+				Source:            channel,
+				OrderIdentifier:   orderIdentifier,
+				CustomerName:      customerName,
+				ItemName:          it.ProductName,
+				VariantSKU:        variant,
+				Quantity:          it.Quantity,
+				WeightGrams:       weight,
+				PrintTimeHours:    printHours,
+				TotalPrintHours:   totalHours,
+				AssignedMachineID: machineID,
+				AssignedMachine:   machineName,
+				Status:            o.Status,
+				Deadline:          deadline,
+				IsUrgent:          isUrgent,
+				CreatedAt:         o.CreatedAt,
+			})
 		}
 	}
 
-	// 3. Sort Queue
+	// Sort Queue
 	sort.Slice(queue, func(i, j int) bool {
 		if queue[i].IsUrgent != queue[j].IsUrgent {
 			return queue[i].IsUrgent
@@ -299,83 +251,71 @@ func (r *ProductionRepository) CompleteJob(source, jobID, machineID, filamentID 
 		DeductedFilaments: []string{},
 	}
 
-	var printHours float64
-	var quantity int = 1
-	var itemWeight float64 = 0.0
-	var targetMachineID string = machineID
+	itemUUID, err := uuid.Parse(jobID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid job_id format: %w", err)
+	}
+
+	var item prodOrderItemGORM
+	if err := r.db.Preload("Filaments").Preload("Product").
+		Where("id = ?", itemUUID).
+		First(&item).Error; err != nil {
+		return nil, fmt.Errorf("order item not found: %w", err)
+	}
+
+	quantity := item.Quantity
+	printHours := item.PrintTimeHours
+	itemWeight := item.WeightGrams
+	targetMachineID := machineID
+
+	if item.Product != nil {
+		if printHours <= 0 {
+			printHours = item.Product.DefaultPrintTimeHours
+		}
+		if itemWeight <= 0 {
+			itemWeight = item.Product.DefaultWeightGrams
+		}
+		if targetMachineID == "" && item.Product.DefaultMachineID != nil {
+			targetMachineID = item.Product.DefaultMachineID.String()
+		}
+	}
+	if printHours <= 0 {
+		printHours = 1.0
+	}
+	if itemWeight <= 0 {
+		itemWeight = 20.0
+	}
+
+	if targetMachineID == "" && item.MachineID != nil {
+		targetMachineID = item.MachineID.String()
+	}
+
 	var filamentDeductions []struct {
 		FilamentID string
 		Grams      float64
 	}
 
-	if source == "MANUAL" {
-		itemUUID, err := uuid.Parse(jobID)
-		if err != nil {
-			return nil, fmt.Errorf("format job_id manual tidak valid: %w", err)
-		}
-
-		var item prodOrderItemGORM
-		if err := r.db.Preload("Filaments").Preload("Product").
-			Where("id = ?", itemUUID).
-			First(&item).Error; err != nil {
-			return nil, fmt.Errorf("item pesanan manual tidak ditemukan: %w", err)
-		}
-
-		quantity = item.Quantity
-		printHours = item.PrintTimeHours
-		itemWeight = item.WeightGrams
-		if itemWeight <= 0 && item.Product != nil {
-			itemWeight = item.Product.DefaultWeightGrams
-		}
-
-		if targetMachineID == "" && item.MachineID != nil {
-			targetMachineID = item.MachineID.String()
-		}
-
-		if len(item.Filaments) > 0 {
-			for _, f := range item.Filaments {
-				if f.FilamentID != nil {
-					filamentDeductions = append(filamentDeductions, struct {
-						FilamentID string
-						Grams      float64
-					}{
-						FilamentID: f.FilamentID.String(),
-						Grams:      f.WeightUsedGrams * float64(quantity),
-					})
-				}
+	if len(item.Filaments) > 0 {
+		for _, f := range item.Filaments {
+			if f.FilamentID != nil {
+				filamentDeductions = append(filamentDeductions, struct {
+					FilamentID string
+					Grams      float64
+				}{
+					FilamentID: f.FilamentID.String(),
+					Grams:      f.WeightUsedGrams * float64(quantity),
+				})
 			}
 		}
+	}
 
-		// Update order status if not COMPLETED
-		var order prodOrderGORM
-		if err := r.db.Where("id = ?", item.OrderID).First(&order).Error; err == nil {
-			now := time.Now()
-			order.Status = "COMPLETED"
-			order.CompletedAt = &now
-			_ = r.db.Save(&order)
-		}
-
-	} else if source == "SHOPEE" {
-		itemID, err := strconv.ParseUint(jobID, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("format job_id Shopee tidak valid: %w", err)
-		}
-
-		var item prodShopeeItemGORM
-		if err := r.db.Preload("Product").Where("id = ?", itemID).First(&item).Error; err != nil {
-			return nil, fmt.Errorf("item pesanan Shopee tidak ditemukan: %w", err)
-		}
-
-		quantity = item.Quantity
-		if item.Product != nil {
-			printHours = item.Product.DefaultPrintTimeHours
-			itemWeight = item.Product.DefaultWeightGrams
-			if targetMachineID == "" && item.Product.DefaultMachineID != nil {
-				targetMachineID = item.Product.DefaultMachineID.String()
-			}
-		}
-	} else {
-		return nil, fmt.Errorf("source harus SHOPEE atau MANUAL")
+	// Update order status if not COMPLETED
+	var order prodOrderGORM
+	if err := r.db.Where("id = ?", item.OrderID).First(&order).Error; err == nil {
+		now := time.Now()
+		order.Status = "COMPLETED"
+		order.CompletedAt = &now
+		_ = r.db.Save(&order)
 	}
 
 	// Fallback filament deduction if caller supplied filamentID or if item has weight
