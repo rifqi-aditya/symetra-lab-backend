@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -31,7 +32,7 @@ func (h *ShopeeHandler) GetAuthURL(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, dto.Fail("Failed to build Shopee auth URL", err.Error()))
 	}
 
-	if c.QueryParam("redirect") == "true" {
+	if c.QueryParam("redirect") == "true" || strings.Contains(c.Request().Header.Get("Accept"), "text/html") {
 		return c.Redirect(http.StatusTemporaryRedirect, url)
 	}
 
