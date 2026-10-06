@@ -14,6 +14,7 @@ func TestNewFinanceTransaction(t *testing.T) {
 	tx, err := finance.NewFinanceTransaction(
 		finance.TypeIncome,
 		finance.CategorySalesShopee,
+		nil,
 		150000,
 		"Order Shopee 123",
 		now,
@@ -35,6 +36,7 @@ func TestNewFinanceTransaction(t *testing.T) {
 	_, err = finance.NewFinanceTransaction(
 		finance.TypeIncome,
 		finance.CategorySalesShopee,
+		nil,
 		0,
 		"Invalid amount",
 		now,
@@ -48,6 +50,7 @@ func TestNewFinanceTransaction(t *testing.T) {
 	_, err = finance.NewFinanceTransaction(
 		finance.TypeExpense,
 		finance.CategoryFilament,
+		nil,
 		50000,
 		"",
 		now,

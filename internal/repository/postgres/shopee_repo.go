@@ -3,12 +3,14 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"symetra-lab-backend-v2/internal/domain/costing"
 	"symetra-lab-backend-v2/internal/domain/shopee"
 )
 
@@ -344,6 +346,122 @@ func (r *ShopeeRepository) FindOrders(ctx context.Context, status, carrier, sear
 	return results, nil
 }
 
+func computeItemCostsFromProduct(tx *gorm.DB, prod *productGORM, qty int, sellingPrice float64) (
+	filCost, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, netProf float64,
+) {
+	if qty <= 0 {
+		qty = 1
+	}
+	q := float64(qty)
+
+	var compInputs []costing.ComponentCostInput
+	for _, c := range prod.Components {
+		price := 0.0
+		if c.ComponentID != nil {
+			var comp componentGORM
+			if err := tx.Where("id = ?", *c.ComponentID).First(&comp).Error; err == nil {
+				price = comp.PricePerUnit
+			}
+		}
+		compInputs = append(compInputs, costing.ComponentCostInput{
+			PricePerUnit:  price,
+			Quantity:      c.Quantity,
+			MarkupPercent: c.MarkupPercent,
+		})
+	}
+
+	var packInputs []costing.PackagingCostInput
+	for _, p := range prod.PackagingItems {
+		uCost := 0.0
+		var pack packagingItemGORM
+		if err := tx.Where("id = ?", p.PackagingItemID).First(&pack).Error; err == nil {
+			uCost = pack.UnitCost
+			if uCost <= 0 && pack.PurchaseQuantity > 0 {
+				uCost = pack.PurchasePrice / pack.PurchaseQuantity
+			}
+		}
+		packInputs = append(packInputs, costing.PackagingCostInput{
+			UnitCost:     uCost,
+			QuantityUsed: p.QuantityUsed,
+		})
+	}
+
+	batchSize := prod.BatchSize
+	if batchSize <= 0 {
+		batchSize = 1
+	}
+
+	cb := costing.Calculate(costing.CalculationInput{
+		MaterialType:          prod.MaterialType,
+		DefaultWeightGrams:    prod.DefaultWeightGrams,
+		DefaultPrintTimeHours: prod.DefaultPrintTimeHours,
+		BatchSize:             batchSize,
+		PackingFeeIDR:         prod.PackingFeeIDR,
+		BaseHPP:               prod.BaseHPP,
+		BaseSellingPrice:      prod.BaseSellingPrice,
+		Components:            compInputs,
+		PackagingItems:        packInputs,
+	})
+
+	filCost = cb.FilamentCost * q
+	compCost = cb.HardwareCost * q
+	packCost = cb.PackagingCost * q
+	elecCost = cb.ElectricityCost * q
+	maintCost = cb.MaintenanceCost * q
+	depCost = cb.DepreciationCost * q
+	totalCOGS = cb.BaseHPP * q
+
+	if totalCOGS == 0 && prod.BaseHPP > 0 {
+		totalCOGS = prod.BaseHPP * q
+		filCost = totalCOGS
+	}
+
+	netProf = (sellingPrice * q) - totalCOGS
+	return
+}
+
+func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
+	type CostSums struct {
+		Filament     float64 `gorm:"column:f_fil"`
+		Component    float64 `gorm:"column:f_comp"`
+		Packaging    float64 `gorm:"column:f_pack"`
+		Electricity  float64 `gorm:"column:f_elec"`
+		Maintenance  float64 `gorm:"column:f_maint"`
+		Depreciation float64 `gorm:"column:f_dep"`
+		TotalCOGS    float64 `gorm:"column:tot_cogs"`
+	}
+	var sums CostSums
+	_ = tx.Raw(`
+		SELECT 
+			COALESCE(SUM(filament_cost), 0) AS f_fil,
+			COALESCE(SUM(component_cost), 0) AS f_comp,
+			COALESCE(SUM(packaging_cost), 0) AS f_pack,
+			COALESCE(SUM(energy_cost), 0) AS f_elec,
+			COALESCE(SUM(maintenance_cost), 0) AS f_maint,
+			COALESCE(SUM(depreciation_cost), 0) AS f_dep,
+			COALESCE(SUM(total_cogs), 0) AS tot_cogs
+		FROM order_items
+		WHERE order_id = ?
+	`, orderID).Scan(&sums).Error
+
+	var ord shopeeUnifiedOrderGORM
+	if err := tx.Where("id = ?", orderID).First(&ord).Error; err == nil {
+		netProfit := ord.NetAmount - sums.TotalCOGS
+		_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
+			"fund_filament":     sums.Filament,
+			"fund_component":    sums.Component,
+			"fund_packaging":    sums.Packaging,
+			"fund_electricity":  sums.Electricity,
+			"fund_maintenance":  sums.Maintenance,
+			"fund_depreciation": sums.Depreciation,
+			"cogs_amount":       sums.TotalCOGS,
+			"net_profit":        netProfit,
+			"fund_net_profit":   netProfit,
+			"updated_at":        time.Now(),
+		}).Error
+	}
+}
+
 func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existingOrder shopeeUnifiedOrderGORM
@@ -353,8 +471,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			orderID = uuid.New()
 		}
 
-		var grossAmount, netAmount, channelFee, cogsAmount, netProfit float64
-		var fFilament, fComponent, fPackaging, fElectricity, fMaintenance, fDepreciation, fNetProfit float64
+		var grossAmount, netAmount, channelFee float64
 		paymentStatus := "UNPAID"
 
 		if o.Escrow() != nil {
@@ -362,16 +479,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			grossAmount = e.SellingPrice()
 			netAmount = e.EscrowAmount()
 			channelFee = e.TotalMarketplaceFee()
-			fFilament = e.KasFilamen()
-			fComponent = e.KasKomponen()
-			fPackaging = e.KasPacking()
-			fElectricity = e.KasListrik()
-			fMaintenance = e.KasMaintenance()
-			fDepreciation = e.KasDepresiasi()
-			cogsAmount = fFilament + fComponent + fPackaging + fElectricity + fMaintenance + fDepreciation
-			// Selisih antara pencairan escrow dengan pos biaya dialokasikan ke laba bersih:
-			fNetProfit = netAmount - cogsAmount
-			netProfit = fNetProfit
 			if e.FinancialStatus() == "RELEASED" {
 				paymentStatus = "PAID"
 			}
@@ -386,36 +493,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		orderUpdatedAt := o.UpdatedAt()
 		if o.UpdateTimeShopee() > 0 {
 			orderUpdatedAt = time.Unix(o.UpdateTimeShopee(), 0)
-		}
-
-		orderRecord := shopeeUnifiedOrderGORM{
-			ID:               orderID,
-			OrderNumber:      o.OrderSN(),
-			CustomerName:     o.BuyerUsername(),
-			Status:           o.OrderStatus(),
-			Channel:          "SHOPEE",
-			PaymentStatus:    paymentStatus,
-			GrossAmount:      grossAmount,
-			ChannelFee:       channelFee,
-			NetAmount:        netAmount,
-			COGSAmount:       cogsAmount,
-			NetProfit:        netProfit,
-			FundFilament:     fFilament,
-			FundComponent:    fComponent,
-			FundPackaging:    fPackaging,
-			FundElectricity:  fElectricity,
-			FundMaintenance:  fMaintenance,
-			FundDepreciation: fDepreciation,
-			FundNetProfit:    fNetProfit,
-			CreatedAt:        orderCreatedAt,
-			UpdatedAt:        orderUpdatedAt,
-		}
-
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"customer_name", "status", "payment_status", "gross_amount", "channel_fee", "net_amount", "cogs_amount", "net_profit", "fund_filament", "fund_component", "fund_packaging", "fund_electricity", "fund_maintenance", "fund_depreciation", "fund_net_profit", "updated_at"}),
-		}).Create(&orderRecord).Error; err != nil {
-			return err
 		}
 
 		// Marketplace details
@@ -453,6 +530,8 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			return err
 		}
 
+		var totFil, totComp, totPack, totElec, totMaint, totDep, totCOGS float64
+
 		// Items
 		for _, item := range o.Items() {
 			var existingItem shopeeUnifiedItemGORM
@@ -462,6 +541,61 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				itemID = uuid.New()
 			}
 
+			productID := item.ProductID()
+			matchedSKU := item.MatchedSKU()
+			mappingStatus := item.MappingStatus()
+
+			filCost := item.FilamentCost()
+			compCost := item.HardwareCost()
+			packCost := item.PackagingCost()
+			elecCost := item.ElectricityCost()
+			maintCost := item.MaintenanceCost()
+			depCost := item.DepreciationCost()
+			baseHPP := item.BaseHPP()
+			netProf := item.NetProfit()
+
+			if productID == nil && existingItem.ProductID != nil {
+				productID = existingItem.ProductID
+				matchedSKU = existingItem.MatchedSKU
+				mappingStatus = existingItem.MappingStatus
+				filCost = existingItem.FilamentCost
+				compCost = existingItem.ComponentCost
+				packCost = existingItem.PackagingCost
+				elecCost = existingItem.EnergyCost
+				maintCost = existingItem.MaintenanceCost
+				depCost = existingItem.DepreciationCost
+				baseHPP = existingItem.HPP
+				netProf = existingItem.NetProfit
+			}
+
+			// Cek auto-match exact SKU dari Shopee ke tabel products jika belum mapped
+			if productID == nil {
+				targetSKU := item.ModelSKU()
+				if targetSKU == "" {
+					targetSKU = item.ItemSKU()
+				}
+				if targetSKU != "" {
+					var p productGORM
+					if err := tx.Preload("Components").Preload("PackagingItems").Where("UPPER(TRIM(sku)) = UPPER(TRIM(?))", targetSKU).First(&p).Error; err == nil {
+						pID := p.ID
+						productID = &pID
+						if p.SKU != nil {
+							matchedSKU = *p.SKU
+						}
+						mappingStatus = "MAPPED"
+						filCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, netProf = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
+					}
+				}
+			}
+
+			totFil += filCost
+			totComp += compCost
+			totPack += packCost
+			totElec += elecCost
+			totMaint += maintCost
+			totDep += depCost
+			totCOGS += baseHPP
+
 			itemG := shopeeUnifiedItemGORM{
 				ID:               itemID,
 				OrderID:          orderID,
@@ -469,20 +603,20 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				ChannelModelID:   item.ModelID(),
 				ProductName:      item.ItemName(),
 				ItemSKU:          item.ItemSKU(),
-				MatchedSKU:       item.MatchedSKU(),
-				MappingStatus:    item.MappingStatus(),
+				MatchedSKU:       matchedSKU,
+				MappingStatus:    mappingStatus,
 				Quantity:         item.Quantity(),
 				SellingPrice:     item.DiscountedPrice(),
-				HPP:              item.BaseHPP(),
-				TotalCOGS:        item.BaseHPP(),
-				FilamentCost:     item.FilamentCost(),
-				ComponentCost:    item.HardwareCost(),
-				PackagingCost:    item.PackagingCost(),
-				EnergyCost:       item.ElectricityCost(),
-				MaintenanceCost:  item.MaintenanceCost(),
-				DepreciationCost: item.DepreciationCost(),
-				NetProfit:        item.NetProfit(),
-				ProductID:        item.ProductID(),
+				HPP:              baseHPP,
+				TotalCOGS:        baseHPP,
+				FilamentCost:     filCost,
+				ComponentCost:    compCost,
+				PackagingCost:    packCost,
+				EnergyCost:       elecCost,
+				MaintenanceCost:  maintCost,
+				DepreciationCost: depCost,
+				NetProfit:        netProf,
+				ProductID:        productID,
 				CreatedAt:        orderCreatedAt,
 				UpdatedAt:        orderUpdatedAt,
 			}
@@ -495,23 +629,103 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			}
 		}
 
+		cogsAmount := totCOGS
+		netProfit := netAmount - cogsAmount
+		fNetProfit := netProfit
+
+		orderRecord := shopeeUnifiedOrderGORM{
+			ID:               orderID,
+			OrderNumber:      o.OrderSN(),
+			CustomerName:     o.BuyerUsername(),
+			Status:           o.OrderStatus(),
+			Channel:          "SHOPEE",
+			PaymentStatus:    paymentStatus,
+			GrossAmount:      grossAmount,
+			ChannelFee:       channelFee,
+			NetAmount:        netAmount,
+			COGSAmount:       cogsAmount,
+			NetProfit:        netProfit,
+			FundFilament:     totFil,
+			FundComponent:    totComp,
+			FundPackaging:    totPack,
+			FundElectricity:  totElec,
+			FundMaintenance:  totMaint,
+			FundDepreciation: totDep,
+			FundNetProfit:    fNetProfit,
+			CreatedAt:        orderCreatedAt,
+			UpdatedAt:        orderUpdatedAt,
+		}
+
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"customer_name", "status", "payment_status", "gross_amount", "channel_fee", "net_amount", "cogs_amount", "net_profit", "fund_filament", "fund_component", "fund_packaging", "fund_electricity", "fund_maintenance", "fund_depreciation", "fund_net_profit", "updated_at"}),
+		}).Create(&orderRecord).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
 
 func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, productID uuid.UUID) error {
-	updates := map[string]interface{}{
-		"product_id":     productID,
-		"mapping_status": "MAPPED",
-		"updated_at":     time.Now(),
-	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. Ambil data master produk beserta komponen & packaging
+		var prod productGORM
+		if err := tx.Preload("Components").Preload("PackagingItems").Where("id = ?", productID).First(&prod).Error; err != nil {
+			return fmt.Errorf("product not found: %w", err)
+		}
 
-	query := r.db.WithContext(ctx).Table("order_items").Where("channel_item_id = ?", itemID)
-	if modelID > 0 {
-		query = query.Where("channel_model_id = ?", modelID)
-	}
+		matchedSKU := ""
+		if prod.SKU != nil {
+			matchedSKU = *prod.SKU
+		}
 
-	return query.Updates(updates).Error
+		// 2. Ambil semua baris order_items yang channel_item_id / channel_model_id nya cocok
+		itemQuery := tx.Model(&shopeeUnifiedItemGORM{}).Where("channel_item_id = ?", itemID)
+		if modelID > 0 {
+			itemQuery = itemQuery.Where("channel_model_id = ?", modelID)
+		}
+
+		var items []shopeeUnifiedItemGORM
+		if err := itemQuery.Find(&items).Error; err != nil {
+			return err
+		}
+
+		orderIDsMap := make(map[uuid.UUID]bool)
+
+		// 3. Update kolom matched_sku, product_id, dan kalkulasi 6 pos biaya untuk setiap item
+		for _, it := range items {
+			orderIDsMap[it.OrderID] = true
+			filCost, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, netProf := computeItemCostsFromProduct(tx, &prod, it.Quantity, it.SellingPrice)
+
+			updates := map[string]interface{}{
+				"product_id":        productID,
+				"matched_sku":       matchedSKU,
+				"mapping_status":    "MAPPED",
+				"filament_cost":     filCost,
+				"component_cost":    compCost,
+				"packaging_cost":    packCost,
+				"energy_cost":       elecCost,
+				"maintenance_cost":  maintCost,
+				"depreciation_cost": depCost,
+				"hpp":               totalCOGS,
+				"total_cogs":        totalCOGS,
+				"net_profit":        netProf,
+				"updated_at":        time.Now(),
+			}
+
+			if err := tx.Model(&shopeeUnifiedItemGORM{}).Where("id = ?", it.ID).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+
+		// 4. Trigger kalkulasi ulang 7 pos kas pada setiap orders induk yang terpengaruh
+		for oID := range orderIDsMap {
+			recalculateOrderFunds(tx, oID)
+		}
+
+		return nil
+	})
 }
 
 func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.CashflowSummary, error) {

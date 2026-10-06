@@ -91,7 +91,6 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 			api.GET("/shopee/auth-url", cfg.ShopeeHandler.GetAuthURL)
 			api.GET("/shopee/callback", cfg.ShopeeHandler.HandleCallback)
 			api.POST("/shopee/webhook", cfg.ShopeeHandler.HandlePushWebhook)
-			api.POST("/shopee/push-listener", cfg.ShopeeHandler.HandlePushWebhook)
 		}
 
 	// Public Auth routes
