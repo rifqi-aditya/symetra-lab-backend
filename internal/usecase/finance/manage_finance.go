@@ -15,6 +15,7 @@ import (
 type CreateTransactionInput struct {
 	Type            finance.TransactionType
 	Category        finance.TransactionCategory
+	CashAccountID   *uuid.UUID // nullable — pos kas yang digunakan
 	Amount          float64
 	Description     string
 	TransactionDate time.Time
@@ -47,6 +48,7 @@ func (uc *CreateTransactionUseCase) Execute(ctx context.Context, input CreateTra
 	tx, err := finance.NewFinanceTransaction(
 		input.Type,
 		input.Category,
+		input.CashAccountID,
 		input.Amount,
 		input.Description,
 		input.TransactionDate,
@@ -152,6 +154,7 @@ func (uc *CreatePurchaseOrderUseCase) Execute(ctx context.Context, input CreateP
 	tx, err := finance.NewFinanceTransaction(
 		finance.TypeExpense,
 		category,
+		nil,
 		po.TotalAmount(),
 		"Pembelian dari "+input.SupplierName,
 		input.PurchaseDate,
@@ -251,6 +254,7 @@ func (uc *CreateCapitalRecordUseCase) Execute(ctx context.Context, input CreateC
 	tx, err := finance.NewFinanceTransaction(
 		finance.TypeCapitalIn,
 		category,
+		nil,
 		input.Amount,
 		input.Description,
 		input.RecordDate,
@@ -303,4 +307,18 @@ func NewGetOrderAllocationUseCase(orderRepo order.Repository) *GetOrderAllocatio
 
 func (uc *GetOrderAllocationUseCase) Execute(ctx context.Context, userID uuid.UUID, channel string, dateFrom, dateTo *time.Time) (*finance.OrderAllocationSummary, error) {
 	return uc.orderRepo.GetOrderAllocationSummary(ctx, userID, channel, dateFrom, dateTo)
+}
+
+// ─── CashAccount Use Cases ──────────────────────────────────────────────
+
+type ListCashAccountsUseCase struct {
+	repo finance.Repository
+}
+
+func NewListCashAccountsUseCase(repo finance.Repository) *ListCashAccountsUseCase {
+	return &ListCashAccountsUseCase{repo: repo}
+}
+
+func (uc *ListCashAccountsUseCase) Execute(ctx context.Context) ([]*finance.CashAccount, error) {
+	return uc.repo.ListCashAccounts(ctx)
 }

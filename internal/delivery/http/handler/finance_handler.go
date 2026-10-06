@@ -26,7 +26,9 @@ type FinanceHandler struct {
 	createCapUC   *financeUC.CreateCapitalRecordUseCase
 	listCapUC     *financeUC.ListCapitalRecordsUseCase
 	getTotalCapUC *financeUC.GetTotalCapitalUseCase
-	getOrderAllocUC *financeUC.GetOrderAllocationUseCase
+
+	getOrderAllocUC    *financeUC.GetOrderAllocationUseCase
+	listCashAccountsUC *financeUC.ListCashAccountsUseCase
 }
 
 func NewFinanceHandler(
@@ -42,20 +44,22 @@ func NewFinanceHandler(
 	listCapUC *financeUC.ListCapitalRecordsUseCase,
 	getTotalCapUC *financeUC.GetTotalCapitalUseCase,
 	getOrderAllocUC *financeUC.GetOrderAllocationUseCase,
+	listCashAccountsUC *financeUC.ListCashAccountsUseCase,
 ) *FinanceHandler {
 	return &FinanceHandler{
-		listTxUC:      listTxUC,
-		createTxUC:    createTxUC,
-		deleteTxUC:    deleteTxUC,
-		getSummaryUC:  getSummaryUC,
-		createPOUC:    createPOUC,
-		listPOUC:      listPOUC,
-		getPOUC:       getPOUC,
-		deletePOUC:    deletePOUC,
-		createCapUC:   createCapUC,
-		listCapUC:     listCapUC,
-		getTotalCapUC: getTotalCapUC,
-		getOrderAllocUC: getOrderAllocUC,
+		listTxUC:           listTxUC,
+		createTxUC:         createTxUC,
+		deleteTxUC:         deleteTxUC,
+		getSummaryUC:       getSummaryUC,
+		createPOUC:         createPOUC,
+		listPOUC:           listPOUC,
+		getPOUC:            getPOUC,
+		deletePOUC:         deletePOUC,
+		createCapUC:        createCapUC,
+		listCapUC:          listCapUC,
+		getTotalCapUC:      getTotalCapUC,
+		getOrderAllocUC:    getOrderAllocUC,
+		listCashAccountsUC: listCashAccountsUC,
 	}
 }
 
@@ -343,4 +347,17 @@ func (h *FinanceHandler) GetOrderAllocations(c echo.Context) error {
 		KasDepresiasi:        summary.FundDepreciation,
 		KasLabaBersih:        summary.FundNetProfit,
 	}))
+}
+
+// GET /api/v1/finance/cash-accounts
+func (h *FinanceHandler) ListCashAccounts(c echo.Context) error {
+	accounts, err := h.listCashAccountsUC.Execute(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dto.Fail("Failed to retrieve cash accounts", err.Error()))
+	}
+	resp := make([]dto.CashAccountResponse, len(accounts))
+	for i, ca := range accounts {
+		resp[i] = dto.ToCashAccountResponse(ca)
+	}
+	return c.JSON(http.StatusOK, dto.Success(resp))
 }

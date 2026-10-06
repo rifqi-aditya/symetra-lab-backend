@@ -58,12 +58,50 @@ const (
 	CapitalAddition CapitalRecordType = "ADDITION"
 )
 
+// ─── CashAccount Entity (Pos Kas) ────────────────────────────────────────────
+
+type CashAccount struct {
+	id          uuid.UUID
+	name        string
+	description string
+	color       string
+	isActive    bool
+	createdAt   time.Time
+	updatedAt   time.Time
+}
+
+func ReconstructCashAccount(
+	id uuid.UUID,
+	name, description, color string,
+	isActive bool,
+	createdAt, updatedAt time.Time,
+) *CashAccount {
+	return &CashAccount{
+		id:          id,
+		name:        name,
+		description: description,
+		color:       color,
+		isActive:    isActive,
+		createdAt:   createdAt,
+		updatedAt:   updatedAt,
+	}
+}
+
+func (c *CashAccount) ID()          uuid.UUID { return c.id }
+func (c *CashAccount) Name()        string    { return c.name }
+func (c *CashAccount) Description() string    { return c.description }
+func (c *CashAccount) Color()       string    { return c.color }
+func (c *CashAccount) IsActive()    bool      { return c.isActive }
+func (c *CashAccount) CreatedAt()   time.Time { return c.createdAt }
+func (c *CashAccount) UpdatedAt()   time.Time { return c.updatedAt }
+
 // ─── FinanceTransaction Entity ───────────────────────────────────────────────
 
 type FinanceTransaction struct {
 	id              uuid.UUID
 	txType          TransactionType
 	category        TransactionCategory
+	cashAccountID   *uuid.UUID // nullable — pos kas yang digunakan
 	amount          float64
 	description     string
 	transactionDate time.Time
@@ -78,6 +116,7 @@ type FinanceTransaction struct {
 func NewFinanceTransaction(
 	txType TransactionType,
 	category TransactionCategory,
+	cashAccountID *uuid.UUID,
 	amount float64,
 	description string,
 	transactionDate time.Time,
@@ -94,6 +133,7 @@ func NewFinanceTransaction(
 		id:              uuid.New(),
 		txType:          txType,
 		category:        category,
+		cashAccountID:   cashAccountID,
 		amount:          amount,
 		description:     description,
 		transactionDate: transactionDate,
@@ -110,6 +150,7 @@ func ReconstructFinanceTransaction(
 	id uuid.UUID,
 	txType TransactionType,
 	category TransactionCategory,
+	cashAccountID *uuid.UUID,
 	amount float64,
 	description string,
 	transactionDate time.Time,
@@ -120,6 +161,7 @@ func ReconstructFinanceTransaction(
 		id:              id,
 		txType:          txType,
 		category:        category,
+		cashAccountID:   cashAccountID,
 		amount:          amount,
 		description:     description,
 		transactionDate: transactionDate,
@@ -135,6 +177,7 @@ func ReconstructFinanceTransaction(
 func (t *FinanceTransaction) ID()              uuid.UUID           { return t.id }
 func (t *FinanceTransaction) Type()            TransactionType     { return t.txType }
 func (t *FinanceTransaction) Category()        TransactionCategory { return t.category }
+func (t *FinanceTransaction) CashAccountID()   *uuid.UUID          { return t.cashAccountID }
 func (t *FinanceTransaction) Amount()          float64             { return t.amount }
 func (t *FinanceTransaction) Description()     string              { return t.description }
 func (t *FinanceTransaction) TransactionDate() time.Time           { return t.transactionDate }

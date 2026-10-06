@@ -381,6 +381,7 @@ func (uc *ShopeeUseCases) HandleOrderStatusPush(ctx context.Context, shopID uint
 		tx, txErr := finance.NewFinanceTransaction(
 			finance.TypeIncome,
 			finance.CategorySalesShopee,
+			nil,
 			ord.Escrow().EscrowAmount(),
 			"Escrow Shopee - Order "+orderSN,
 			orderDate,

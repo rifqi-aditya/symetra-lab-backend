@@ -16,6 +16,9 @@ type Repository interface {
 	DeleteTransaction(ctx context.Context, id uuid.UUID) error
 	GetSummary(ctx context.Context, from, to time.Time) (*FinanceSummary, error)
 
+	// CashAccount (Pos Kas)
+	ListCashAccounts(ctx context.Context) ([]*CashAccount, error)
+
 	// PurchaseOrder
 	CreatePurchaseOrder(ctx context.Context, po *PurchaseOrder) error
 	FindPurchaseOrderByID(ctx context.Context, id uuid.UUID) (*PurchaseOrder, error)

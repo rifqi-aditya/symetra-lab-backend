@@ -87,7 +87,7 @@ func main() {
 			NOW(),
 			NOW()
 		FROM orders o
-		WHERE o.payment_status = 'PAID' AND o.gross_amount > 0
+		WHERE o.channel = 'MANUAL' AND o.payment_status = 'PAID' AND o.gross_amount > 0
 		ON CONFLICT (reference_type, reference_id) DO NOTHING;
 	`
 	resManual := db.Exec(sqlManual)

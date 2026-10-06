@@ -255,6 +255,7 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		financeGroup.GET("/capital", cfg.FinanceHandler.ListCapitalRecords)
 		financeGroup.POST("/capital", cfg.FinanceHandler.CreateCapitalRecord)
 		financeGroup.GET("/capital/total", cfg.FinanceHandler.GetTotalCapital)
+		financeGroup.GET("/cash-accounts", cfg.FinanceHandler.ListCashAccounts)
 	}
 
 	}

@@ -14,6 +14,7 @@ import (
 type CreateTransactionRequest struct {
 	Type            string  `json:"type"` // INCOME | EXPENSE | CAPITAL_IN
 	Category        string  `json:"category"`
+	CashAccountID   string  `json:"cash_account_id,omitempty"` // UUID string, nullable
 	Amount          float64 `json:"amount"`
 	Description     string  `json:"description"`
 	TransactionDate string  `json:"transaction_date"` // Format: "2006-01-02"
@@ -23,17 +24,18 @@ type CreateTransactionRequest struct {
 }
 
 type FinanceTransactionResponse struct {
-	ID              uuid.UUID `json:"id"`
-	Type            string    `json:"type"`
-	Category        string    `json:"category"`
-	Amount          float64   `json:"amount"`
-	Description     string    `json:"description"`
-	TransactionDate string    `json:"transaction_date"`
-	ReferenceType   string    `json:"reference_type,omitempty"`
-	ReferenceID     string    `json:"reference_id,omitempty"`
-	Notes           string    `json:"notes,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              uuid.UUID  `json:"id"`
+	Type            string     `json:"type"`
+	Category        string     `json:"category"`
+	CashAccountID   *uuid.UUID `json:"cash_account_id,omitempty"`
+	Amount          float64    `json:"amount"`
+	Description     string     `json:"description"`
+	TransactionDate string     `json:"transaction_date"`
+	ReferenceType   string     `json:"reference_type,omitempty"`
+	ReferenceID     string     `json:"reference_id,omitempty"`
+	Notes           string     `json:"notes,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 func ToFinanceTransactionResponse(t *finance.FinanceTransaction) FinanceTransactionResponse {
@@ -41,6 +43,7 @@ func ToFinanceTransactionResponse(t *finance.FinanceTransaction) FinanceTransact
 		ID:              t.ID(),
 		Type:            string(t.Type()),
 		Category:        string(t.Category()),
+		CashAccountID:   t.CashAccountID(),
 		Amount:          t.Amount(),
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate().Format("2006-01-02"),
@@ -57,6 +60,26 @@ type FinanceTransactionListQuery struct {
 	Category string `query:"category"`
 	DateFrom string `query:"date_from"` // Format: "2006-01-02"
 	DateTo   string `query:"date_to"`
+}
+
+// ─── CashAccount DTOs ──────────────────────────────────────────────────────────
+
+type CashAccountResponse struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Color       string    `json:"color"`
+	IsActive    bool      `json:"is_active"`
+}
+
+func ToCashAccountResponse(ca *finance.CashAccount) CashAccountResponse {
+	return CashAccountResponse{
+		ID:          ca.ID(),
+		Name:        ca.Name(),
+		Description: ca.Description(),
+		Color:       ca.Color(),
+		IsActive:    ca.IsActive(),
+	}
 }
 
 type FinanceSummaryResponse struct {
@@ -196,9 +219,20 @@ func ToCreateTransactionInput(req CreateTransactionRequest) (financeUC.CreateTra
 	if err != nil {
 		return financeUC.CreateTransactionInput{}, err
 	}
+
+	var cashAccountID *uuid.UUID
+	if req.CashAccountID != "" {
+		parsed, err := uuid.Parse(req.CashAccountID)
+		if err != nil {
+			return financeUC.CreateTransactionInput{}, err
+		}
+		cashAccountID = &parsed
+	}
+
 	return financeUC.CreateTransactionInput{
 		Type:            finance.TransactionType(req.Type),
 		Category:        finance.TransactionCategory(req.Category),
+		CashAccountID:   cashAccountID,
 		Amount:          req.Amount,
 		Description:     req.Description,
 		TransactionDate: date,

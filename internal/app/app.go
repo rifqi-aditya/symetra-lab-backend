@@ -80,6 +80,7 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 	listCapitalRecordsUC := financeUC.NewListCapitalRecordsUseCase(financeRepo)
 	getTotalCapitalUC := financeUC.NewGetTotalCapitalUseCase(financeRepo)
 	getOrderAllocUC := financeUC.NewGetOrderAllocationUseCase(orderRepo)
+	listCashAccountsUC := financeUC.NewListCashAccountsUseCase(financeRepo)
 
 	listProductsUC := productUC.NewListProductsUseCase(productRepo)
 	getProductUC := productUC.NewGetProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo)
@@ -248,6 +249,7 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		listCapitalRecordsUC,
 		getTotalCapitalUC,
 		getOrderAllocUC,
+		listCashAccountsUC,
 	)
 
 	e := echo.New()

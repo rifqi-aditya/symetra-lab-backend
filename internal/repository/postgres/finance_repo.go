@@ -14,20 +14,33 @@ import (
 // ─── GORM Structs ─────────────────────────────────────────────────────────────
 
 type financeTransactionGORM struct {
-	ID              uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
-	Type            string    `gorm:"column:type"`
-	Category        string    `gorm:"column:category"`
-	Amount          float64   `gorm:"column:amount"`
-	Description     string    `gorm:"column:description"`
-	TransactionDate time.Time `gorm:"column:transaction_date"`
-	ReferenceType   string    `gorm:"column:reference_type"`
-	ReferenceID     string    `gorm:"column:reference_id"`
-	Notes           string    `gorm:"column:notes"`
-	CreatedAt       time.Time `gorm:"column:created_at"`
-	UpdatedAt       time.Time `gorm:"column:updated_at"`
+	ID              uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
+	Type            string     `gorm:"column:type"`
+	Category        string     `gorm:"column:category"`
+	CashAccountID   *uuid.UUID `gorm:"column:cash_account_id;type:uuid"`
+	Amount          float64    `gorm:"column:amount"`
+	Description     string     `gorm:"column:description"`
+	TransactionDate time.Time  `gorm:"column:transaction_date"`
+	ReferenceType   string     `gorm:"column:reference_type"`
+	ReferenceID     string     `gorm:"column:reference_id"`
+	Notes           string     `gorm:"column:notes"`
+	CreatedAt       time.Time  `gorm:"column:created_at"`
+	UpdatedAt       time.Time  `gorm:"column:updated_at"`
 }
 
 func (financeTransactionGORM) TableName() string { return "finance_transactions" }
+
+type cashAccountGORM struct {
+	ID          uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
+	Name        string    `gorm:"column:name"`
+	Description string    `gorm:"column:description"`
+	Color       string    `gorm:"column:color"`
+	IsActive    bool      `gorm:"column:is_active"`
+	CreatedAt   time.Time `gorm:"column:created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at"`
+}
+
+func (cashAccountGORM) TableName() string { return "cash_accounts" }
 
 type purchaseOrderGORM struct {
 	ID                  uuid.UUID               `gorm:"column:id;primaryKey;type:uuid"`
@@ -89,6 +102,7 @@ func mapFinanceTxGORMToDomain(g *financeTransactionGORM) *finance.FinanceTransac
 		g.ID,
 		finance.TransactionType(g.Type),
 		finance.TransactionCategory(g.Category),
+		g.CashAccountID,
 		g.Amount,
 		g.Description,
 		g.TransactionDate,
@@ -143,6 +157,7 @@ func (r *FinanceRepository) CreateTransaction(ctx context.Context, t *finance.Fi
 		ID:              t.ID(),
 		Type:            string(t.Type()),
 		Category:        string(t.Category()),
+		CashAccountID:   t.CashAccountID(),
 		Amount:          t.Amount(),
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate(),
@@ -161,6 +176,7 @@ func (r *FinanceRepository) CreateTransactionIfNotExists(ctx context.Context, t 
 		ID:              t.ID(),
 		Type:            string(t.Type()),
 		Category:        string(t.Category()),
+		CashAccountID:   t.CashAccountID(),
 		Amount:          t.Amount(),
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate(),
@@ -388,4 +404,25 @@ func (r *FinanceRepository) GetTotalCapital(ctx context.Context) (float64, error
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&total).Error
 	return total, err
+}
+
+// ─── CashAccount Methods ─────────────────────────────────────────────────────────
+
+func (r *FinanceRepository) ListCashAccounts(ctx context.Context) ([]*finance.CashAccount, error) {
+	var list []cashAccountGORM
+	err := r.db.WithContext(ctx).
+		Where("is_active = ?", true).
+		Order("name ASC").
+		Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*finance.CashAccount, len(list))
+	for i, g := range list {
+		results[i] = finance.ReconstructCashAccount(
+			g.ID, g.Name, g.Description, g.Color,
+			g.IsActive, g.CreatedAt, g.UpdatedAt,
+		)
+	}
+	return results, nil
 }
