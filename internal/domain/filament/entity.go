@@ -1,4 +1,4 @@
-﻿package filament
+package filament
 
 import (
 	"strings"
@@ -14,18 +14,10 @@ type FilamentProfile struct {
 	brand                    string
 	materialType             string
 	diameterMM               float64
-	nozzleTemp               *int
-	bedTemp                  *int
-	retractionLength         *float64
-	flowRatio                *float64
-	pressureAdvance          *float64
-	coolingFanPercent        *int
-	maxVolumetricSpeed       *float64
 	emptySpoolWeightGrams    *float64
 	spoolWeightGrams         float64
 	spoolOuterDiameterMM     *float64
 	spoolInnerHoleDiameterMM *float64
-	spoolWidthMM             *float64
 	createdAt                time.Time
 	updatedAt                time.Time
 }
@@ -34,12 +26,9 @@ func ReconstructProfile(
 	id, userID uuid.UUID,
 	brand, materialType string,
 	diameterMM float64,
-	nozzleTemp, bedTemp *int,
-	retractionLength, flowRatio, pressureAdvance *float64,
-	coolingFanPercent *int,
-	maxVolumetricSpeed, emptySpoolWeightGrams *float64,
+	emptySpoolWeightGrams *float64,
 	spoolWeightGrams float64,
-	spoolOuterDiameterMM, spoolInnerHoleDiameterMM, spoolWidthMM *float64,
+	spoolOuterDiameterMM, spoolInnerHoleDiameterMM *float64,
 	createdAt, updatedAt time.Time,
 ) *FilamentProfile {
 	return &FilamentProfile{
@@ -48,18 +37,10 @@ func ReconstructProfile(
 		brand:                    brand,
 		materialType:             materialType,
 		diameterMM:               diameterMM,
-		nozzleTemp:               nozzleTemp,
-		bedTemp:                  bedTemp,
-		retractionLength:         retractionLength,
-		flowRatio:                flowRatio,
-		pressureAdvance:          pressureAdvance,
-		coolingFanPercent:        coolingFanPercent,
-		maxVolumetricSpeed:       maxVolumetricSpeed,
 		emptySpoolWeightGrams:    emptySpoolWeightGrams,
 		spoolWeightGrams:         spoolWeightGrams,
 		spoolOuterDiameterMM:     spoolOuterDiameterMM,
 		spoolInnerHoleDiameterMM: spoolInnerHoleDiameterMM,
-		spoolWidthMM:             spoolWidthMM,
 		createdAt:                createdAt,
 		updatedAt:                updatedAt,
 	}
@@ -70,18 +51,10 @@ func (p *FilamentProfile) UserID() uuid.UUID                  { return p.userID 
 func (p *FilamentProfile) Brand() string                      { return p.brand }
 func (p *FilamentProfile) MaterialType() string               { return p.materialType }
 func (p *FilamentProfile) DiameterMM() float64                { return p.diameterMM }
-func (p *FilamentProfile) NozzleTemp() *int                   { return p.nozzleTemp }
-func (p *FilamentProfile) BedTemp() *int                      { return p.bedTemp }
-func (p *FilamentProfile) RetractionLength() *float64         { return p.retractionLength }
-func (p *FilamentProfile) FlowRatio() *float64                { return p.flowRatio }
-func (p *FilamentProfile) PressureAdvance() *float64          { return p.pressureAdvance }
-func (p *FilamentProfile) CoolingFanPercent() *int            { return p.coolingFanPercent }
-func (p *FilamentProfile) MaxVolumetricSpeed() *float64       { return p.maxVolumetricSpeed }
 func (p *FilamentProfile) EmptySpoolWeightGrams() *float64    { return p.emptySpoolWeightGrams }
 func (p *FilamentProfile) SpoolWeightGrams() float64          { return p.spoolWeightGrams }
 func (p *FilamentProfile) SpoolOuterDiameterMM() *float64     { return p.spoolOuterDiameterMM }
 func (p *FilamentProfile) SpoolInnerHoleDiameterMM() *float64 { return p.spoolInnerHoleDiameterMM }
-func (p *FilamentProfile) SpoolWidthMM() *float64             { return p.spoolWidthMM }
 func (p *FilamentProfile) CreatedAt() time.Time               { return p.createdAt }
 func (p *FilamentProfile) UpdatedAt() time.Time               { return p.updatedAt }
 

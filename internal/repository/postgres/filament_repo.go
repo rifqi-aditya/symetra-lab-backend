@@ -16,18 +16,10 @@ type filamentProfileGORM struct {
 	Brand                    string    `gorm:"column:brand"`
 	MaterialType             string    `gorm:"column:material_type"`
 	DiameterMM               float64   `gorm:"column:diameter_mm"`
-	NozzleTemp               *int      `gorm:"column:nozzle_temp"`
-	BedTemp                  *int      `gorm:"column:bed_temp"`
-	RetractionLength         *float64  `gorm:"column:retraction_length"`
-	FlowRatio                *float64  `gorm:"column:flow_ratio"`
-	PressureAdvance          *float64  `gorm:"column:pressure_advance"`
-	CoolingFanPercent        *int      `gorm:"column:cooling_fan_percent"`
-	MaxVolumetricSpeed       *float64  `gorm:"column:max_volumetric_speed"`
 	EmptySpoolWeightGrams    *float64  `gorm:"column:empty_spool_weight_grams"`
 	SpoolWeightGrams         float64   `gorm:"column:spool_weight_grams"`
 	SpoolOuterDiameterMM     *float64  `gorm:"column:spool_outer_diameter_mm"`
 	SpoolInnerHoleDiameterMM *float64  `gorm:"column:spool_inner_hole_diameter_mm"`
-	SpoolWidthMM             *float64  `gorm:"column:spool_width_mm"`
 	CreatedAt                time.Time `gorm:"column:created_at"`
 	UpdatedAt                time.Time `gorm:"column:updated_at"`
 }
@@ -90,18 +82,10 @@ func mapProfileGORMToDomain(p *filamentProfileGORM) *filament.FilamentProfile {
 		p.Brand,
 		p.MaterialType,
 		p.DiameterMM,
-		p.NozzleTemp,
-		p.BedTemp,
-		p.RetractionLength,
-		p.FlowRatio,
-		p.PressureAdvance,
-		p.CoolingFanPercent,
-		p.MaxVolumetricSpeed,
 		p.EmptySpoolWeightGrams,
 		p.SpoolWeightGrams,
 		p.SpoolOuterDiameterMM,
 		p.SpoolInnerHoleDiameterMM,
-		p.SpoolWidthMM,
 		p.CreatedAt,
 		p.UpdatedAt,
 	)

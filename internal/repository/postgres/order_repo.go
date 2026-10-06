@@ -31,12 +31,8 @@ type orderGORM struct {
 	FundMaintenance  float64         `gorm:"column:fund_maintenance"`
 	FundDepreciation float64         `gorm:"column:fund_depreciation"`
 	FundNetProfit    float64         `gorm:"column:fund_net_profit"`
-	TotalRevenue     float64         `gorm:"column:total_revenue"`
-	TotalHPP         float64         `gorm:"column:total_hpp"`
-	TotalProfit      float64         `gorm:"column:total_profit"`
 	Status           string          `gorm:"column:status"`
 	Notes            string          `gorm:"column:notes"`
-	Source           string          `gorm:"column:source"`
 	PaymentStatus    string          `gorm:"column:payment_status"`
 	StartedAt        *time.Time      `gorm:"column:started_at"`
 	CompletedAt      *time.Time      `gorm:"column:completed_at"`
@@ -70,7 +66,6 @@ type orderItemGORM struct {
 	TotalCogs        float64    `gorm:"column:total_cogs"`
 	NetProfit        float64    `gorm:"column:net_profit"`
 	EnergyCost       float64    `gorm:"column:energy_cost"`
-	PackingFee       float64    `gorm:"column:packing_fee"`
 	ChannelItemID    int64      `gorm:"column:channel_item_id"`
 	ChannelModelID   int64      `gorm:"column:channel_model_id"`
 	MappingStatus    string     `gorm:"column:mapping_status"`
@@ -127,44 +122,20 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 
 	ch := g.Channel
 	if ch == "" {
-		ch = g.Source
-	}
-	if ch == "" {
 		ch = "MANUAL"
 	}
 
 	gross := g.GrossAmount
-	if gross == 0 {
-		gross = g.TotalRevenue
-	}
 	net := g.NetAmount
 	if net == 0 {
-		net = g.TotalRevenue
+		net = gross
 	}
 	cogs := g.CogsAmount
-	if cogs == 0 {
-		cogs = g.TotalHPP
-	}
 	profit := g.NetProfit
-	if profit == 0 {
-		profit = g.TotalProfit
-	}
 
-	totRev := g.TotalRevenue
-	if totRev == 0 {
-		totRev = gross
-	}
-	if totRev == 0 {
-		totRev = net
-	}
-	totHpp := g.TotalHPP
-	if totHpp == 0 {
-		totHpp = cogs
-	}
-	totProf := g.TotalProfit
-	if totProf == 0 {
-		totProf = profit
-	}
+	totRev := gross
+	totHpp := cogs
+	totProf := profit
 
 	return order.ReconstructOrder(
 		g.ID,
@@ -190,7 +161,7 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		totProf,
 		g.Status,
 		g.Notes,
-		g.Source,
+		ch,
 		g.PaymentStatus,
 		g.StartedAt,
 		g.CompletedAt,
@@ -254,12 +225,8 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 			FundMaintenance:  o.FundMaintenance(),
 			FundDepreciation: o.FundDepreciation(),
 			FundNetProfit:    o.FundNetProfit(),
-			TotalRevenue:     o.TotalRevenue(),
-			TotalHPP:         o.TotalHPP(),
-			TotalProfit:      o.TotalProfit(),
 			Status:           o.Status(),
 			Notes:            o.Notes(),
-			Source:           o.Source(),
 			PaymentStatus:    o.PaymentStatus(),
 			StartedAt:        o.StartedAt(),
 			CompletedAt:      o.CompletedAt(),
@@ -293,7 +260,6 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 				TotalCogs:        it.TotalCogs(),
 				NetProfit:        it.NetProfit(),
 				EnergyCost:       it.EnergyCost(),
-				PackingFee:       it.PackingFee(),
 				ChannelItemID:    it.ChannelItemID(),
 				ChannelModelID:   it.ChannelModelID(),
 				MappingStatus:    it.MappingStatus(),

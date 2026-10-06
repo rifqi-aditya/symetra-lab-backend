@@ -83,18 +83,10 @@ type FilamentProfileResponse struct {
 	Brand                    string    `json:"brand"`
 	MaterialType             string    `json:"material_type"`
 	DiameterMM               float64   `json:"diameter_mm"`
-	NozzleTemp               *int      `json:"nozzle_temp"`
-	BedTemp                  *int      `json:"bed_temp"`
-	RetractionLength         *float64  `json:"retraction_length"`
-	FlowRatio                *float64  `json:"flow_ratio"`
-	PressureAdvance          *float64  `json:"pressure_advance"`
-	CoolingFanPercent        *int      `json:"cooling_fan_percent"`
-	MaxVolumetricSpeed       *float64  `json:"max_volumetric_speed"`
 	EmptySpoolWeightGrams    *float64  `json:"empty_spool_weight_grams"`
 	SpoolWeightGrams         float64   `json:"spool_weight_grams"`
 	SpoolOuterDiameterMM     *float64  `json:"spool_outer_diameter_mm"`
 	SpoolInnerHoleDiameterMM *float64  `json:"spool_inner_hole_diameter_mm"`
-	SpoolWidthMM             *float64  `json:"spool_width_mm"`
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
 }
@@ -106,18 +98,10 @@ func ToFilamentProfileResponse(p *filament.FilamentProfile) FilamentProfileRespo
 		Brand:                    p.Brand(),
 		MaterialType:             p.MaterialType(),
 		DiameterMM:               p.DiameterMM(),
-		NozzleTemp:               p.NozzleTemp(),
-		BedTemp:                  p.BedTemp(),
-		RetractionLength:         p.RetractionLength(),
-		FlowRatio:                p.FlowRatio(),
-		PressureAdvance:          p.PressureAdvance(),
-		CoolingFanPercent:        p.CoolingFanPercent(),
-		MaxVolumetricSpeed:       p.MaxVolumetricSpeed(),
 		EmptySpoolWeightGrams:    p.EmptySpoolWeightGrams(),
 		SpoolWeightGrams:         p.SpoolWeightGrams(),
 		SpoolOuterDiameterMM:     p.SpoolOuterDiameterMM(),
 		SpoolInnerHoleDiameterMM: p.SpoolInnerHoleDiameterMM(),
-		SpoolWidthMM:             p.SpoolWidthMM(),
 		CreatedAt:                p.CreatedAt(),
 		UpdatedAt:                p.UpdatedAt(),
 	}
@@ -130,18 +114,10 @@ type FilamentResponse struct {
 	Brand                    string     `json:"brand"`
 	MaterialType             string     `json:"material_type"`
 	DiameterMM               float64    `json:"diameter_mm"`
-	NozzleTemp               *int       `json:"nozzle_temp"`
-	BedTemp                  *int       `json:"bed_temp"`
-	RetractionLength         *float64   `json:"retraction_length"`
-	FlowRatio                *float64   `json:"flow_ratio"`
-	PressureAdvance          *float64   `json:"pressure_advance"`
-	CoolingFanPercent        *int       `json:"cooling_fan_percent"`
-	MaxVolumetricSpeed       *float64   `json:"max_volumetric_speed"`
 	EmptySpoolWeightGrams    *float64   `json:"empty_spool_weight_grams"`
 	SpoolWeightGrams         float64    `json:"spool_weight_grams"`
 	SpoolOuterDiameterMM     *float64   `json:"spool_outer_diameter_mm"`
 	SpoolInnerHoleDiameterMM *float64   `json:"spool_inner_hole_diameter_mm"`
-	SpoolWidthMM             *float64   `json:"spool_width_mm"`
 	ColorName                string     `json:"color_name"`
 	ColorHex                 string     `json:"color_hex"`
 	SKU                      *string    `json:"sku"`
@@ -176,18 +152,10 @@ func ToFilamentResponse(f *filament.Filament) FilamentResponse {
 		resp.Brand = prof.Brand()
 		resp.MaterialType = prof.MaterialType()
 		resp.DiameterMM = prof.DiameterMM()
-		resp.NozzleTemp = prof.NozzleTemp()
-		resp.BedTemp = prof.BedTemp()
-		resp.RetractionLength = prof.RetractionLength()
-		resp.FlowRatio = prof.FlowRatio()
-		resp.PressureAdvance = prof.PressureAdvance()
-		resp.CoolingFanPercent = prof.CoolingFanPercent()
-		resp.MaxVolumetricSpeed = prof.MaxVolumetricSpeed()
 		resp.EmptySpoolWeightGrams = prof.EmptySpoolWeightGrams()
 		resp.SpoolWeightGrams = prof.SpoolWeightGrams()
 		resp.SpoolOuterDiameterMM = prof.SpoolOuterDiameterMM()
 		resp.SpoolInnerHoleDiameterMM = prof.SpoolInnerHoleDiameterMM()
-		resp.SpoolWidthMM = prof.SpoolWidthMM()
 	}
 
 	return resp
