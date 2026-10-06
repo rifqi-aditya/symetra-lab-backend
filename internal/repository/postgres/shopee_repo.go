@@ -283,6 +283,21 @@ func (r *ShopeeRepository) FindAllShops(ctx context.Context) ([]*shopee.ShopeeSh
 }
 
 func (r *ShopeeRepository) SaveShop(ctx context.Context, s *shopee.ShopeeShop) error {
+	var existing shopGORM
+	err := r.db.WithContext(ctx).Where("shop_id = ?", s.ShopID()).First(&existing).Error
+	if err == nil {
+		return r.db.WithContext(ctx).Model(&existing).Updates(map[string]interface{}{
+			"access_token":             s.AccessToken(),
+			"refresh_token":            s.RefreshToken(),
+			"access_token_expires_at":  s.AccessTokenExpiresAt(),
+			"refresh_token_expires_at": s.RefreshTokenExpiresAt(),
+			"updated_at":               time.Now(),
+		}).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
 	record := shopGORM{
 		ShopID:                s.ShopID(),
 		ShopName:              s.ShopName(),
@@ -291,14 +306,11 @@ func (r *ShopeeRepository) SaveShop(ctx context.Context, s *shopee.ShopeeShop) e
 		RefreshToken:          s.RefreshToken(),
 		AccessTokenExpiresAt:  s.AccessTokenExpiresAt(),
 		RefreshTokenExpiresAt: s.RefreshTokenExpiresAt(),
-		CreatedAt:             s.CreatedAt(),
-		UpdatedAt:             s.UpdatedAt(),
+		CreatedAt:             time.Now(),
+		UpdatedAt:             time.Now(),
 	}
 
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "shop_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"access_token", "refresh_token", "access_token_expires_at", "refresh_token_expires_at", "updated_at"}),
-	}).Create(&record).Error
+	return r.db.WithContext(ctx).Create(&record).Error
 }
 
 func (r *ShopeeRepository) FindOrder(ctx context.Context, orderSN string) (*shopee.ShopeeOrder, error) {

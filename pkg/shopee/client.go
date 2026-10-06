@@ -7,7 +7,7 @@ import (
 
 const (
 	ProductionBaseURL = "https://partner.shopeemobile.com"
-	TestBaseURL       = "https://partner.test-stable.shopeemobile.com"
+	TestBaseURL       = "https://openplatform.sandbox.test-stable.shopee.sg"
 )
 
 // Client menyimpan konfigurasi dan klien HTTP untuk berkomunikasi dengan Shopee Open Platform
