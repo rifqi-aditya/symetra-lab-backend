@@ -46,7 +46,7 @@ func Load() *Config {
 		ShopeePartnerID:    partnerID,
 		ShopeePartnerKey:   getEnv("SHOPEE_PARTNER_KEY", ""),
 		ShopeeIsProduction: isProd,
-		ShopeeRedirectURL:  getEnv("SHOPEE_REDIRECT_URL", "http://localhost:8081/api/v2/shopee/callback"),
+		ShopeeRedirectURL:  getEnv("SHOPEE_REDIRECT_URL", "http://localhost:8080/api/v1/shopee/callback"),
 	}
 }
 

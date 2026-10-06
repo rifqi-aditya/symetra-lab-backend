@@ -11,7 +11,7 @@ import (
 
 func TestVerifyWebhookSignature(t *testing.T) {
 	partnerKey := "my_partner_key_12345"
-	url := "https://api.symetralab.com/api/v2/shopee/webhook"
+	url := "https://api.symetralab.com/api/v1/shopee/webhook"
 	body := []byte(`{"code":3,"shop_id":711996297,"timestamp":1660123127,"data":{"ordersn":"220810QSK8S7BX","status":"READY_TO_SHIP"}}`)
 
 	// Generate expected signature

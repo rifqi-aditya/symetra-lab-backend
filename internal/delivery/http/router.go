@@ -81,10 +81,8 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 	})
 
 
-	// Mount routes for both /api/v2 and /api/v1 (dual compatibility for frontend)
-	apiPrefixes := []string{"/api/v2", "/api/v1"}
-	for _, prefix := range apiPrefixes {
-		api := e.Group(prefix)
+	// Mount routes for /api/v1
+	api := e.Group("/api/v1")
 
 		// Public Shopee OAuth & Push Webhook routes
 		if cfg.ShopeeHandler != nil {
@@ -255,7 +253,5 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		financeGroup.POST("/capital", cfg.FinanceHandler.CreateCapitalRecord)
 		financeGroup.GET("/capital/total", cfg.FinanceHandler.GetTotalCapital)
 		financeGroup.GET("/cash-accounts", cfg.FinanceHandler.ListCashAccounts)
-	}
-
 	}
 }
