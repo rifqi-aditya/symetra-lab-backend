@@ -3,7 +3,7 @@
   "info": {
     "title": "Symetra Lab Backend API",
     "description": "Dokumentasi Resmi REST API untuk Workshop Management System Symetra Lab.\\n\\nMencakup manajemen inventori 3D printing (filamen, mesin cetak, sparepart, komponen hardware, packaging), kalkulasi HPP dan margin berbasis **7 Pos Kas**, integrasi Shopee Open Platform v2, pesanan manual, serta antrean produksi otomatis.",
-    "version": "2.0.0",
+    "version": "1.0.0",
     "contact": {
       "name": "Symetra Lab Team",
       "url": "https://symetralab.com"

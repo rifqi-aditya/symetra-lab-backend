@@ -104,8 +104,8 @@ Returns root application metadata.
 - **Response:**
   ```json
   {
-    "app": "Symetra Lab Backend",
-    "version": "2.0.0",
+    "app": "Symetra Lab Backend v1",
+    "version": "1.0.0",
     "status": "online"
   }
   ```
@@ -117,7 +117,7 @@ Returns health check status for load balancers.
   ```json
   {
     "status": "healthy",
-    "version": "2.0.0"
+    "version": "1.0.0"
   }
   ```
 
