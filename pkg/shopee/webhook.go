@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"strings"
 )
 
 // WebhookPushPayload merepresentasikan root payload push notification dari Shopee Open Platform
@@ -25,16 +26,29 @@ type OrderStatusPushData struct {
 }
 
 // VerifyWebhookSignature memverifikasi keaslian webhook Shopee menggunakan HMAC-SHA256
-// Shopee menghitung HMAC-SHA256 dari string: fullCallbackURL + "|" + rawRequestBody dengan key: PartnerKey
 func VerifyWebhookSignature(fullCallbackURL string, rawBody []byte, signatureHeader string, partnerKey string) bool {
 	if signatureHeader == "" || partnerKey == "" {
 		return false
 	}
 
+	sig := strings.TrimSpace(signatureHeader)
+	sig = strings.TrimPrefix(sig, "SHA256 ")
+	sig = strings.TrimPrefix(sig, "sha256 ")
+
+	// 1. Format standar Shopee: fullCallbackURL + "|" + rawBody
 	baseString := fullCallbackURL + "|" + string(rawBody)
 	h := hmac.New(sha256.New, []byte(partnerKey))
 	h.Write([]byte(baseString))
 	expectedSign := hex.EncodeToString(h.Sum(nil))
 
-	return subtle.ConstantTimeCompare([]byte(signatureHeader), []byte(expectedSign)) == 1
+	if subtle.ConstantTimeCompare([]byte(strings.ToLower(sig)), []byte(strings.ToLower(expectedSign))) == 1 {
+		return true
+	}
+
+	// 2. Format alternatif: rawBody saja
+	h2 := hmac.New(sha256.New, []byte(partnerKey))
+	h2.Write(rawBody)
+	expectedSign2 := hex.EncodeToString(h2.Sum(nil))
+
+	return subtle.ConstantTimeCompare([]byte(strings.ToLower(sig)), []byte(strings.ToLower(expectedSign2))) == 1
 }

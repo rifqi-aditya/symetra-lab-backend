@@ -88,6 +88,7 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		if cfg.ShopeeHandler != nil {
 			api.GET("/shopee/auth-url", cfg.ShopeeHandler.GetAuthURL)
 			api.GET("/shopee/callback", cfg.ShopeeHandler.HandleCallback)
+			api.GET("/shopee/webhook", cfg.ShopeeHandler.HandlePushWebhook)
 			api.POST("/shopee/webhook", cfg.ShopeeHandler.HandlePushWebhook)
 		}
 

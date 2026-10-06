@@ -199,23 +199,39 @@ func (h *ShopeeHandler) RecalculateFinances(c echo.Context) error {
 	}))
 }
 
-// HandlePushWebhook menerima push notification HTTP POST dari Shopee Open Platform
-// Menangani notifikasi code == 3 (order_status_push)
+// HandlePushWebhook menerima push notification HTTP POST / GET dari Shopee Open Platform
+// Menangani notifikasi code == 3 (order_status_push) dan verifikasi URL callback
 func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 	req := c.Request()
+
+	// 1. Dukung HTTP GET (sering digunakan sistem platform untuk verifikasi ping / liveness)
+	if req.Method == http.MethodGet {
+		return c.JSON(http.StatusOK, map[string]string{
+			"status":  "success",
+			"message": "Shopee webhook endpoint is active",
+		})
+	}
+
 	rawBody, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Printf("[Shopee Webhook] Error reading request body: %v", err)
-		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid body", err.Error()))
+		return c.JSON(http.StatusOK, map[string]string{"status": "error_reading_body"})
 	}
 
-	// 1. Verifikasi Signature Shopee (Header: Authorization atau X-Shopee-Signature)
+	// Jika body kosong (misal connection handshake test push dari Shopee)
+	if len(rawBody) == 0 {
+		return c.JSON(http.StatusOK, map[string]string{
+			"status":  "success",
+			"message": "Endpoint handshake verified",
+		})
+	}
+
+	// 2. Verifikasi Signature Shopee (Header: Authorization atau X-Shopee-Signature)
 	authHeader := req.Header.Get("Authorization")
 	if authHeader == "" {
 		authHeader = req.Header.Get("X-Shopee-Signature")
 	}
 
-	// Buat full URL request untuk pencocokan signature
 	scheme := "http"
 	if req.TLS != nil || req.Header.Get("X-Forwarded-Proto") == "https" {
 		scheme = "https"
@@ -226,16 +242,23 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 		isValid := pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, h.cfg.ShopeePartnerKey)
 		if !isValid {
 			log.Printf("[Shopee Webhook] Signature mismatch! URL: %s, Auth: %s", fullURL, authHeader)
-			// Return 401 jika signature tidak cocok
-			return c.JSON(http.StatusUnauthorized, dto.Fail("Unauthorized webhook signature", nil))
+			// Di lingkungan production, tolak request tidak sah. Di sandbox testing, izinkan verifikasi awal callback lolos dengan peringatan di log.
+			if h.cfg.ShopeeIsProduction {
+				return c.JSON(http.StatusUnauthorized, dto.Fail("Unauthorized webhook signature", nil))
+			}
+			log.Printf("[Shopee Webhook] Sandbox mode active: proceeding with 200 OK to allow callback verification")
 		}
 	}
 
-	// 2. Parse Webhook Push Payload
+	// 3. Parse Webhook Push Payload
 	var push pkgShopee.WebhookPushPayload
 	if err := json.Unmarshal(rawBody, &push); err != nil {
-		log.Printf("[Shopee Webhook] Failed to decode JSON payload: %v (raw: %s)", err, string(rawBody))
-		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid JSON payload", err.Error()))
+		log.Printf("[Shopee Webhook] Non-standard payload or test ping: %v (raw: %s)", err, string(rawBody))
+		// Shopee verifier mengharapkan status 2xx
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"status": "received",
+			"raw":    string(rawBody),
+		})
 	}
 
 	log.Printf("[Shopee Webhook] Received push event code=%d, shop_id=%d, order_sn=%s, status=%s",
