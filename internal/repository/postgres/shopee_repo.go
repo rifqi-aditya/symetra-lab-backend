@@ -80,6 +80,9 @@ type shopeeUnifiedItemGORM struct {
 	TotalCOGS        float64    `gorm:"column:total_cogs"`
 	NetProfit        float64    `gorm:"column:net_profit"`
 	ProductID        *uuid.UUID `gorm:"column:product_id;type:uuid"`
+	MachineID        *uuid.UUID `gorm:"column:machine_id;type:uuid"`
+	WeightGrams      float64    `gorm:"column:weight_grams"`
+	PrintTimeHours   float64    `gorm:"column:print_time_hours"`
 	CreatedAt        time.Time  `gorm:"column:created_at"`
 	UpdatedAt        time.Time  `gorm:"column:updated_at"`
 }
@@ -615,10 +618,23 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			totDep += depCost
 			totCOGS += baseHPP
 			prodTitle := item.ItemName()
+			var itemMachineID *uuid.UUID
+			var itemWeight float64
+			var itemPrintTime float64
+			itemSKU := item.ItemSKU()
+
 			if productID != nil {
 				var pr productGORM
-				if err := tx.Where("id = ?", *productID).First(&pr).Error; err == nil && pr.Name != "" {
-					prodTitle = pr.Name
+				if err := tx.Where("id = ?", *productID).First(&pr).Error; err == nil {
+					if pr.Name != "" {
+						prodTitle = pr.Name
+					}
+					itemMachineID = pr.DefaultMachineID
+					itemWeight = pr.DefaultWeightGrams * float64(item.Quantity())
+					itemPrintTime = pr.DefaultPrintTimeHours * float64(item.Quantity())
+					if itemSKU == "" && pr.SKU != nil {
+						itemSKU = *pr.SKU
+					}
 				}
 			}
 
@@ -628,7 +644,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				ChannelItemID:    item.ItemID(),
 				ChannelModelID:   item.ModelID(),
 				ProductName:      prodTitle,
-				ItemSKU:          item.ItemSKU(),
+				ItemSKU:          itemSKU,
 				MatchedSKU:       matchedSKU,
 				MappingStatus:    mappingStatus,
 				Quantity:         item.Quantity(),
@@ -643,6 +659,9 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				DepreciationCost: depCost,
 				NetProfit:        netProf,
 				ProductID:        productID,
+				MachineID:        itemMachineID,
+				WeightGrams:      itemWeight,
+				PrintTimeHours:   itemPrintTime,
 				CreatedAt:        orderCreatedAt,
 				UpdatedAt:        orderUpdatedAt,
 			})
@@ -779,6 +798,19 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 				"total_cogs":        totalCOGS,
 				"net_profit":        netProf,
 				"updated_at":        time.Now(),
+			}
+
+			if prod.DefaultMachineID != nil {
+				updates["machine_id"] = prod.DefaultMachineID
+			}
+			if prod.DefaultWeightGrams > 0 {
+				updates["weight_grams"] = prod.DefaultWeightGrams * float64(it.Quantity)
+			}
+			if prod.DefaultPrintTimeHours > 0 {
+				updates["print_time_hours"] = prod.DefaultPrintTimeHours * float64(it.Quantity)
+			}
+			if it.ItemSKU == "" && matchedSKU != "" {
+				updates["item_sku"] = matchedSKU
 			}
 
 			if err := tx.Model(&shopeeUnifiedItemGORM{}).Where("id = ?", it.ID).Updates(updates).Error; err != nil {
