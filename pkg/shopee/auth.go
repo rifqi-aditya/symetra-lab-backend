@@ -47,7 +47,7 @@ func (c *Client) BuildAuthURL() (string, error) {
 	q.Set("partner_id", fmt.Sprintf("%d", c.PartnerID))
 	q.Set("timestamp", fmt.Sprintf("%d", timestamp))
 	q.Set("sign", sign)
-	q.Set("redirect", c.RedirectURL)
+	q.Set("redirect", strings.TrimSpace(c.RedirectURL))
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
