@@ -31,13 +31,21 @@ type ShopeeOrderDetailItem struct {
 	BuyerUserID       uint64           `json:"buyer_user_id"`
 	BuyerUsername     string           `json:"buyer_username"`
 	MessageToSeller   string           `json:"message_to_seller"`
-	ShipByDate        int64            `json:"ship_by_date"`
-	ShippingCarrier   string           `json:"shipping_carrier"`
-	TotalAmount       float64          `json:"total_amount"`
-	BuyerCancelReason string           `json:"buyer_cancel_reason"`
-	CreateTime        int64            `json:"create_time"`
-	UpdateTime        int64            `json:"update_time"`
-	ItemList          []ShopeeItemInfo `json:"item_list"`
+	ShipByDate              int64            `json:"ship_by_date"`
+	ShippingCarrier         string           `json:"shipping_carrier"`
+	CheckoutShippingCarrier string           `json:"checkout_shipping_carrier"`
+	PackageList             []ShopeePackage  `json:"package_list"`
+	TotalAmount             float64          `json:"total_amount"`
+	BuyerCancelReason       string           `json:"buyer_cancel_reason"`
+	CreateTime              int64            `json:"create_time"`
+	UpdateTime              int64            `json:"update_time"`
+	ItemList                []ShopeeItemInfo `json:"item_list"`
+}
+
+type ShopeePackage struct {
+	PackageNumber   string `json:"package_number"`
+	LogisticsStatus string `json:"logistics_status"`
+	ShippingCarrier string `json:"shipping_carrier"`
 }
 
 type ShopeeItemInfo struct {

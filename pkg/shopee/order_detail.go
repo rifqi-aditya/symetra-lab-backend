@@ -20,7 +20,7 @@ func (c *Client) GetOrderDetail(accessToken string, shopID uint64, orderSNList [
 	timestamp := time.Now().Unix()
 	sign := GenerateShopSign(c.PartnerID, path, timestamp, accessToken, shopID, c.PartnerKey)
 
-	optionalFields := "buyer_user_id,buyer_username,item_list,message_to_seller,ship_by_date,shipping_carrier,total_amount,buyer_cancel_reason"
+	optionalFields := "buyer_user_id,buyer_username,item_list,message_to_seller,ship_by_date,shipping_carrier,checkout_shipping_carrier,package_list,actual_shipping_carrier,total_amount,buyer_cancel_reason"
 
 	params := url.Values{}
 	params.Set("partner_id", fmt.Sprintf("%d", c.PartnerID))

@@ -207,6 +207,14 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 			shipByDateTime = &t
 		}
 
+		carrier := o.ShippingCarrier
+		if carrier == "" {
+			carrier = o.CheckoutShippingCarrier
+		}
+		if carrier == "" && len(o.PackageList) > 0 {
+			carrier = o.PackageList[0].ShippingCarrier
+		}
+
 		domainOrder := shopee.ReconstructOrder(
 			o.OrderSN,
 			shop.ShopID(),
@@ -216,7 +224,7 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 			o.MessageToSeller,
 			o.ShipByDate,
 			shipByDateTime,
-			o.ShippingCarrier,
+			carrier,
 			"",
 			o.TotalAmount,
 			o.BuyerCancelReason,
@@ -347,6 +355,14 @@ func (uc *ShopeeUseCases) SyncSingleOrder(ctx context.Context, shopID uint64, or
 		}
 	}
 
+	carrier := o.ShippingCarrier
+	if carrier == "" {
+		carrier = o.CheckoutShippingCarrier
+	}
+	if carrier == "" && len(o.PackageList) > 0 {
+		carrier = o.PackageList[0].ShippingCarrier
+	}
+
 	domainOrder := shopee.ReconstructOrder(
 		o.OrderSN,
 		shop.ShopID(),
@@ -356,7 +372,7 @@ func (uc *ShopeeUseCases) SyncSingleOrder(ctx context.Context, shopID uint64, or
 		o.MessageToSeller,
 		o.ShipByDate,
 		shipByDateTime,
-		o.ShippingCarrier,
+		carrier,
 		"",
 		o.TotalAmount,
 		o.BuyerCancelReason,
