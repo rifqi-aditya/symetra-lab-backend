@@ -90,6 +90,7 @@ func (shopeeUnifiedItemGORM) TableName() string {
 
 type shopeeUnifiedOrderGORM struct {
 	ID               uuid.UUID                   `gorm:"column:id;primaryKey;type:uuid"`
+	UserID           uuid.UUID                   `gorm:"column:user_id;type:uuid"`
 	OrderNumber      string                      `gorm:"column:order_number;index"`
 	CustomerName     string                      `gorm:"column:customer_name"`
 	Status           string                      `gorm:"column:status"`
@@ -507,44 +508,19 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			orderUpdatedAt = time.Unix(o.UpdateTimeShopee(), 0)
 		}
 
-		// Marketplace details
-		mDetails := shopeeOrderMarketplaceGORM{
-			OrderID:         orderID,
-			Channel:         "SHOPEE",
-			ShopID:          o.ShopID(),
-			OrderSN:         o.OrderSN(),
-			BuyerUserID:     o.BuyerUserID(),
-			BuyerUsername:   o.BuyerUsername(),
-			MessageToSeller: o.MessageToSeller(),
-			ShippingCarrier: o.ShippingCarrier(),
-			TrackingNumber:  o.TrackingNumber(),
-			ShipByDate:      o.ShipByDate(),
-			ShipByDateTime:  o.ShipByDateTime(),
-			CreatedAt:       orderCreatedAt,
-			UpdatedAt:       orderUpdatedAt,
-		}
-		if o.Escrow() != nil {
-			e := o.Escrow()
-			mDetails.CommissionFee = e.CommissionFee()
-			mDetails.ServiceFee = e.ServiceFee()
-			mDetails.SellerTransactionFee = e.SellerTransactionFee()
-			mDetails.SellerOrderProcessingFee = e.SellerOrderProcessingFee()
-			mDetails.SellerVoucherDiscount = e.SellerVoucherDiscount()
-			mDetails.TotalMarketplaceFee = e.TotalMarketplaceFee()
-			mDetails.EscrowAmount = e.EscrowAmount()
-			mDetails.FinancialStatus = e.FinancialStatus()
-		}
-
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "order_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"shipping_carrier", "tracking_number", "ship_by_date", "ship_by_date_time", "commission_fee", "service_fee", "seller_transaction_fee", "seller_order_processing_fee", "seller_voucher_discount", "total_marketplace_fee", "escrow_amount", "financial_status", "updated_at"}),
-		}).Create(&mDetails).Error; err != nil {
-			return err
+		// Dapatkan default admin user_id jika belum ada
+		userID := existingOrder.UserID
+		if userID == uuid.Nil {
+			var firstUser struct{ ID uuid.UUID }
+			if err := tx.Raw("SELECT id FROM auth.users ORDER BY created_at ASC LIMIT 1").Scan(&firstUser).Error; err == nil && firstUser.ID != uuid.Nil {
+				userID = firstUser.ID
+			}
 		}
 
 		var totFil, totComp, totPack, totElec, totMaint, totDep, totCOGS float64
+		var itemsToInsert []shopeeUnifiedItemGORM
 
-		// Items
+		// 1. Hitung biaya & siapkan item-item pesanan
 		for _, item := range o.Items() {
 			var existingItem shopeeUnifiedItemGORM
 			_ = tx.Where("order_id = ? AND channel_item_id = ?", orderID, item.ItemID()).First(&existingItem).Error
@@ -608,7 +584,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			totDep += depCost
 			totCOGS += baseHPP
 
-			itemG := shopeeUnifiedItemGORM{
+			itemsToInsert = append(itemsToInsert, shopeeUnifiedItemGORM{
 				ID:               itemID,
 				OrderID:          orderID,
 				ChannelItemID:    item.ItemID(),
@@ -631,22 +607,17 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				ProductID:        productID,
 				CreatedAt:        orderCreatedAt,
 				UpdatedAt:        orderUpdatedAt,
-			}
-
-			if err := tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "id"}},
-				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "selling_price", "hpp", "total_cogs", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "net_profit", "updated_at"}),
-			}).Create(&itemG).Error; err != nil {
-				return err
-			}
+			})
 		}
 
 		cogsAmount := totCOGS
 		netProfit := netAmount - cogsAmount
 		fNetProfit := netProfit
 
+		// 2. Simpan induk tabel orders TERLEBIH DAHULU agar Foreign Key tidak error
 		orderRecord := shopeeUnifiedOrderGORM{
 			ID:               orderID,
+			UserID:           userID,
 			OrderNumber:      o.OrderSN(),
 			CustomerName:     o.BuyerUsername(),
 			Status:           o.OrderStatus(),
@@ -673,6 +644,51 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			DoUpdates: clause.AssignmentColumns([]string{"customer_name", "status", "payment_status", "gross_amount", "channel_fee", "net_amount", "cogs_amount", "net_profit", "fund_filament", "fund_component", "fund_packaging", "fund_electricity", "fund_maintenance", "fund_depreciation", "fund_net_profit", "updated_at"}),
 		}).Create(&orderRecord).Error; err != nil {
 			return err
+		}
+
+		// 3. Simpan detail tabel anak: order_marketplace_details
+		mDetails := shopeeOrderMarketplaceGORM{
+			OrderID:         orderID,
+			Channel:         "SHOPEE",
+			ShopID:          o.ShopID(),
+			OrderSN:         o.OrderSN(),
+			BuyerUserID:     o.BuyerUserID(),
+			BuyerUsername:   o.BuyerUsername(),
+			MessageToSeller: o.MessageToSeller(),
+			ShippingCarrier: o.ShippingCarrier(),
+			TrackingNumber:  o.TrackingNumber(),
+			ShipByDate:      o.ShipByDate(),
+			ShipByDateTime:  o.ShipByDateTime(),
+			CreatedAt:       orderCreatedAt,
+			UpdatedAt:       orderUpdatedAt,
+		}
+		if o.Escrow() != nil {
+			e := o.Escrow()
+			mDetails.CommissionFee = e.CommissionFee()
+			mDetails.ServiceFee = e.ServiceFee()
+			mDetails.SellerTransactionFee = e.SellerTransactionFee()
+			mDetails.SellerOrderProcessingFee = e.SellerOrderProcessingFee()
+			mDetails.SellerVoucherDiscount = e.SellerVoucherDiscount()
+			mDetails.TotalMarketplaceFee = e.TotalMarketplaceFee()
+			mDetails.EscrowAmount = e.EscrowAmount()
+			mDetails.FinancialStatus = e.FinancialStatus()
+		}
+
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "order_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"shipping_carrier", "tracking_number", "ship_by_date", "ship_by_date_time", "commission_fee", "service_fee", "seller_transaction_fee", "seller_order_processing_fee", "seller_voucher_discount", "total_marketplace_fee", "escrow_amount", "financial_status", "updated_at"}),
+		}).Create(&mDetails).Error; err != nil {
+			return err
+		}
+
+		// 4. Simpan detail tabel anak: order_items
+		for _, itemG := range itemsToInsert {
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "id"}},
+				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "selling_price", "hpp", "total_cogs", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "net_profit", "updated_at"}),
+			}).Create(&itemG).Error; err != nil {
+				return err
+			}
 		}
 
 		return nil
