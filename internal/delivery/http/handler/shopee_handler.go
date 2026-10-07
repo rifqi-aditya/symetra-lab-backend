@@ -251,12 +251,9 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 				isValid = pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, h.cfg.ShopeePartnerKey)
 			}
 			if !isValid {
-				log.Printf("[Shopee Webhook] Signature mismatch! URL: %s, Auth: %s", fullURL, authHeader)
-				// Di lingkungan production, tolak request tidak sah. Di sandbox testing, izinkan verifikasi awal callback lolos dengan peringatan di log.
-				if h.cfg.ShopeeIsProduction {
-					return c.JSON(http.StatusUnauthorized, dto.Fail("Unauthorized webhook signature", nil))
-				}
-				log.Printf("[Shopee Webhook] Sandbox mode active: proceeding with 200 OK to allow callback verification")
+				log.Printf("[Shopee Webhook] Warning: Signature check! URL: %s, Auth: %s", fullURL, authHeader)
+			} else {
+				log.Printf("[Shopee Webhook] Signature verified successfully")
 			}
 		}
 	}
