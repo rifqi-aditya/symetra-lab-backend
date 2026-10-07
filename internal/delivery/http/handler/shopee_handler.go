@@ -239,15 +239,25 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 	}
 	fullURL := fmt.Sprintf("%s://%s%s", scheme, req.Host, req.RequestURI)
 
-	if h.cfg != nil && h.cfg.ShopeePartnerKey != "" && authHeader != "" {
-		isValid := pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, h.cfg.ShopeePartnerKey)
-		if !isValid {
-			log.Printf("[Shopee Webhook] Signature mismatch! URL: %s, Auth: %s", fullURL, authHeader)
-			// Di lingkungan production, tolak request tidak sah. Di sandbox testing, izinkan verifikasi awal callback lolos dengan peringatan di log.
-			if h.cfg.ShopeeIsProduction {
-				return c.JSON(http.StatusUnauthorized, dto.Fail("Unauthorized webhook signature", nil))
+	if h.cfg != nil && authHeader != "" {
+		pushKey := h.cfg.ShopeePushPartnerKey
+		if pushKey == "" {
+			pushKey = h.cfg.ShopeePartnerKey
+		}
+
+		if pushKey != "" {
+			isValid := pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, pushKey)
+			if !isValid && h.cfg.ShopeePartnerKey != "" && h.cfg.ShopeePartnerKey != pushKey {
+				isValid = pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, h.cfg.ShopeePartnerKey)
 			}
-			log.Printf("[Shopee Webhook] Sandbox mode active: proceeding with 200 OK to allow callback verification")
+			if !isValid {
+				log.Printf("[Shopee Webhook] Signature mismatch! URL: %s, Auth: %s", fullURL, authHeader)
+				// Di lingkungan production, tolak request tidak sah. Di sandbox testing, izinkan verifikasi awal callback lolos dengan peringatan di log.
+				if h.cfg.ShopeeIsProduction {
+					return c.JSON(http.StatusUnauthorized, dto.Fail("Unauthorized webhook signature", nil))
+				}
+				log.Printf("[Shopee Webhook] Sandbox mode active: proceeding with 200 OK to allow callback verification")
+			}
 		}
 	}
 

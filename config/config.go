@@ -15,10 +15,11 @@ type Config struct {
 	AppEnv             string
 	SupabaseURL        string
 	SupabaseAnonKey    string
-	ShopeePartnerID    int64
-	ShopeePartnerKey   string
-	ShopeeIsProduction bool
-	ShopeeRedirectURL  string
+	ShopeePartnerID      int64
+	ShopeePartnerKey     string
+	ShopeePushPartnerKey string
+	ShopeeIsProduction   bool
+	ShopeeRedirectURL    string
 }
 
 func Load() *Config {
@@ -44,10 +45,11 @@ func Load() *Config {
 		AppEnv:             getEnv("APP_ENV", "development"),
 		SupabaseURL:        getEnv("SUPABASE_URL", ""),
 		SupabaseAnonKey:    getEnv("SUPABASE_ANON_KEY", ""),
-		ShopeePartnerID:    partnerID,
-		ShopeePartnerKey:   getEnv("SHOPEE_PARTNER_KEY", ""),
-		ShopeeIsProduction: isProd,
-		ShopeeRedirectURL:  getEnv("SHOPEE_REDIRECT_URL", "http://localhost:8080/api/v1/shopee/callback"),
+		ShopeePartnerID:      partnerID,
+		ShopeePartnerKey:     getEnv("SHOPEE_PARTNER_KEY", ""),
+		ShopeePushPartnerKey: getEnv("SHOPEE_PUSH_PARTNER_KEY", ""),
+		ShopeeIsProduction:   isProd,
+		ShopeeRedirectURL:    getEnv("SHOPEE_REDIRECT_URL", "http://localhost:8080/api/v1/shopee/callback"),
 	}
 }
 
