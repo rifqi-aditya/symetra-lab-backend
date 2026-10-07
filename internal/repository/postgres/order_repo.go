@@ -421,7 +421,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 	query := `
 		SELECT 
 			COUNT(*) AS total_orders,
-			COALESCE(SUM(gross_amount), 0) AS total_gross_sales,
+			COALESCE(SUM(CASE WHEN gross_amount > 0 THEN gross_amount ELSE (net_amount + channel_fee) END), 0) AS total_gross_sales,
 			COALESCE(SUM(channel_fee), 0) AS total_channel_fees,
 			COALESCE(SUM(net_amount), 0) AS total_net_revenue,
 			COALESCE(SUM(cogs_amount), 0) AS total_cogs,
@@ -440,7 +440,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 				WHERE o2.user_id = ? AND oi.mapping_status = 'UNMAPPED'
 			), 0) AS unmapped_items_count,
 			COALESCE(COUNT(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN 1 END), 0) AS pending_orders_count,
-			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN gross_amount ELSE 0 END), 0) AS pending_gross_sales,
+			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN (CASE WHEN gross_amount > 0 THEN gross_amount ELSE (net_amount + channel_fee) END) ELSE 0 END), 0) AS pending_gross_sales,
 			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN net_amount ELSE 0 END), 0) AS pending_escrow_amount,
 			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN net_profit ELSE 0 END), 0) AS pending_net_profit
 		FROM orders

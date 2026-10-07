@@ -498,6 +498,12 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		if o.Escrow() != nil && o.Escrow().EscrowAmount() > 0 {
 			e := o.Escrow()
 			grossAmount = e.SellingPrice()
+			if grossAmount <= 0 {
+				grossAmount = o.TotalAmount()
+			}
+			if grossAmount <= 0 {
+				grossAmount = e.EscrowAmount() + e.TotalMarketplaceFee()
+			}
 			netAmount = e.EscrowAmount()
 			channelFee = e.TotalMarketplaceFee()
 			if e.FinancialStatus() == "RELEASED" {
@@ -510,6 +516,21 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			} else {
 				netAmount = grossAmount
 			}
+		}
+
+		if grossAmount <= 0 {
+			var itemsTotal float64
+			for _, it := range o.Items() {
+				p := it.DiscountedPrice()
+				if p <= 0 {
+					p = it.OriginalPrice()
+				}
+				itemsTotal += p * float64(it.Quantity())
+			}
+			grossAmount = itemsTotal
+		}
+		if grossAmount <= 0 && netAmount > 0 {
+			grossAmount = netAmount + channelFee
 		}
 
 		orderCreatedAt := o.CreatedAt()

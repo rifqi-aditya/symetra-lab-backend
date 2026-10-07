@@ -311,10 +311,21 @@ func (uc *ShopeeUseCases) SyncSingleOrder(ctx context.Context, shopID uint64, or
 				finStatus = "RELEASED"
 			}
 
+			sellingPrice := inc.OrderSellingPrice
+			if sellingPrice <= 0 {
+				sellingPrice = inc.SellingPrice
+			}
+			if sellingPrice <= 0 && o.TotalAmount > 0 {
+				sellingPrice = o.TotalAmount
+			}
+			if sellingPrice <= 0 && inc.EscrowAmount > 0 {
+				sellingPrice = inc.EscrowAmount + totalMarketFee
+			}
+
 			eObj := shopee.ReconstructOrderEscrow(
 				orderSN,
 				inc.EscrowAmount,
-				inc.SellingPrice,
+				sellingPrice,
 				inc.CommissionFee,
 				commRule,
 				commPct,
