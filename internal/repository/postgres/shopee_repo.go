@@ -484,7 +484,7 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 }
 
 func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existingOrder shopeeUnifiedOrderGORM
 		err := tx.Where("order_number = ?", o.OrderSN()).First(&existingOrder).Error
 		orderID := existingOrder.ID
@@ -771,10 +771,14 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 
 		return nil
 	})
+	if err == nil {
+		_ = SyncCashAccountLedger(ctx, r.db)
+	}
+	return err
 }
 
 func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, productID uuid.UUID) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1. Ambil data master produk beserta komponen & packaging
 		var prod productGORM
 		if err := tx.Preload("Components").Preload("PackagingItems").Where("id = ?", productID).First(&prod).Error; err != nil {
@@ -846,6 +850,10 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 
 		return nil
 	})
+	if err == nil {
+		_ = SyncCashAccountLedger(ctx, r.db)
+	}
+	return err
 }
 
 func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.CashflowSummary, error) {

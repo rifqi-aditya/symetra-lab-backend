@@ -61,39 +61,52 @@ const (
 // ─── CashAccount Entity (Pos Kas) ────────────────────────────────────────────
 
 type CashAccount struct {
-	id          uuid.UUID
-	name        string
-	description string
-	color       string
-	isActive    bool
-	createdAt   time.Time
-	updatedAt   time.Time
+	id              uuid.UUID
+	name            string
+	code            string
+	description     string
+	color           string
+	allocatedAmount float64
+	spentAmount     float64
+	currentBalance  float64
+	isActive        bool
+	createdAt       time.Time
+	updatedAt       time.Time
 }
 
 func ReconstructCashAccount(
 	id uuid.UUID,
-	name, description, color string,
+	name, code, description, color string,
+	allocatedAmount, spentAmount, currentBalance float64,
 	isActive bool,
 	createdAt, updatedAt time.Time,
 ) *CashAccount {
 	return &CashAccount{
-		id:          id,
-		name:        name,
-		description: description,
-		color:       color,
-		isActive:    isActive,
-		createdAt:   createdAt,
-		updatedAt:   updatedAt,
+		id:              id,
+		name:            name,
+		code:            code,
+		description:     description,
+		color:           color,
+		allocatedAmount: allocatedAmount,
+		spentAmount:     spentAmount,
+		currentBalance:  currentBalance,
+		isActive:        isActive,
+		createdAt:       createdAt,
+		updatedAt:       updatedAt,
 	}
 }
 
-func (c *CashAccount) ID()          uuid.UUID { return c.id }
-func (c *CashAccount) Name()        string    { return c.name }
-func (c *CashAccount) Description() string    { return c.description }
-func (c *CashAccount) Color()       string    { return c.color }
-func (c *CashAccount) IsActive()    bool      { return c.isActive }
-func (c *CashAccount) CreatedAt()   time.Time { return c.createdAt }
-func (c *CashAccount) UpdatedAt()   time.Time { return c.updatedAt }
+func (c *CashAccount) ID()              uuid.UUID { return c.id }
+func (c *CashAccount) Name()            string    { return c.name }
+func (c *CashAccount) Code()            string    { return c.code }
+func (c *CashAccount) Description()     string    { return c.description }
+func (c *CashAccount) Color()           string    { return c.color }
+func (c *CashAccount) AllocatedAmount() float64   { return c.allocatedAmount }
+func (c *CashAccount) SpentAmount()     float64   { return c.spentAmount }
+func (c *CashAccount) CurrentBalance()  float64   { return c.currentBalance }
+func (c *CashAccount) IsActive()        bool      { return c.isActive }
+func (c *CashAccount) CreatedAt()       time.Time { return c.createdAt }
+func (c *CashAccount) UpdatedAt()       time.Time { return c.updatedAt }
 
 // ─── FinanceTransaction Entity ───────────────────────────────────────────────
 

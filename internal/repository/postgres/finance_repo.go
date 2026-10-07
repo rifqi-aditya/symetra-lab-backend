@@ -31,13 +31,17 @@ type financeTransactionGORM struct {
 func (financeTransactionGORM) TableName() string { return "finance_transactions" }
 
 type cashAccountGORM struct {
-	ID          uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
-	Name        string    `gorm:"column:name"`
-	Description string    `gorm:"column:description"`
-	Color       string    `gorm:"column:color"`
-	IsActive    bool      `gorm:"column:is_active"`
-	CreatedAt   time.Time `gorm:"column:created_at"`
-	UpdatedAt   time.Time `gorm:"column:updated_at"`
+	ID              uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
+	Name            string    `gorm:"column:name"`
+	Code            string    `gorm:"column:code"`
+	Description     string    `gorm:"column:description"`
+	Color           string    `gorm:"column:color"`
+	AllocatedAmount float64   `gorm:"column:allocated_amount"`
+	SpentAmount     float64   `gorm:"column:spent_amount"`
+	CurrentBalance  float64   `gorm:"column:current_balance"`
+	IsActive        bool      `gorm:"column:is_active"`
+	CreatedAt       time.Time `gorm:"column:created_at"`
+	UpdatedAt       time.Time `gorm:"column:updated_at"`
 }
 
 func (cashAccountGORM) TableName() string { return "cash_accounts" }
@@ -167,7 +171,11 @@ func (r *FinanceRepository) CreateTransaction(ctx context.Context, t *finance.Fi
 		CreatedAt:       t.CreatedAt(),
 		UpdatedAt:       t.UpdatedAt(),
 	}
-	return r.db.WithContext(ctx).Create(&g).Error
+	if err := r.db.WithContext(ctx).Create(&g).Error; err != nil {
+		return err
+	}
+	_ = SyncCashAccountLedger(ctx, r.db)
+	return nil
 }
 
 // CreateTransactionIfNotExists: idempotent insert — skip if reference already exists
@@ -199,7 +207,11 @@ func (r *FinanceRepository) CreateTransactionIfNotExists(ctx context.Context, t 
 		return err
 	}
 
-	return r.db.WithContext(ctx).Create(&g).Error
+	if err := r.db.WithContext(ctx).Create(&g).Error; err != nil {
+		return err
+	}
+	_ = SyncCashAccountLedger(ctx, r.db)
+	return nil
 }
 
 func (r *FinanceRepository) FindTransactionByID(ctx context.Context, id uuid.UUID) (*finance.FinanceTransaction, error) {
@@ -240,7 +252,11 @@ func (r *FinanceRepository) FindTransactions(ctx context.Context, filter finance
 }
 
 func (r *FinanceRepository) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&financeTransactionGORM{}).Error
+	if err := r.db.WithContext(ctx).Where("id = ?", id).Delete(&financeTransactionGORM{}).Error; err != nil {
+		return err
+	}
+	_ = SyncCashAccountLedger(ctx, r.db)
+	return nil
 }
 
 func (r *FinanceRepository) GetSummary(ctx context.Context, from, to time.Time) (*finance.FinanceSummary, error) {
@@ -420,9 +436,14 @@ func (r *FinanceRepository) ListCashAccounts(ctx context.Context) ([]*finance.Ca
 	results := make([]*finance.CashAccount, len(list))
 	for i, g := range list {
 		results[i] = finance.ReconstructCashAccount(
-			g.ID, g.Name, g.Description, g.Color,
+			g.ID, g.Name, g.Code, g.Description, g.Color,
+			g.AllocatedAmount, g.SpentAmount, g.CurrentBalance,
 			g.IsActive, g.CreatedAt, g.UpdatedAt,
 		)
 	}
 	return results, nil
+}
+
+func (r *FinanceRepository) SyncRunningBalances(ctx context.Context) error {
+	return SyncCashAccountLedger(ctx, r.db)
 }

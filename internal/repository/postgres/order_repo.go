@@ -261,7 +261,7 @@ func (r *OrderRepository) FindByID(ctx context.Context, userID, id uuid.UUID) (*
 }
 
 func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		g := orderGORM{
 			ID:               o.ID(),
 			UserID:           o.UserID(),
@@ -329,6 +329,10 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 
 		return nil
 	})
+	if err == nil && o.PaymentStatus() == "PAID" {
+		_ = SyncCashAccountLedger(ctx, r.db)
+	}
+	return err
 }
 
 func (r *OrderRepository) UpdateStatus(ctx context.Context, userID, id uuid.UUID, status string) error {
@@ -373,6 +377,7 @@ func (r *OrderRepository) UpdatePaymentStatus(ctx context.Context, userID, id uu
 	if res.RowsAffected == 0 {
 		return order.ErrOrderNotFound
 	}
+	_ = SyncCashAccountLedger(ctx, r.db)
 	return nil
 }
 
@@ -387,6 +392,7 @@ func (r *OrderRepository) Delete(ctx context.Context, userID, id uuid.UUID) erro
 	if res.RowsAffected == 0 {
 		return order.ErrOrderNotFound
 	}
+	_ = SyncCashAccountLedger(ctx, r.db)
 	return nil
 }
 
@@ -475,51 +481,123 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		avgMargin = (agg.TotalNetProfit / agg.TotalGrossSales) * 100.0
 	}
 
-	// 2. Query actual expenses from finance_transactions to compute real running fund balances
-	type expenseResult struct {
-		Category   string  `gorm:"column:category"`
-		TotalSpent float64 `gorm:"column:total_spent"`
-	}
-	var expenses []expenseResult
-	expQuery := `
-		SELECT category, COALESCE(SUM(amount), 0) AS total_spent
-		FROM finance_transactions
-		WHERE type = 'EXPENSE'
-		  AND (?::timestamptz IS NULL OR transaction_date >= ?)
-		  AND (?::timestamptz IS NULL OR transaction_date <= ?)
-		GROUP BY category
-	`
-	_ = r.db.WithContext(ctx).Raw(expQuery, dateFrom, dateFrom, dateTo, dateTo).Scan(&expenses).Error
-
+	// 2. Query cash_accounts running ledger (O(1) direct read) for All-Time without custom filters
+	var fundFilament, fundComponent, fundPackaging, fundElectricity, fundMaintenance, fundDepreciation, fundNetProfit float64
 	var spentFilament, spentComponent, spentPackaging, spentElectricity, spentMaintenance, spentDepreciation, spentNetProfit float64
-	for _, e := range expenses {
-		switch e.Category {
-		case "FILAMENT":
-			spentFilament += e.TotalSpent
-		case "HARDWARE":
-			spentComponent += e.TotalSpent
-		case "PACKAGING":
-			spentPackaging += e.TotalSpent
-		case "ELECTRICITY":
-			spentElectricity += e.TotalSpent
-		case "MACHINE_MAINTENANCE":
-			spentMaintenance += e.TotalSpent
-		case "MACHINE_PURCHASE":
-			spentDepreciation += e.TotalSpent
-		default:
-			// OTHER_EXPENSE, RENT, MARKETING, INTERNET, SHIPPING_COST, etc.
-			spentNetProfit += e.TotalSpent
+	var allocFilament, allocComponent, allocPackaging, allocElectricity, allocMaintenance, allocDepreciation, allocNetProfit float64
+
+	isAllTime := dateFrom == nil && dateTo == nil && (channel == "" || channel == "ALL")
+	useLedger := false
+
+	if isAllTime {
+		type accountRow struct {
+			Code            string  `gorm:"column:code"`
+			AllocatedAmount float64 `gorm:"column:allocated_amount"`
+			SpentAmount     float64 `gorm:"column:spent_amount"`
+			CurrentBalance  float64 `gorm:"column:current_balance"`
+		}
+		var accRows []accountRow
+		err := r.db.WithContext(ctx).Table("cash_accounts").
+			Select("code, allocated_amount, spent_amount, current_balance").
+			Where("is_active = ?", true).
+			Scan(&accRows).Error
+
+		if err == nil && len(accRows) > 0 {
+			useLedger = true
+			for _, acc := range accRows {
+				switch acc.Code {
+				case "FILAMENT":
+					fundFilament = acc.CurrentBalance
+					spentFilament = acc.SpentAmount
+					allocFilament = acc.AllocatedAmount
+				case "COMPONENT":
+					fundComponent = acc.CurrentBalance
+					spentComponent = acc.SpentAmount
+					allocComponent = acc.AllocatedAmount
+				case "PACKAGING":
+					fundPackaging = acc.CurrentBalance
+					spentPackaging = acc.SpentAmount
+					allocPackaging = acc.AllocatedAmount
+				case "ELECTRICITY":
+					fundElectricity = acc.CurrentBalance
+					spentElectricity = acc.SpentAmount
+					allocElectricity = acc.AllocatedAmount
+				case "MAINTENANCE":
+					fundMaintenance = acc.CurrentBalance
+					spentMaintenance = acc.SpentAmount
+					allocMaintenance = acc.AllocatedAmount
+				case "DEPRECIATION":
+					fundDepreciation = acc.CurrentBalance
+					spentDepreciation = acc.SpentAmount
+					allocDepreciation = acc.AllocatedAmount
+				case "NET_PROFIT":
+					fundNetProfit = acc.CurrentBalance
+					spentNetProfit = acc.SpentAmount
+					allocNetProfit = acc.AllocatedAmount
+				}
+			}
 		}
 	}
 
-	// Net Available Fund Balances: Real running balance (Inflow Alokasi - Outflow Belanja)
-	fundFilament := agg.FundFilament - spentFilament
-	fundComponent := agg.FundComponent - spentComponent
-	fundPackaging := agg.FundPackaging - spentPackaging
-	fundElectricity := agg.FundElectricity - spentElectricity
-	fundMaintenance := agg.FundMaintenance - spentMaintenance
-	fundDepreciation := agg.FundDepreciation - spentDepreciation
-	fundNetProfit := agg.FundNetProfit - spentNetProfit
+	if !useLedger {
+		type expenseResult struct {
+			Category   string  `gorm:"column:category"`
+			TotalSpent float64 `gorm:"column:total_spent"`
+		}
+		var expenses []expenseResult
+		expQuery := `
+			SELECT category, COALESCE(SUM(amount), 0) AS total_spent
+			FROM finance_transactions
+			WHERE type = 'EXPENSE'
+			  AND (?::timestamptz IS NULL OR transaction_date >= ?)
+			  AND (?::timestamptz IS NULL OR transaction_date <= ?)
+			GROUP BY category
+		`
+		_ = r.db.WithContext(ctx).Raw(expQuery, dateFrom, dateFrom, dateTo, dateTo).Scan(&expenses).Error
+
+		spentFilament = 0
+		spentComponent = 0
+		spentPackaging = 0
+		spentElectricity = 0
+		spentMaintenance = 0
+		spentDepreciation = 0
+		spentNetProfit = 0
+
+		for _, e := range expenses {
+			switch e.Category {
+			case "FILAMENT":
+				spentFilament += e.TotalSpent
+			case "HARDWARE":
+				spentComponent += e.TotalSpent
+			case "PACKAGING":
+				spentPackaging += e.TotalSpent
+			case "ELECTRICITY":
+				spentElectricity += e.TotalSpent
+			case "MACHINE_MAINTENANCE":
+				spentMaintenance += e.TotalSpent
+			case "MACHINE_PURCHASE":
+				spentDepreciation += e.TotalSpent
+			default:
+				spentNetProfit += e.TotalSpent
+			}
+		}
+
+		allocFilament = agg.FundFilament
+		allocComponent = agg.FundComponent
+		allocPackaging = agg.FundPackaging
+		allocElectricity = agg.FundElectricity
+		allocMaintenance = agg.FundMaintenance
+		allocDepreciation = agg.FundDepreciation
+		allocNetProfit = agg.FundNetProfit
+
+		fundFilament = allocFilament - spentFilament
+		fundComponent = allocComponent - spentComponent
+		fundPackaging = allocPackaging - spentPackaging
+		fundElectricity = allocElectricity - spentElectricity
+		fundMaintenance = allocMaintenance - spentMaintenance
+		fundDepreciation = allocDepreciation - spentDepreciation
+		fundNetProfit = allocNetProfit - spentNetProfit
+	}
 
 	return &finance.OrderAllocationSummary{
 		TotalOrders:           agg.TotalOrders,
@@ -537,13 +615,13 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		FundDepreciation:      fundDepreciation,
 		FundNetProfit:         fundNetProfit,
 
-		AllocatedFilament:     agg.FundFilament,
-		AllocatedComponent:    agg.FundComponent,
-		AllocatedPackaging:    agg.FundPackaging,
-		AllocatedElectricity:  agg.FundElectricity,
-		AllocatedMaintenance:  agg.FundMaintenance,
-		AllocatedDepreciation: agg.FundDepreciation,
-		AllocatedNetProfit:    agg.FundNetProfit,
+		AllocatedFilament:     allocFilament,
+		AllocatedComponent:    allocComponent,
+		AllocatedPackaging:    allocPackaging,
+		AllocatedElectricity:  allocElectricity,
+		AllocatedMaintenance:  allocMaintenance,
+		AllocatedDepreciation: allocDepreciation,
+		AllocatedNetProfit:    allocNetProfit,
 
 		SpentFilament:         spentFilament,
 		SpentComponent:        spentComponent,
