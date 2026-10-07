@@ -71,6 +71,7 @@ type orderItemGORM struct {
 	MappingStatus    string     `gorm:"column:mapping_status"`
 	MatchedSKU       string     `gorm:"column:matched_sku"`
 	CreatedAt        time.Time  `gorm:"column:created_at"`
+	UpdatedAt        time.Time  `gorm:"column:updated_at"`
 }
 
 func (orderItemGORM) TableName() string {

@@ -81,6 +81,7 @@ type shopeeUnifiedItemGORM struct {
 	NetProfit        float64    `gorm:"column:net_profit"`
 	ProductID        *uuid.UUID `gorm:"column:product_id;type:uuid"`
 	CreatedAt        time.Time  `gorm:"column:created_at"`
+	UpdatedAt        time.Time  `gorm:"column:updated_at"`
 }
 
 func (shopeeUnifiedItemGORM) TableName() string {
@@ -176,7 +177,7 @@ func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.Shopee
 			it.MaintenanceCost,
 			it.DepreciationCost,
 			it.CreatedAt,
-			it.CreatedAt,
+			it.UpdatedAt,
 		)
 	}
 
@@ -605,6 +606,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				NetProfit:        netProf,
 				ProductID:        productID,
 				CreatedAt:        orderCreatedAt,
+				UpdatedAt:        orderUpdatedAt,
 			})
 		}
 
@@ -683,7 +685,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		for _, itemG := range itemsToInsert {
 			if err := tx.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "id"}},
-				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "selling_price", "hpp", "total_cogs", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "net_profit"}),
+				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "selling_price", "hpp", "total_cogs", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "net_profit", "updated_at"}),
 			}).Create(&itemG).Error; err != nil {
 				return err
 			}
@@ -737,6 +739,7 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 				"hpp":               totalCOGS,
 				"total_cogs":        totalCOGS,
 				"net_profit":        netProf,
+				"updated_at":        time.Now(),
 			}
 
 			if err := tx.Model(&shopeeUnifiedItemGORM{}).Where("id = ?", it.ID).Updates(updates).Error; err != nil {
