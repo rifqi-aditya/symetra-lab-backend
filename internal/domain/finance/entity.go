@@ -465,4 +465,10 @@ type OrderAllocationSummary struct {
 
 	AverageProfitMargin float64
 	UnmappedItemsCount  int64
+
+	// Pending Marketplace Escrow (Dana Mengendap / Belum Cair)
+	PendingOrdersCount  int64
+	PendingGrossSales   float64
+	PendingEscrowAmount float64
+	PendingNetProfit    float64
 }

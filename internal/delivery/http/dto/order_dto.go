@@ -142,6 +142,12 @@ type OrderAllocationSummaryResponse struct {
 	SpentDepreciation    float64 `json:"spent_depreciation"`
 	SpentNetProfit       float64 `json:"spent_net_profit"`
 
+	// Pending Marketplace Escrow (Dana Mengendap / Belum Cair)
+	PendingOrdersCount  int64   `json:"pending_orders_count"`
+	PendingGrossSales   float64 `json:"pending_gross_sales"`
+	PendingEscrowAmount float64 `json:"pending_escrow_amount"`
+	PendingNetProfit    float64 `json:"pending_net_profit"`
+
 	// Legacy aliases for backwards compatibility
 	TotalCompletedOrders int64   `json:"total_completed_orders"`
 	TotalEscrowNetIn     float64 `json:"total_escrow_net_in"`

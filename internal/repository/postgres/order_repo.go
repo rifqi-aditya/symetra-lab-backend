@@ -398,20 +398,24 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 	dateFrom, dateTo *time.Time,
 ) (*finance.OrderAllocationSummary, error) {
 	type aggResult struct {
-		TotalOrders        int64   `gorm:"column:total_orders"`
-		TotalGrossSales    float64 `gorm:"column:total_gross_sales"`
-		TotalChannelFees   float64 `gorm:"column:total_channel_fees"`
-		TotalNetRevenue    float64 `gorm:"column:total_net_revenue"`
-		TotalCOGS          float64 `gorm:"column:total_cogs"`
-		TotalNetProfit     float64 `gorm:"column:total_net_profit"`
-		FundFilament       float64 `gorm:"column:fund_filament"`
-		FundComponent      float64 `gorm:"column:fund_component"`
-		FundPackaging      float64 `gorm:"column:fund_packaging"`
-		FundElectricity    float64 `gorm:"column:fund_electricity"`
-		FundMaintenance    float64 `gorm:"column:fund_maintenance"`
-		FundDepreciation   float64 `gorm:"column:fund_depreciation"`
-		FundNetProfit      float64 `gorm:"column:fund_net_profit"`
-		UnmappedItemsCount int64   `gorm:"column:unmapped_items_count"`
+		TotalOrders         int64   `gorm:"column:total_orders"`
+		TotalGrossSales     float64 `gorm:"column:total_gross_sales"`
+		TotalChannelFees    float64 `gorm:"column:total_channel_fees"`
+		TotalNetRevenue     float64 `gorm:"column:total_net_revenue"`
+		TotalCOGS           float64 `gorm:"column:total_cogs"`
+		TotalNetProfit      float64 `gorm:"column:total_net_profit"`
+		FundFilament        float64 `gorm:"column:fund_filament"`
+		FundComponent       float64 `gorm:"column:fund_component"`
+		FundPackaging       float64 `gorm:"column:fund_packaging"`
+		FundElectricity     float64 `gorm:"column:fund_electricity"`
+		FundMaintenance     float64 `gorm:"column:fund_maintenance"`
+		FundDepreciation    float64 `gorm:"column:fund_depreciation"`
+		FundNetProfit       float64 `gorm:"column:fund_net_profit"`
+		UnmappedItemsCount  int64   `gorm:"column:unmapped_items_count"`
+		PendingOrdersCount  int64   `gorm:"column:pending_orders_count"`
+		PendingGrossSales   float64 `gorm:"column:pending_gross_sales"`
+		PendingEscrowAmount float64 `gorm:"column:pending_escrow_amount"`
+		PendingNetProfit    float64 `gorm:"column:pending_net_profit"`
 	}
 
 	query := `
@@ -422,22 +426,26 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 			COALESCE(SUM(net_amount), 0) AS total_net_revenue,
 			COALESCE(SUM(cogs_amount), 0) AS total_cogs,
 			COALESCE(SUM(net_profit), 0) AS total_net_profit,
-			COALESCE(SUM(fund_filament), 0) AS fund_filament,
-			COALESCE(SUM(fund_component), 0) AS fund_component,
-			COALESCE(SUM(fund_packaging), 0) AS fund_packaging,
-			COALESCE(SUM(fund_electricity), 0) AS fund_electricity,
-			COALESCE(SUM(fund_maintenance), 0) AS fund_maintenance,
-			COALESCE(SUM(fund_depreciation), 0) AS fund_depreciation,
-			COALESCE(SUM(fund_net_profit), 0) AS fund_net_profit,
+			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_filament ELSE 0 END), 0) AS fund_filament,
+			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_component ELSE 0 END), 0) AS fund_component,
+			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_packaging ELSE 0 END), 0) AS fund_packaging,
+			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_electricity ELSE 0 END), 0) AS fund_electricity,
+			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_maintenance ELSE 0 END), 0) AS fund_maintenance,
+			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_depreciation ELSE 0 END), 0) AS fund_depreciation,
+			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_net_profit ELSE 0 END), 0) AS fund_net_profit,
 			COALESCE((
 				SELECT COUNT(*) 
 				FROM order_items oi
 				JOIN orders o2 ON o2.id = oi.order_id
 				WHERE o2.user_id = ? AND oi.mapping_status = 'UNMAPPED'
-			), 0) AS unmapped_items_count
+			), 0) AS unmapped_items_count,
+			COALESCE(COUNT(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN 1 END), 0) AS pending_orders_count,
+			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN gross_amount ELSE 0 END), 0) AS pending_gross_sales,
+			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN net_amount ELSE 0 END), 0) AS pending_escrow_amount,
+			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN net_profit ELSE 0 END), 0) AS pending_net_profit
 		FROM orders
 		WHERE user_id = ? 
-		  AND payment_status = 'PAID'
+		  AND status != 'CANCELLED'
 		  AND (? = 'ALL' OR channel = ?)
 		  AND (?::timestamptz IS NULL OR created_at >= ?)
 		  AND (?::timestamptz IS NULL OR created_at <= ?)
@@ -547,5 +555,9 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 
 		AverageProfitMargin:   avgMargin,
 		UnmappedItemsCount:    agg.UnmappedItemsCount,
+		PendingOrdersCount:    agg.PendingOrdersCount,
+		PendingGrossSales:     agg.PendingGrossSales,
+		PendingEscrowAmount:   agg.PendingEscrowAmount,
+		PendingNetProfit:      agg.PendingNetProfit,
 	}, nil
 }
