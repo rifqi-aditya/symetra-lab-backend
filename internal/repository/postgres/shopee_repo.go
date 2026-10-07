@@ -459,8 +459,13 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 
 	var ord shopeeUnifiedOrderGORM
 	if err := tx.Where("id = ?", orderID).First(&ord).Error; err == nil {
-		netProfit := ord.NetAmount - sums.TotalCOGS
+		netBase := ord.NetAmount
+		if netBase <= 0 {
+			netBase = ord.GrossAmount
+		}
+		netProfit := netBase - sums.TotalCOGS
 		_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
+			"net_amount":        netBase,
 			"fund_filament":     sums.Filament,
 			"fund_component":    sums.Component,
 			"fund_packaging":    sums.Packaging,
@@ -487,7 +492,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		var grossAmount, netAmount, channelFee float64
 		paymentStatus := "UNPAID"
 
-		if o.Escrow() != nil {
+		if o.Escrow() != nil && o.Escrow().EscrowAmount() > 0 {
 			e := o.Escrow()
 			grossAmount = e.SellingPrice()
 			netAmount = e.EscrowAmount()
@@ -497,6 +502,11 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			}
 		} else {
 			grossAmount = o.TotalAmount()
+			if channelFee > 0 {
+				netAmount = grossAmount - channelFee
+			} else {
+				netAmount = grossAmount
+			}
 		}
 
 		orderCreatedAt := o.CreatedAt()
@@ -604,13 +614,20 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			totMaint += maintCost
 			totDep += depCost
 			totCOGS += baseHPP
+			prodTitle := item.ItemName()
+			if productID != nil {
+				var pr productGORM
+				if err := tx.Where("id = ?", *productID).First(&pr).Error; err == nil && pr.Name != "" {
+					prodTitle = pr.Name
+				}
+			}
 
 			itemsToInsert = append(itemsToInsert, shopeeUnifiedItemGORM{
 				ID:               itemID,
 				OrderID:          orderID,
 				ChannelItemID:    item.ItemID(),
 				ChannelModelID:   item.ModelID(),
-				ProductName:      item.ItemName(),
+				ProductName:      prodTitle,
 				ItemSKU:          item.ItemSKU(),
 				MatchedSKU:       matchedSKU,
 				MappingStatus:    mappingStatus,
@@ -749,6 +766,7 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 
 			updates := map[string]interface{}{
 				"product_id":        productID,
+				"product_name":      prod.Name,
 				"matched_sku":       matchedSKU,
 				"mapping_status":    "MATCHED",
 				"filament_cost":     filCost,

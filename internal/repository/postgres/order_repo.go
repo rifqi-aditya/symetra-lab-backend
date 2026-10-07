@@ -32,24 +32,43 @@ type orderGORM struct {
 	FundDepreciation float64         `gorm:"column:fund_depreciation"`
 	FundNetProfit    float64         `gorm:"column:fund_net_profit"`
 	Status           string          `gorm:"column:status"`
-	Notes            string          `gorm:"column:notes"`
-	PaymentStatus    string          `gorm:"column:payment_status"`
-	StartedAt        *time.Time      `gorm:"column:started_at"`
-	CompletedAt      *time.Time      `gorm:"column:completed_at"`
-	CreatedAt        time.Time       `gorm:"column:created_at"`
-	UpdatedAt        time.Time       `gorm:"column:updated_at"`
-	Items            []orderItemGORM `gorm:"foreignKey:OrderID;references:ID;constraint:OnDelete:CASCADE"`
+	Notes              string                      `gorm:"column:notes"`
+	PaymentStatus      string                      `gorm:"column:payment_status"`
+	StartedAt          *time.Time                  `gorm:"column:started_at"`
+	CompletedAt        *time.Time                  `gorm:"column:completed_at"`
+	CreatedAt          time.Time                   `gorm:"column:created_at"`
+	UpdatedAt          time.Time                   `gorm:"column:updated_at"`
+	Items              []orderItemGORM             `gorm:"foreignKey:OrderID;references:ID;constraint:OnDelete:CASCADE"`
+	MarketplaceDetails *orderMarketplaceDetailGORM `gorm:"foreignKey:OrderID;references:ID"`
 }
 
 func (orderGORM) TableName() string {
 	return "orders"
 }
 
+type orderMarketplaceDetailGORM struct {
+	ID              uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
+	OrderID         uuid.UUID  `gorm:"column:order_id;type:uuid"`
+	Channel         string     `gorm:"column:channel"`
+	OrderSN         string     `gorm:"column:order_sn"`
+	ShippingCarrier string     `gorm:"column:shipping_carrier"`
+	TrackingNumber  string     `gorm:"column:tracking_number"`
+	ShipByDate      int64      `gorm:"column:ship_by_date"`
+	ShipByDateTime  *time.Time `gorm:"column:ship_by_date_time"`
+	EscrowAmount    float64    `gorm:"column:escrow_amount"`
+	FinancialStatus string     `gorm:"column:financial_status"`
+}
+
+func (orderMarketplaceDetailGORM) TableName() string {
+	return "order_marketplace_details"
+}
+
 type orderItemGORM struct {
-	ID               uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
-	OrderID          uuid.UUID  `gorm:"column:order_id;type:uuid"`
-	ProductID        *uuid.UUID `gorm:"column:product_id;type:uuid"`
-	ProductName      string     `gorm:"column:product_name"`
+	ID               uuid.UUID    `gorm:"column:id;primaryKey;type:uuid"`
+	OrderID          uuid.UUID    `gorm:"column:order_id;type:uuid"`
+	ProductID        *uuid.UUID   `gorm:"column:product_id;type:uuid"`
+	Product          *productGORM `gorm:"foreignKey:ProductID;references:ID"`
+	ProductName      string       `gorm:"column:product_name"`
 	ItemSKU          string     `gorm:"column:item_sku"`
 	Quantity         int        `gorm:"column:quantity"`
 	SellingPrice     float64    `gorm:"column:selling_price"`
@@ -93,11 +112,20 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 
 	items := make([]order.OrderItem, len(g.Items))
 	for i, it := range g.Items {
-		items[i] = order.ReconstructOrderItemFull(
+		prodName := it.ProductName
+		var thumbURL *string
+		if it.Product != nil {
+			if it.Product.Name != "" {
+				prodName = it.Product.Name
+			}
+			thumbURL = it.Product.ThumbnailURL
+		}
+
+		itemObj := order.ReconstructOrderItemFull(
 			it.ID,
 			it.OrderID,
 			it.ProductID,
-			it.ProductName,
+			prodName,
 			it.ItemSKU,
 			it.Quantity,
 			it.SellingPrice,
@@ -119,6 +147,8 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 			it.MatchedSKU,
 			it.CreatedAt,
 		)
+		itemObj.SetThumbnailURL(thumbURL)
+		items[i] = itemObj
 	}
 
 	ch := g.Channel
@@ -133,12 +163,15 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 	}
 	cogs := g.CogsAmount
 	profit := g.NetProfit
+	if profit <= 0 && net > cogs && g.NetProfit == -cogs {
+		profit = net - cogs
+	}
 
 	totRev := gross
 	totHpp := cogs
 	totProf := profit
 
-	return order.ReconstructOrder(
+	domainOrder := order.ReconstructOrder(
 		g.ID,
 		g.UserID,
 		g.OrderNumber,
@@ -170,12 +203,23 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		g.CreatedAt,
 		g.UpdatedAt,
 	)
+
+	if g.MarketplaceDetails != nil {
+		domainOrder.SetLogistics(
+			g.MarketplaceDetails.ShippingCarrier,
+			g.MarketplaceDetails.TrackingNumber,
+			g.MarketplaceDetails.ShipByDateTime,
+		)
+	}
+
+	return domainOrder
 }
 
 func (r *OrderRepository) FindAll(ctx context.Context, userID uuid.UUID) ([]*order.Order, error) {
 	var gormOrders []orderGORM
 	err := r.db.WithContext(ctx).
-		Preload("Items").
+		Preload("Items.Product").
+		Preload("MarketplaceDetails").
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Find(&gormOrders).Error
@@ -193,7 +237,8 @@ func (r *OrderRepository) FindAll(ctx context.Context, userID uuid.UUID) ([]*ord
 func (r *OrderRepository) FindByID(ctx context.Context, userID, id uuid.UUID) (*order.Order, error) {
 	var g orderGORM
 	err := r.db.WithContext(ctx).
-		Preload("Items").
+		Preload("Items.Product").
+		Preload("MarketplaceDetails").
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&g).Error
 	if err != nil {

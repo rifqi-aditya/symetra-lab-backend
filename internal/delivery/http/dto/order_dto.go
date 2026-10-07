@@ -42,6 +42,7 @@ type OrderItemResponse struct {
 	OrderID          uuid.UUID  `json:"order_id"`
 	ProductID        *uuid.UUID `json:"product_id,omitempty"`
 	ProductName      string     `json:"product_name"`
+	ThumbnailURL     *string    `json:"thumbnail_url,omitempty"`
 	ItemSKU          string     `json:"item_sku,omitempty"`
 	Quantity         int        `json:"quantity"`
 	SellingPrice     float64    `json:"selling_price"`
@@ -51,10 +52,12 @@ type OrderItemResponse struct {
 	MachineID        *uuid.UUID `json:"machine_id,omitempty"`
 	FilamentCost     float64    `json:"filament_cost"`
 	ComponentCost    float64    `json:"component_cost"`
+	HardwareCost     float64    `json:"hardware_cost"`
 	PackagingCost    float64    `json:"packaging_cost"`
 	ElectricityCost  float64    `json:"electricity_cost"`
 	MaintenanceCost  float64    `json:"maintenance_cost"`
 	DepreciationCost float64    `json:"depreciation_cost"`
+	MachineCost      float64    `json:"machine_cost"`
 	TotalCogs        float64    `json:"total_cogs"`
 	NetProfit        float64    `json:"net_profit"`
 	EnergyCost       float64    `json:"energy_cost"`
@@ -73,6 +76,9 @@ type OrderResponse struct {
 	CustomerName     string              `json:"customer_name"`
 	CustomerContact  string              `json:"customer_contact"`
 	Channel          string              `json:"channel"`
+	ShippingCarrier  string              `json:"shipping_carrier,omitempty"`
+	TrackingNumber   string              `json:"tracking_number,omitempty"`
+	ShipByDateTime   *time.Time          `json:"ship_by_date_time,omitempty"`
 	GrossAmount      float64             `json:"gross_amount"`
 	ChannelFee       float64             `json:"channel_fee"`
 	NetAmount        float64             `json:"net_amount"`
@@ -154,6 +160,7 @@ func ToOrderItemResponse(it *order.OrderItem) OrderItemResponse {
 		OrderID:          it.OrderID(),
 		ProductID:        it.ProductID(),
 		ProductName:      it.ProductName(),
+		ThumbnailURL:     it.ThumbnailURL(),
 		ItemSKU:          it.ItemSKU(),
 		Quantity:         it.Quantity(),
 		SellingPrice:     it.SellingPrice(),
@@ -163,10 +170,12 @@ func ToOrderItemResponse(it *order.OrderItem) OrderItemResponse {
 		MachineID:        it.MachineID(),
 		FilamentCost:     it.FilamentCost(),
 		ComponentCost:    it.ComponentCost(),
+		HardwareCost:     it.HardwareCost(),
 		PackagingCost:    it.PackagingCost(),
 		ElectricityCost:  it.ElectricityCost(),
 		MaintenanceCost:  it.MaintenanceCost(),
 		DepreciationCost: it.DepreciationCost(),
+		MachineCost:      it.MachineCost(),
 		TotalCogs:        it.TotalCogs(),
 		NetProfit:        it.NetProfit(),
 		EnergyCost:       it.EnergyCost(),
@@ -210,10 +219,16 @@ func ToOrderResponse(o *order.Order) OrderResponse {
 		totHpp = cogs
 	}
 	profit := o.NetProfit()
+	if profit <= 0 && net > totHpp && profit == -totHpp {
+		profit = net - totHpp
+	}
 	if profit == 0 {
 		profit = o.TotalProfit()
 	}
 	totProfit := o.TotalProfit()
+	if totProfit <= 0 && totRev > totHpp && totProfit == -totHpp {
+		totProfit = totRev - totHpp
+	}
 	if totProfit == 0 {
 		totProfit = profit
 	}
@@ -225,6 +240,9 @@ func ToOrderResponse(o *order.Order) OrderResponse {
 		CustomerName:     o.CustomerName(),
 		CustomerContact:  o.CustomerContact(),
 		Channel:          o.Channel(),
+		ShippingCarrier:  o.ShippingCarrier(),
+		TrackingNumber:   o.TrackingNumber(),
+		ShipByDateTime:   o.ShipByDateTime(),
 		GrossAmount:      gross,
 		ChannelFee:       o.ChannelFee(),
 		NetAmount:        net,

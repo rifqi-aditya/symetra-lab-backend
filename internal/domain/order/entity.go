@@ -36,6 +36,9 @@ type Order struct {
 	paymentStatus    string // PAID, UNPAID
 	startedAt        *time.Time
 	completedAt      *time.Time
+	shippingCarrier  string
+	trackingNumber   string
+	shipByDateTime   *time.Time
 	items            []OrderItem
 	createdAt        time.Time
 	updatedAt        time.Time
@@ -46,6 +49,7 @@ type OrderItem struct {
 	orderID          uuid.UUID
 	productID        *uuid.UUID
 	productName      string
+	thumbnailURL     *string
 	itemSKU          string
 	quantity         int
 	sellingPrice     float64
@@ -365,10 +369,26 @@ func (o *Order) Items() []OrderItem         { return o.items }
 func (o *Order) CreatedAt() time.Time       { return o.createdAt }
 func (o *Order) UpdatedAt() time.Time       { return o.updatedAt }
 
+func (o *Order) ShippingCarrier() string    { return o.shippingCarrier }
+func (o *Order) TrackingNumber() string     { return o.trackingNumber }
+func (o *Order) ShipByDateTime() *time.Time { return o.shipByDateTime }
+func (o *Order) SetLogistics(carrier, tracking string, shipBy *time.Time) {
+	o.shippingCarrier = carrier
+	o.trackingNumber = tracking
+	o.shipByDateTime = shipBy
+}
+
 func (item *OrderItem) ID() uuid.UUID               { return item.id }
 func (item *OrderItem) OrderID() uuid.UUID          { return item.orderID }
 func (item *OrderItem) ProductID() *uuid.UUID       { return item.productID }
 func (item *OrderItem) ProductName() string         { return item.productName }
+func (item *OrderItem) ThumbnailURL() *string       { return item.thumbnailURL }
+func (item *OrderItem) SetThumbnailURL(url *string) { item.thumbnailURL = url }
+func (item *OrderItem) SetProductName(name string)  { item.productName = name }
+func (item *OrderItem) HardwareCost() float64       { return item.componentCost }
+func (item *OrderItem) MachineCost() float64 {
+	return item.electricityCost + item.maintenanceCost + item.depreciationCost
+}
 func (item *OrderItem) ItemSKU() string             { return item.itemSKU }
 func (item *OrderItem) Quantity() int               { return item.quantity }
 func (item *OrderItem) SellingPrice() float64       { return item.sellingPrice }
