@@ -570,8 +570,29 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 						if p.SKU != nil {
 							matchedSKU = *p.SKU
 						}
-						mappingStatus = "MAPPED"
+						mappingStatus = "MATCHED"
 						filCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, netProf = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
+					}
+				}
+
+				// Jika belum cocok dengan SKU, cek riwayat penautan manual sebelumnya berdasarkan channel_item_id
+				if productID == nil && item.ItemID() > 0 {
+					var prevItem shopeeUnifiedItemGORM
+					prevQ := tx.Where("channel_item_id = ? AND product_id IS NOT NULL", item.ItemID())
+					if item.ModelID() > 0 {
+						prevQ = prevQ.Where("channel_model_id = ?", item.ModelID())
+					}
+					if err := prevQ.Order("updated_at DESC").First(&prevItem).Error; err == nil && prevItem.ProductID != nil {
+						var p productGORM
+						if err := tx.Preload("Components").Preload("PackagingItems").Where("id = ?", *prevItem.ProductID).First(&p).Error; err == nil {
+							pID := p.ID
+							productID = &pID
+							if p.SKU != nil {
+								matchedSKU = *p.SKU
+							}
+							mappingStatus = "MATCHED"
+							filCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, netProf = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
+						}
 					}
 				}
 			}
@@ -729,7 +750,7 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 			updates := map[string]interface{}{
 				"product_id":        productID,
 				"matched_sku":       matchedSKU,
-				"mapping_status":    "MAPPED",
+				"mapping_status":    "MATCHED",
 				"filament_cost":     filCost,
 				"component_cost":    compCost,
 				"packaging_cost":    packCost,

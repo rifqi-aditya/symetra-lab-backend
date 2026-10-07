@@ -1,4 +1,4 @@
-﻿package postgres
+package postgres
 
 import (
 	"context"
@@ -40,7 +40,6 @@ type productGORM struct {
 	ID                    uuid.UUID                  `gorm:"column:id;primaryKey;type:uuid"`
 	UserID                uuid.UUID                  `gorm:"column:user_id;type:uuid"`
 	Name                  string                     `gorm:"column:name"`
-	ParentSKU             *string                    `gorm:"column:parent_sku"`
 	SKU                   *string                    `gorm:"column:sku"`
 	Description           *string                    `gorm:"column:description"`
 	Category              string                     `gorm:"column:category"`
@@ -86,7 +85,7 @@ func toProductEntity(g *productGORM) *product.Product {
 		g.ID,
 		g.UserID,
 		g.Name,
-		g.ParentSKU,
+		nil,
 		g.SKU,
 		g.Description,
 		g.Category,
@@ -131,9 +130,7 @@ func (r *ProductRepository) FindAll(ctx context.Context, userID uuid.UUID, filte
 	if filter.Category != "" {
 		query = query.Where("category = ?", filter.Category)
 	}
-	if filter.ParentSKU != "" {
-		query = query.Where("parent_sku = ?", filter.ParentSKU)
-	}
+
 
 	if filter.Limit > 0 {
 		if err := query.Count(&total).Error; err != nil {
@@ -206,7 +203,6 @@ func (r *ProductRepository) Create(ctx context.Context, p *product.Product) erro
 			ID:                    p.ID(),
 			UserID:                p.UserID(),
 			Name:                  p.Name(),
-			ParentSKU:             p.ParentSKU(),
 			SKU:                   p.SKU(),
 			Description:           p.Description(),
 			Category:              p.Category(),
@@ -266,8 +262,7 @@ func (r *ProductRepository) Update(ctx context.Context, p *product.Product) erro
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		updates := map[string]interface{}{
 			"name":                     p.Name(),
-			"parent_sku":              p.ParentSKU(),
-			"sku":                     p.SKU(),
+			"sku":                      p.SKU(),
 			"description":             p.Description(),
 			"category":                p.Category(),
 			"thumbnail_url":           p.ThumbnailURL(),
