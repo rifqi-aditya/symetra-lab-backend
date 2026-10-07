@@ -39,6 +39,7 @@ type Order struct {
 	shippingCarrier  string
 	trackingNumber   string
 	shipByDateTime   *time.Time
+	financialStatus  string
 	items            []OrderItem
 	createdAt        time.Time
 	updatedAt        time.Time
@@ -372,10 +373,14 @@ func (o *Order) UpdatedAt() time.Time       { return o.updatedAt }
 func (o *Order) ShippingCarrier() string    { return o.shippingCarrier }
 func (o *Order) TrackingNumber() string     { return o.trackingNumber }
 func (o *Order) ShipByDateTime() *time.Time { return o.shipByDateTime }
+func (o *Order) FinancialStatus() string    { return o.financialStatus }
 func (o *Order) SetLogistics(carrier, tracking string, shipBy *time.Time) {
 	o.shippingCarrier = carrier
 	o.trackingNumber = tracking
 	o.shipByDateTime = shipBy
+}
+func (o *Order) SetFinancialStatus(status string) {
+	o.financialStatus = status
 }
 
 func (item *OrderItem) ID() uuid.UUID               { return item.id }

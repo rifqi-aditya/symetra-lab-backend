@@ -210,6 +210,16 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 			g.MarketplaceDetails.TrackingNumber,
 			g.MarketplaceDetails.ShipByDateTime,
 		)
+		if g.MarketplaceDetails.FinancialStatus != "" {
+			domainOrder.SetFinancialStatus(g.MarketplaceDetails.FinancialStatus)
+		}
+	}
+	if domainOrder.FinancialStatus() == "" {
+		if g.PaymentStatus == "PAID" || g.Status == "COMPLETED" {
+			domainOrder.SetFinancialStatus("RELEASED")
+		} else {
+			domainOrder.SetFinancialStatus("PENDING_RELEASE")
+		}
 	}
 
 	return domainOrder

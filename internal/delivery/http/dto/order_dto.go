@@ -97,12 +97,14 @@ type OrderResponse struct {
 	Status           string              `json:"status"`
 	Notes            string              `json:"notes"`
 	Source           string              `json:"source"`
-	PaymentStatus    string              `json:"payment_status"`
-	StartedAt        *time.Time          `json:"started_at,omitempty"`
-	CompletedAt      *time.Time          `json:"completed_at,omitempty"`
-	Items            []OrderItemResponse `json:"items,omitempty"`
-	CreatedAt        time.Time           `json:"created_at"`
-	UpdatedAt        time.Time           `json:"updated_at"`
+	PaymentStatus    string                      `json:"payment_status"`
+	FinancialStatus  string                      `json:"financial_status,omitempty"`
+	Escrow           *ShopeeOrderEscrowResponse  `json:"escrow,omitempty"`
+	StartedAt        *time.Time                  `json:"started_at,omitempty"`
+	CompletedAt      *time.Time                  `json:"completed_at,omitempty"`
+	Items            []OrderItemResponse         `json:"items,omitempty"`
+	CreatedAt        time.Time                   `json:"created_at"`
+	UpdatedAt        time.Time                   `json:"updated_at"`
 }
 
 type OrderAllocationSummaryResponse struct {
@@ -233,6 +235,36 @@ func ToOrderResponse(o *order.Order) OrderResponse {
 		totProfit = profit
 	}
 
+	finStatus := o.FinancialStatus()
+	if finStatus == "" {
+		if o.PaymentStatus() == "PAID" || o.Status() == "COMPLETED" {
+			finStatus = "RELEASED"
+		} else {
+			finStatus = "PENDING_RELEASE"
+		}
+	}
+
+	var escrowResp *ShopeeOrderEscrowResponse
+	if o.Channel() == "SHOPEE" {
+		escrowResp = &ShopeeOrderEscrowResponse{
+			OrderSN:             o.OrderNumber(),
+			EscrowAmount:        net,
+			SellingPrice:        gross,
+			TotalMarketplaceFee: o.ChannelFee(),
+			TotalHPP:            totHpp,
+			KasFilamen:          o.FundFilament(),
+			KasKomponen:         o.FundComponent(),
+			KasPacking:          o.FundPackaging(),
+			KasListrik:          o.FundElectricity(),
+			KasMaintenance:      o.FundMaintenance(),
+			KasDepresiasi:       o.FundDepreciation(),
+			KasLabaBersih:       profit,
+			FinancialStatus:     finStatus,
+			CreatedAt:           o.CreatedAt(),
+			UpdatedAt:           o.UpdatedAt(),
+		}
+	}
+
 	return OrderResponse{
 		ID:               o.ID(),
 		UserID:           o.UserID(),
@@ -262,6 +294,8 @@ func ToOrderResponse(o *order.Order) OrderResponse {
 		Notes:            o.Notes(),
 		Source:           o.Source(),
 		PaymentStatus:    o.PaymentStatus(),
+		FinancialStatus:  finStatus,
+		Escrow:           escrowResp,
 		StartedAt:        o.StartedAt(),
 		CompletedAt:      o.CompletedAt(),
 		Items:            items,
