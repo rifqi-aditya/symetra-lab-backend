@@ -33,3 +33,5 @@ tmp/
 
 .vercel
 frontend/
+.vercel
+.env*

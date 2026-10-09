@@ -34,6 +34,11 @@ func (uc *GetOrderUseCase) Execute(ctx context.Context, userID, id uuid.UUID) (*
 	return uc.repo.FindByID(ctx, userID, id)
 }
 
+func (uc *GetOrderUseCase) ExecuteByOrderNumber(ctx context.Context, userID uuid.UUID, orderNumber string) (*order.Order, error) {
+	return uc.repo.FindByOrderNumber(ctx, userID, orderNumber)
+}
+
+
 type CreateOrderItemInput struct {
 	ProductID      *uuid.UUID
 	ProductName    string

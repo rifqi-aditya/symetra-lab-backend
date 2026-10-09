@@ -97,3 +97,71 @@ func (c *Client) GetEscrowDetail(accessToken string, shopID uint64, orderSN stri
 
 	return &result, nil
 }
+
+// ShopeeEscrowListResponse merepresentasikan respon dari /api/v2/payment/get_escrow_list
+type ShopeeEscrowListResponse struct {
+	Error     string `json:"error"`
+	Message   string `json:"message"`
+	RequestID string `json:"request_id"`
+	Response  struct {
+		EscrowList []ShopeeEscrowListItem `json:"escrow_list"`
+		More       bool                   `json:"more"`
+	} `json:"response"`
+}
+
+type ShopeeEscrowListItem struct {
+	OrderSN           string  `json:"order_sn"`
+	PayoutAmount      float64 `json:"payout_amount"`
+	EscrowReleaseTime int64   `json:"escrow_release_time"`
+}
+
+// GetEscrowList mengambil daftar pesanan yang dananya telah dilepas / cair (/api/v2/payment/get_escrow_list)
+func (c *Client) GetEscrowList(accessToken string, shopID uint64, releaseTimeFrom, releaseTimeTo int64, pageSize int) (*ShopeeEscrowListResponse, error) {
+	path := "/api/v2/payment/get_escrow_list"
+	timestamp := time.Now().Unix()
+	sign := GenerateShopSign(c.PartnerID, path, timestamp, accessToken, shopID, c.PartnerKey)
+
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+
+	params := url.Values{}
+	params.Set("partner_id", fmt.Sprintf("%d", c.PartnerID))
+	params.Set("timestamp", fmt.Sprintf("%d", timestamp))
+	params.Set("access_token", accessToken)
+	params.Set("shop_id", fmt.Sprintf("%d", shopID))
+	params.Set("sign", sign)
+	params.Set("release_time_from", fmt.Sprintf("%d", releaseTimeFrom))
+	params.Set("release_time_to", fmt.Sprintf("%d", releaseTimeTo))
+	params.Set("page_size", fmt.Sprintf("%d", pageSize))
+
+	fullURL := fmt.Sprintf("%s%s?%s", c.BaseURL, path, params.Encode())
+
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("gagal membuat HTTP request: %w", err)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("gagal menghubungi Shopee API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca respons Shopee: %w", err)
+	}
+
+	var result ShopeeEscrowListResponse
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return nil, fmt.Errorf("gagal decode JSON escrow list: %w, raw: %s", err, string(bodyBytes))
+	}
+
+	if result.Error != "" {
+		return nil, fmt.Errorf("shopee API error [%s]: %s (req_id: %s)", result.Error, result.Message, result.RequestID)
+	}
+
+	return &result, nil
+}
+

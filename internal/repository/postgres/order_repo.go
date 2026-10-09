@@ -75,16 +75,12 @@ type orderItemGORM struct {
 	HPP              float64    `gorm:"column:hpp"`
 	WeightGrams      float64    `gorm:"column:weight_grams"`
 	PrintTimeHours   float64    `gorm:"column:print_time_hours"`
-	MachineID        *uuid.UUID `gorm:"column:machine_id;type:uuid"`
 	FilamentCost     float64    `gorm:"column:filament_cost"`
 	ComponentCost    float64    `gorm:"column:component_cost"`
 	PackagingCost    float64    `gorm:"column:packaging_cost"`
-	ElectricityCost  float64    `gorm:"column:electricity_cost"`
+	EnergyCost       float64    `gorm:"column:energy_cost"`
 	MaintenanceCost  float64    `gorm:"column:maintenance_cost"`
 	DepreciationCost float64    `gorm:"column:depreciation_cost"`
-	TotalCogs        float64    `gorm:"column:total_cogs"`
-	NetProfit        float64    `gorm:"column:net_profit"`
-	EnergyCost       float64    `gorm:"column:energy_cost"`
 	ChannelItemID    int64      `gorm:"column:channel_item_id"`
 	ChannelModelID   int64      `gorm:"column:channel_model_id"`
 	MappingStatus    string     `gorm:"column:mapping_status"`
@@ -121,6 +117,11 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 			thumbURL = it.Product.ThumbnailURL
 		}
 
+		var machineID *uuid.UUID
+		if it.Product != nil && it.Product.DefaultMachineID != nil {
+			machineID = it.Product.DefaultMachineID
+		}
+
 		itemObj := order.ReconstructOrderItemFull(
 			it.ID,
 			it.OrderID,
@@ -132,15 +133,15 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 			it.HPP,
 			it.WeightGrams,
 			it.PrintTimeHours,
-			it.MachineID,
+			machineID,
 			it.FilamentCost,
 			it.ComponentCost,
 			it.PackagingCost,
-			it.ElectricityCost,
+			it.EnergyCost,
 			it.MaintenanceCost,
 			it.DepreciationCost,
-			it.TotalCogs,
-			it.NetProfit,
+			it.HPP,
+			it.SellingPrice-it.HPP,
 			it.ChannelItemID,
 			it.ChannelModelID,
 			it.MappingStatus,
@@ -260,6 +261,22 @@ func (r *OrderRepository) FindByID(ctx context.Context, userID, id uuid.UUID) (*
 	return mapOrderGORMToDomain(&g), nil
 }
 
+func (r *OrderRepository) FindByOrderNumber(ctx context.Context, userID uuid.UUID, orderNumber string) (*order.Order, error) {
+	var g orderGORM
+	err := r.db.WithContext(ctx).
+		Preload("Items.Product").
+		Preload("MarketplaceDetails").
+		Where("(order_number = ? OR id IN (SELECT order_id FROM order_marketplace_details WHERE order_sn = ?)) AND user_id = ?", orderNumber, orderNumber, userID).
+		First(&g).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, order.ErrOrderNotFound
+		}
+		return nil, err
+	}
+	return mapOrderGORMToDomain(&g), nil
+}
+
 func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		g := orderGORM{
@@ -306,16 +323,12 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 				HPP:              it.HPP(),
 				WeightGrams:      it.WeightGrams(),
 				PrintTimeHours:   it.PrintTimeHours(),
-				MachineID:        it.MachineID(),
 				FilamentCost:     it.FilamentCost(),
 				ComponentCost:    it.ComponentCost(),
 				PackagingCost:    it.PackagingCost(),
-				ElectricityCost:  it.ElectricityCost(),
+				EnergyCost:       it.EnergyCost(),
 				MaintenanceCost:  it.MaintenanceCost(),
 				DepreciationCost: it.DepreciationCost(),
-				TotalCogs:        it.TotalCogs(),
-				NetProfit:        it.NetProfit(),
-				EnergyCost:       it.EnergyCost(),
 				ChannelItemID:    it.ChannelItemID(),
 				ChannelModelID:   it.ChannelModelID(),
 				MappingStatus:    it.MappingStatus(),

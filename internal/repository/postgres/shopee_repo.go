@@ -77,10 +77,7 @@ type shopeeUnifiedItemGORM struct {
 	EnergyCost       float64    `gorm:"column:energy_cost"`
 	MaintenanceCost  float64    `gorm:"column:maintenance_cost"`
 	DepreciationCost float64    `gorm:"column:depreciation_cost"`
-	TotalCOGS        float64    `gorm:"column:total_cogs"`
-	NetProfit        float64    `gorm:"column:net_profit"`
 	ProductID        *uuid.UUID `gorm:"column:product_id;type:uuid"`
-	MachineID        *uuid.UUID `gorm:"column:machine_id;type:uuid"`
 	WeightGrams      float64    `gorm:"column:weight_grams"`
 	PrintTimeHours   float64    `gorm:"column:print_time_hours"`
 	CreatedAt        time.Time  `gorm:"column:created_at"`
@@ -174,8 +171,8 @@ func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.Shopee
 			it.ComponentCost,
 			it.PackagingCost,
 			0, // machineCost
-			it.TotalCOGS,
-			it.NetProfit,
+			it.HPP,
+			it.SellingPrice - it.HPP,
 			it.EnergyCost,
 			it.MaintenanceCost,
 			it.DepreciationCost,
@@ -455,7 +452,7 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 			COALESCE(SUM(energy_cost), 0) AS f_elec,
 			COALESCE(SUM(maintenance_cost), 0) AS f_maint,
 			COALESCE(SUM(depreciation_cost), 0) AS f_dep,
-			COALESCE(SUM(total_cogs), 0) AS tot_cogs
+			COALESCE(SUM(hpp), 0) AS tot_cogs
 		FROM order_items
 		WHERE order_id = ?
 	`, orderID).Scan(&sums).Error
@@ -574,7 +571,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			maintCost := item.MaintenanceCost()
 			depCost := item.DepreciationCost()
 			baseHPP := item.BaseHPP()
-			netProf := item.NetProfit()
 
 			if productID == nil && existingItem.ProductID != nil {
 				productID = existingItem.ProductID
@@ -587,7 +583,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				maintCost = existingItem.MaintenanceCost
 				depCost = existingItem.DepreciationCost
 				baseHPP = existingItem.HPP
-				netProf = existingItem.NetProfit
 			}
 
 			// Cek auto-match exact SKU dari Shopee ke tabel products jika belum mapped
@@ -605,7 +600,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 							matchedSKU = *p.SKU
 						}
 						mappingStatus = "MATCHED"
-						filCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, netProf = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
+						filCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, _ = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
 					}
 				}
 
@@ -625,7 +620,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 								matchedSKU = *p.SKU
 							}
 							mappingStatus = "MATCHED"
-							filCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, netProf = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
+							filCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, _ = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
 						}
 					}
 				}
@@ -639,7 +634,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			totDep += depCost
 			totCOGS += baseHPP
 			prodTitle := item.ItemName()
-			var itemMachineID *uuid.UUID
 			var itemWeight float64
 			var itemPrintTime float64
 			itemSKU := item.ItemSKU()
@@ -650,7 +644,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 					if pr.Name != "" {
 						prodTitle = pr.Name
 					}
-					itemMachineID = pr.DefaultMachineID
 					itemWeight = pr.DefaultWeightGrams * float64(item.Quantity())
 					itemPrintTime = pr.DefaultPrintTimeHours * float64(item.Quantity())
 					if itemSKU == "" && pr.SKU != nil {
@@ -671,16 +664,13 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				Quantity:         item.Quantity(),
 				SellingPrice:     item.DiscountedPrice(),
 				HPP:              baseHPP,
-				TotalCOGS:        baseHPP,
 				FilamentCost:     filCost,
 				ComponentCost:    compCost,
 				PackagingCost:    packCost,
 				EnergyCost:       elecCost,
 				MaintenanceCost:  maintCost,
 				DepreciationCost: depCost,
-				NetProfit:        netProf,
 				ProductID:        productID,
-				MachineID:        itemMachineID,
 				WeightGrams:      itemWeight,
 				PrintTimeHours:   itemPrintTime,
 				CreatedAt:        orderCreatedAt,
@@ -763,7 +753,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		for _, itemG := range itemsToInsert {
 			if err := tx.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "id"}},
-				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "selling_price", "hpp", "total_cogs", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "net_profit", "updated_at"}),
+				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "selling_price", "hpp", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "updated_at"}),
 			}).Create(&itemG).Error; err != nil {
 				return err
 			}
@@ -806,7 +796,7 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 		// 3. Update kolom matched_sku, product_id, dan kalkulasi 6 pos biaya untuk setiap item
 		for _, it := range items {
 			orderIDsMap[it.OrderID] = true
-			filCost, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, netProf := computeItemCostsFromProduct(tx, &prod, it.Quantity, it.SellingPrice)
+			filCost, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, _ := computeItemCostsFromProduct(tx, &prod, it.Quantity, it.SellingPrice)
 
 			updates := map[string]interface{}{
 				"product_id":        productID,
@@ -820,14 +810,9 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 				"maintenance_cost":  maintCost,
 				"depreciation_cost": depCost,
 				"hpp":               totalCOGS,
-				"total_cogs":        totalCOGS,
-				"net_profit":        netProf,
 				"updated_at":        time.Now(),
 			}
 
-			if prod.DefaultMachineID != nil {
-				updates["machine_id"] = prod.DefaultMachineID
-			}
 			if prod.DefaultWeightGrams > 0 {
 				updates["weight_grams"] = prod.DefaultWeightGrams * float64(it.Quantity)
 			}

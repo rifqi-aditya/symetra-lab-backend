@@ -78,6 +78,7 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 	deletePurchaseOrderUC := financeUC.NewDeletePurchaseOrderUseCase(financeRepo)
 	createCapitalRecordUC := financeUC.NewCreateCapitalRecordUseCase(financeRepo)
 	listCapitalRecordsUC := financeUC.NewListCapitalRecordsUseCase(financeRepo)
+	deleteCapitalRecordUC := financeUC.NewDeleteCapitalRecordUseCase(financeRepo)
 	getTotalCapitalUC := financeUC.NewGetTotalCapitalUseCase(financeRepo)
 	getOrderAllocUC := financeUC.NewGetOrderAllocationUseCase(orderRepo)
 	listCashAccountsUC := financeUC.NewListCashAccountsUseCase(financeRepo)
@@ -247,6 +248,7 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		deletePurchaseOrderUC,
 		createCapitalRecordUC,
 		listCapitalRecordsUC,
+		deleteCapitalRecordUC,
 		getTotalCapitalUC,
 		getOrderAllocUC,
 		listCashAccountsUC,

@@ -11,6 +11,7 @@ type Repository interface {
 	// FinanceTransaction
 	CreateTransaction(ctx context.Context, t *FinanceTransaction) error
 	CreateTransactionIfNotExists(ctx context.Context, t *FinanceTransaction) error // idempotent, skip if reference already exists
+	UpsertShopeeEscrowTransaction(ctx context.Context, t *FinanceTransaction) error // inserts or updates settlement date & amount
 	FindTransactionByID(ctx context.Context, id uuid.UUID) (*FinanceTransaction, error)
 	FindTransactions(ctx context.Context, filter TransactionFilter) ([]*FinanceTransaction, error)
 	DeleteTransaction(ctx context.Context, id uuid.UUID) error
@@ -29,6 +30,7 @@ type Repository interface {
 	// CapitalRecord
 	CreateCapitalRecord(ctx context.Context, cr *CapitalRecord) error
 	FindCapitalRecords(ctx context.Context) ([]*CapitalRecord, error)
+	DeleteCapitalRecord(ctx context.Context, id uuid.UUID) error
 	GetTotalCapital(ctx context.Context) (float64, error)
 }
 

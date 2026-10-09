@@ -285,6 +285,18 @@ func (uc *ListCapitalRecordsUseCase) Execute(ctx context.Context) ([]*finance.Ca
 	return uc.repo.FindCapitalRecords(ctx)
 }
 
+type DeleteCapitalRecordUseCase struct {
+	repo finance.Repository
+}
+
+func NewDeleteCapitalRecordUseCase(repo finance.Repository) *DeleteCapitalRecordUseCase {
+	return &DeleteCapitalRecordUseCase{repo: repo}
+}
+
+func (uc *DeleteCapitalRecordUseCase) Execute(ctx context.Context, id uuid.UUID) error {
+	return uc.repo.DeleteCapitalRecord(ctx, id)
+}
+
 type GetTotalCapitalUseCase struct {
 	repo finance.Repository
 }

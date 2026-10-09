@@ -79,11 +79,9 @@ type prodOrderItemGORM struct {
 	Quantity       int                     `gorm:"column:quantity"`
 	WeightGrams    float64                 `gorm:"column:weight_grams"`
 	PrintTimeHours float64                 `gorm:"column:print_time_hours"`
-	MachineID      *uuid.UUID              `gorm:"column:machine_id;type:uuid"`
 	MatchedSKU     string                  `gorm:"column:matched_sku"`
 	ItemSKU        string                  `gorm:"column:item_sku"`
 	Product        *prodProductGORM        `gorm:"foreignKey:ProductID;references:ID"`
-	Machine        *prodMachineGORM        `gorm:"foreignKey:MachineID;references:ID"`
 	Filaments      []prodOrderFilamentGORM `gorm:"foreignKey:OrderItemID;references:ID"`
 }
 
@@ -132,7 +130,6 @@ func (r *ProductionRepository) GetUnifiedQueue() ([]*production.ProductionQueueI
 
 	var activeOrders []prodOrderGORM
 	if err := r.db.Preload("Items.Product.DefaultMachine").
-		Preload("Items.Machine").
 		Preload("Marketplace").
 		Where("status IN ('PENDING', 'IN_PRODUCTION', 'READY_TO_SHIP', 'PROCESSED')").
 		Find(&activeOrders).Error; err != nil {
@@ -148,13 +145,7 @@ func (r *ProductionRepository) GetUnifiedQueue() ([]*production.ProductionQueueI
 		for _, it := range o.Items {
 			var machineID *string
 			var machineName string
-			if it.MachineID != nil {
-				mid := it.MachineID.String()
-				machineID = &mid
-			}
-			if it.Machine != nil {
-				machineName = it.Machine.Name
-			} else if it.Product != nil && it.Product.DefaultMachine != nil {
+			if it.Product != nil && it.Product.DefaultMachine != nil {
 				mid := it.Product.DefaultMachineID.String()
 				machineID = &mid
 				machineName = it.Product.DefaultMachine.Name
@@ -284,10 +275,6 @@ func (r *ProductionRepository) CompleteJob(source, jobID, machineID, filamentID 
 	}
 	if itemWeight <= 0 {
 		itemWeight = 20.0
-	}
-
-	if targetMachineID == "" && item.MachineID != nil {
-		targetMachineID = item.MachineID.String()
 	}
 
 	var filamentDeductions []struct {

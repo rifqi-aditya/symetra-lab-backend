@@ -2,6 +2,7 @@ package shopee
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -117,6 +118,9 @@ func (uc *ShopeeUseCases) GetValidShop(ctx context.Context, shopID uint64) (*sho
 
 	if shopID > 0 {
 		shop, err = uc.repo.FindShop(ctx, shopID)
+		if err != nil && errors.Is(err, shopee.ErrShopNotFound) {
+			shop, err = uc.repo.FindDefaultShop(ctx)
+		}
 	} else {
 		shop, err = uc.repo.FindDefaultShop(ctx)
 	}
@@ -241,7 +245,55 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 		}
 	}
 
+	// Sinkronisasi otomatis pencairan dana (escrow release) ke finance_transactions
+	_, _ = uc.SyncReleasedEscrows(ctx, shop.ShopID())
+
 	return savedCount, nil
+}
+
+// SyncReleasedEscrows menyinkronkan daftar pencairan dana (escrow released) dari Shopee ke finance_transactions
+func (uc *ShopeeUseCases) SyncReleasedEscrows(ctx context.Context, shopID uint64) (int, error) {
+	shop, err := uc.GetValidShop(ctx, shopID)
+	if err != nil {
+		return 0, err
+	}
+	if uc.shopeeClient == nil {
+		return 0, shopee.ErrPartnerNotConfig
+	}
+
+	now := time.Now().Unix()
+	timeFrom := now - (14 * 86400) // 14 hari terakhir
+
+	escrowResp, err := uc.shopeeClient.GetEscrowList(shop.AccessToken(), shop.ShopID(), timeFrom, now, 50)
+	if err != nil {
+		return 0, err
+	}
+
+	syncedCount := 0
+	for _, item := range escrowResp.Response.EscrowList {
+		if item.EscrowReleaseTime <= 0 || item.PayoutAmount <= 0 {
+			continue
+		}
+		releaseDate := time.Unix(item.EscrowReleaseTime, 0)
+		tx, txErr := finance.NewFinanceTransaction(
+			finance.TypeIncome,
+			finance.CategorySalesShopee,
+			nil,
+			item.PayoutAmount,
+			"Escrow Shopee - Order "+item.OrderSN,
+			releaseDate,
+			"SHOPEE_ESCROW",
+			item.OrderSN,
+			"",
+		)
+		if txErr == nil && uc.financeRepo != nil {
+			if err := uc.financeRepo.UpsertShopeeEscrowTransaction(ctx, tx); err == nil {
+				syncedCount++
+			}
+		}
+	}
+
+	return syncedCount, nil
 }
 
 // SyncSingleOrder mengambil detail dan escrow untuk 1 order_sn spesifik dan menyimpannya ke database
@@ -399,26 +451,22 @@ func (uc *ShopeeUseCases) HandleOrderStatusPush(ctx context.Context, shopID uint
 		return nil, err
 	}
 
-	// Auto-create finance_transaction saat pesanan COMPLETED
+	// Auto-create/update finance_transaction saat pesanan COMPLETED dengan tanggal pelepasan uang (cash settlement date)
 	if ord != nil && ord.OrderStatus() == "COMPLETED" && ord.Escrow() != nil && uc.financeRepo != nil {
-		orderDate := ord.CreatedAt()
-		if ord.CreateTimeShopee() > 0 {
-			orderDate = time.Unix(ord.CreateTimeShopee(), 0)
-		}
+		releaseDate := time.Now()
 		tx, txErr := finance.NewFinanceTransaction(
 			finance.TypeIncome,
 			finance.CategorySalesShopee,
 			nil,
 			ord.Escrow().EscrowAmount(),
 			"Escrow Shopee - Order "+orderSN,
-			orderDate,
+			releaseDate,
 			"SHOPEE_ESCROW",
 			orderSN,
 			"",
 		)
 		if txErr == nil {
-			// CreateTransactionIfNotExists: skip jika order_sn sudah ada (idempotent)
-			_ = uc.financeRepo.CreateTransactionIfNotExists(ctx, tx)
+			_ = uc.financeRepo.UpsertShopeeEscrowTransaction(ctx, tx)
 		}
 	}
 

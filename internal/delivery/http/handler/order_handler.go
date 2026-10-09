@@ -62,9 +62,15 @@ func (h *OrderHandler) GetByID(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, dto.Fail("Unauthorized", err.Error()))
 	}
 
-	id, err := uuid.Parse(c.Param("id"))
+	idParam := c.Param("id")
+	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid order ID", err.Error()))
+		// Jika bukan UUID valid, coba lookup berdasarkan order number atau order sn
+		o, errByNum := h.getUC.ExecuteByOrderNumber(c.Request().Context(), userID, idParam)
+		if errByNum != nil {
+			return c.JSON(http.StatusNotFound, dto.Fail("Order not found", errByNum.Error()))
+		}
+		return c.JSON(http.StatusOK, dto.Success(dto.ToOrderResponse(o)))
 	}
 
 	o, err := h.getUC.Execute(c.Request().Context(), userID, id)

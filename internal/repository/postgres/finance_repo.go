@@ -214,6 +214,54 @@ func (r *FinanceRepository) CreateTransactionIfNotExists(ctx context.Context, t 
 	return nil
 }
 
+// UpsertShopeeEscrowTransaction creates or updates an escrow transaction with the exact settlement date
+func (r *FinanceRepository) UpsertShopeeEscrowTransaction(ctx context.Context, t *finance.FinanceTransaction) error {
+	var existing financeTransactionGORM
+	err := r.db.WithContext(ctx).
+		Where("reference_type = ? AND reference_id = ?", t.ReferenceType(), t.ReferenceID()).
+		First(&existing).Error
+	if err == nil {
+		// Update transaction_date dan amount jika ada pembaruan tanggal pencairan
+		updateFields := map[string]interface{}{
+			"transaction_date": t.TransactionDate(),
+			"amount":           t.Amount(),
+			"updated_at":       time.Now(),
+		}
+		if t.Description() != "" {
+			updateFields["description"] = t.Description()
+		}
+		if err := r.db.WithContext(ctx).Model(&existing).Updates(updateFields).Error; err != nil {
+			return err
+		}
+		_ = SyncCashAccountLedger(ctx, r.db)
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	g := financeTransactionGORM{
+		ID:              t.ID(),
+		Type:            string(t.Type()),
+		Category:        string(t.Category()),
+		CashAccountID:   t.CashAccountID(),
+		Amount:          t.Amount(),
+		Description:     t.Description(),
+		TransactionDate: t.TransactionDate(),
+		ReferenceType:   t.ReferenceType(),
+		ReferenceID:     t.ReferenceID(),
+		Notes:           t.Notes(),
+		CreatedAt:       t.CreatedAt(),
+		UpdatedAt:       t.UpdatedAt(),
+	}
+
+	if err := r.db.WithContext(ctx).Create(&g).Error; err != nil {
+		return err
+	}
+	_ = SyncCashAccountLedger(ctx, r.db)
+	return nil
+}
+
 func (r *FinanceRepository) FindTransactionByID(ctx context.Context, id uuid.UUID) (*finance.FinanceTransaction, error) {
 	var g financeTransactionGORM
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&g).Error
@@ -252,11 +300,23 @@ func (r *FinanceRepository) FindTransactions(ctx context.Context, filter finance
 }
 
 func (r *FinanceRepository) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
-	if err := r.db.WithContext(ctx).Where("id = ?", id).Delete(&financeTransactionGORM{}).Error; err != nil {
-		return err
-	}
-	_ = SyncCashAccountLedger(ctx, r.db)
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var txRecord financeTransactionGORM
+		if err := tx.Where("id = ?", id).First(&txRecord).Error; err == nil {
+			// Jika berasal dari modal usaha (CAPITAL_RECORD), hapus juga dari capital_records
+			if txRecord.ReferenceType == "CAPITAL_RECORD" && txRecord.ReferenceID != "" {
+				if crID, parseErr := uuid.Parse(txRecord.ReferenceID); parseErr == nil {
+					_ = tx.Where("id = ?", crID).Delete(&capitalRecordGORM{}).Error
+				}
+			}
+		}
+
+		if err := tx.Where("id = ?", id).Delete(&financeTransactionGORM{}).Error; err != nil {
+			return err
+		}
+		_ = SyncCashAccountLedger(ctx, tx)
+		return nil
+	})
 }
 
 func (r *FinanceRepository) GetSummary(ctx context.Context, from, to time.Time) (*finance.FinanceSummary, error) {
@@ -410,6 +470,20 @@ func (r *FinanceRepository) FindCapitalRecords(ctx context.Context) ([]*finance.
 		results[i] = mapCapitalRecordGORMToDomain(&list[i])
 	}
 	return results, nil
+}
+
+func (r *FinanceRepository) DeleteCapitalRecord(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. Hapus transaksi terkait di finance_transactions jika ada
+		_ = tx.Where("reference_type = 'CAPITAL_RECORD' AND reference_id = ?", id.String()).Delete(&financeTransactionGORM{}).Error
+
+		// 2. Hapus dari capital_records
+		if err := tx.Where("id = ?", id).Delete(&capitalRecordGORM{}).Error; err != nil {
+			return err
+		}
+		_ = SyncCashAccountLedger(ctx, tx)
+		return nil
+	})
 }
 
 func (r *FinanceRepository) GetTotalCapital(ctx context.Context) (float64, error) {

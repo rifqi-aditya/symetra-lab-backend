@@ -25,6 +25,7 @@ type FinanceHandler struct {
 
 	createCapUC   *financeUC.CreateCapitalRecordUseCase
 	listCapUC     *financeUC.ListCapitalRecordsUseCase
+	deleteCapUC   *financeUC.DeleteCapitalRecordUseCase
 	getTotalCapUC *financeUC.GetTotalCapitalUseCase
 
 	getOrderAllocUC    *financeUC.GetOrderAllocationUseCase
@@ -42,6 +43,7 @@ func NewFinanceHandler(
 	deletePOUC *financeUC.DeletePurchaseOrderUseCase,
 	createCapUC *financeUC.CreateCapitalRecordUseCase,
 	listCapUC *financeUC.ListCapitalRecordsUseCase,
+	deleteCapUC *financeUC.DeleteCapitalRecordUseCase,
 	getTotalCapUC *financeUC.GetTotalCapitalUseCase,
 	getOrderAllocUC *financeUC.GetOrderAllocationUseCase,
 	listCashAccountsUC *financeUC.ListCashAccountsUseCase,
@@ -57,6 +59,7 @@ func NewFinanceHandler(
 		deletePOUC:         deletePOUC,
 		createCapUC:        createCapUC,
 		listCapUC:          listCapUC,
+		deleteCapUC:        deleteCapUC,
 		getTotalCapUC:      getTotalCapUC,
 		getOrderAllocUC:    getOrderAllocUC,
 		listCashAccountsUC: listCashAccountsUC,
@@ -273,6 +276,21 @@ func (h *FinanceHandler) GetTotalCapital(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dto.Fail("Failed to get total capital", err.Error()))
 	}
 	return c.JSON(http.StatusOK, dto.Success(map[string]float64{"total_capital": total}))
+}
+
+// DELETE /api/v1/finance/capital/:id
+func (h *FinanceHandler) DeleteCapitalRecord(c echo.Context) error {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid capital record ID", err.Error()))
+	}
+
+	if err := h.deleteCapUC.Execute(c.Request().Context(), id); err != nil {
+		return c.JSON(http.StatusInternalServerError, dto.Fail("Failed to delete capital record", err.Error()))
+	}
+
+	return c.JSON(http.StatusOK, dto.Success(map[string]string{"message": "Capital record deleted successfully"}))
 }
 
 // GET /api/v1/finance/allocations?channel=ALL&date_from=2026-01-01&date_to=2026-12-31

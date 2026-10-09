@@ -19,10 +19,18 @@ type WebhookPushPayload struct {
 // OrderStatusPushData merepresentasikan detail saat Code == 3 (order_status_push)
 type OrderStatusPushData struct {
 	OrderSN           string        `json:"ordersn"`
+	OrderSNAlt        string        `json:"order_sn,omitempty"`
 	Status            string        `json:"status"`
 	CompletedScenario string        `json:"completed_scenario,omitempty"`
 	UpdateTime        int64         `json:"update_time"`
 	Items             []interface{} `json:"items,omitempty"`
+}
+
+func (d *OrderStatusPushData) GetOrderSN() string {
+	if d.OrderSN != "" {
+		return d.OrderSN
+	}
+	return d.OrderSNAlt
 }
 
 // VerifyWebhookSignature memverifikasi keaslian webhook Shopee menggunakan HMAC-SHA256

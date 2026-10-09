@@ -269,13 +269,13 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 		})
 	}
 
+	orderSN := push.Data.GetOrderSN()
 	log.Printf("[Shopee Webhook] Received push event code=%d, shop_id=%d, order_sn=%s, status=%s",
-		push.Code, push.ShopID, push.Data.OrderSN, push.Data.Status)
+		push.Code, push.ShopID, orderSN, push.Data.Status)
 
-	// Code 3 = order_status_push
-	if push.Code == 3 || push.Data.OrderSN != "" {
+	// Code 3 = order_status_push atau payload mengandung orderSN
+	if push.Code == 3 || orderSN != "" {
 		ctx := req.Context()
-		orderSN := push.Data.OrderSN
 		status := push.Data.Status
 		shopID := push.ShopID
 
