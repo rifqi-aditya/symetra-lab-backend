@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"math"
 	"sort"
 	"sync"
 
@@ -65,10 +66,15 @@ func (uc *ListProductsUseCase) Execute(ctx context.Context, userID uuid.UUID, fi
 
 	items := make([]ProductItemOutput, len(products))
 	for i, p := range products {
+		shopeeRecommended := 0.0
+		if p.BaseSellingPrice() > 0 {
+			shopeeRecommended = math.Ceil(((p.BaseSellingPrice() + 1250.0) / (1.0 - 0.14)) / 100.0) * 100.0
+		}
 		cb := costing.ProductCostBreakdown{
-			BaseHPP:             p.BaseHPP(),
-			BaseSellingPrice:    p.BaseSellingPrice(),
-			TargetMarginPercent: p.TargetMarginPercent(),
+			BaseHPP:                p.BaseHPP(),
+			BaseSellingPrice:       p.BaseSellingPrice(),
+			TargetMarginPercent:    p.TargetMarginPercent(),
+			ShopeeRecommendedPrice: shopeeRecommended,
 		}
 		items[i] = ProductItemOutput{
 			Product:       p,
