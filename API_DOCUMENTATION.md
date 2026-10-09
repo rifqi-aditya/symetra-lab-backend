@@ -327,7 +327,7 @@ Manages direct offline, WhatsApp, or custom client orders.
 Lists all manual orders with line items.
 
 #### `POST /api/v1/orders`
-Creates a manual order. Automatically generates format `ORD-YYYYMMDD-XXXX` and calculates revenue, HPP, and profit.
+Creates a manual order. Automatically generates sequential format `ORD-YYYYMM-XXXX` and calculates revenue, HPP, and profit.
 - **Request Body:**
   ```json
   {

@@ -3,6 +3,9 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -651,4 +654,29 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		PendingEscrowAmount:   agg.PendingEscrowAmount,
 		PendingNetProfit:      agg.PendingNetProfit,
 	}, nil
+}
+
+func (r *OrderRepository) GetNextManualOrderNumber(ctx context.Context, userID uuid.UUID, t time.Time) (string, error) {
+	prefix := fmt.Sprintf("ORD-%s-", t.Format("200601"))
+	var lastOrderNumber string
+	err := r.db.WithContext(ctx).
+		Model(&orderGORM{}).
+		Where("user_id = ? AND order_number LIKE ?", userID, prefix+"%").
+		Order("order_number DESC").
+		Limit(1).
+		Pluck("order_number", &lastOrderNumber).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", err
+	}
+
+	nextSeq := 1
+	if lastOrderNumber != "" {
+		parts := strings.Split(lastOrderNumber, "-")
+		if len(parts) == 3 {
+			if seq, parseErr := strconv.Atoi(parts[2]); parseErr == nil {
+				nextSeq = seq + 1
+			}
+		}
+	}
+	return fmt.Sprintf("%s%04d", prefix, nextSeq), nil
 }

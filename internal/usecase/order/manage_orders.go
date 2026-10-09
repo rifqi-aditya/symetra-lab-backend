@@ -136,6 +136,10 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, userID uuid.UUID, inp
 		return nil, err
 	}
 
+	if nextOrderNum, errSeq := uc.orderRepo.GetNextManualOrderNumber(ctx, userID, time.Now()); errSeq == nil && nextOrderNum != "" {
+		ord.SetOrderNumber(nextOrderNum)
+	}
+
 	if err := uc.orderRepo.Create(ctx, ord); err != nil {
 		return nil, err
 	}

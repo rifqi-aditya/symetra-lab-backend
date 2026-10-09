@@ -1525,7 +1525,7 @@
         },
         "responses": {
           "201": {
-            "description": "Pesanan manual dibuat dengan ORD-YYYYMMDD-XXXX"
+            "description": "Pesanan manual dibuat dengan format sekuensial ORD-YYYYMM-XXXX"
           }
         }
       }

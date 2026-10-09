@@ -98,7 +98,7 @@ func NewOrder(
 	}
 
 	orderID := uuid.New()
-	orderNumber := fmt.Sprintf("ORD-%s-%04d", time.Now().Format("20060102"), rand.Intn(10000))
+	orderNumber := fmt.Sprintf("ORD-%s-%04d", time.Now().Format("200601"), rand.Intn(9999)+1)
 
 	var totalRev, totalHPP float64
 	var totalFilament, totalComponent, totalPackaging, totalElectricity, totalMaintenance, totalDepreciation float64
@@ -381,6 +381,11 @@ func (o *Order) SetLogistics(carrier, tracking string, shipBy *time.Time) {
 }
 func (o *Order) SetFinancialStatus(status string) {
 	o.financialStatus = status
+}
+func (o *Order) SetOrderNumber(orderNumber string) {
+	if orderNumber != "" {
+		o.orderNumber = orderNumber
+	}
 }
 
 func (item *OrderItem) ID() uuid.UUID               { return item.id }
