@@ -66,6 +66,25 @@ func NewFinanceHandler(
 	}
 }
 
+// Zona waktu Indonesia Barat (WIB = UTC+7)
+var wibLocation = time.FixedZone("WIB", 7*3600)
+
+func parseWIBDateRange(fromStr, toStr string) (*time.Time, *time.Time) {
+	var fromPtr, toPtr *time.Time
+	if fromStr != "" {
+		if t, err := time.ParseInLocation("2006-01-02", fromStr, wibLocation); err == nil {
+			fromPtr = &t
+		}
+	}
+	if toStr != "" {
+		if t, err := time.ParseInLocation("2006-01-02", toStr, wibLocation); err == nil {
+			end := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, wibLocation)
+			toPtr = &end
+		}
+	}
+	return fromPtr, toPtr
+}
+
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
 // GET /api/v1/finance/transactions?type=EXPENSE&category=FILAMENT&date_from=2026-01-01&date_to=2026-12-31
@@ -79,19 +98,9 @@ func (h *FinanceHandler) ListTransactions(c echo.Context) error {
 		Type:     finance.TransactionType(q.Type),
 		Category: finance.TransactionCategory(q.Category),
 	}
-	if q.DateFrom != "" {
-		t, err := time.Parse("2006-01-02", q.DateFrom)
-		if err == nil {
-			filter.DateFrom = &t
-		}
-	}
-	if q.DateTo != "" {
-		t, err := time.Parse("2006-01-02", q.DateTo)
-		if err == nil {
-			end := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, t.Location())
-			filter.DateTo = &end
-		}
-	}
+	fromPtr, toPtr := parseWIBDateRange(q.DateFrom, q.DateTo)
+	filter.DateFrom = fromPtr
+	filter.DateTo = toPtr
 
 	txs, err := h.listTxUC.Execute(c.Request().Context(), filter)
 	if err != nil {
@@ -150,20 +159,17 @@ func (h *FinanceHandler) GetSummary(c echo.Context) error {
 		toStr = c.QueryParam("to")
 	}
 
-	now := time.Now()
+	now := time.Now().In(wibLocation)
 	// Default: rentang seluruh waktu jika tidak ada filter parameter
-	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, wibLocation)
 	to := now.AddDate(1, 0, 0)
 
-	if fromStr != "" {
-		if t, err := time.Parse("2006-01-02", fromStr); err == nil {
-			from = t
-		}
+	fromPtr, toPtr := parseWIBDateRange(fromStr, toStr)
+	if fromPtr != nil {
+		from = *fromPtr
 	}
-	if toStr != "" {
-		if t, err := time.Parse("2006-01-02", toStr); err == nil {
-			to = time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, t.Location())
-		}
+	if toPtr != nil {
+		to = *toPtr
 	}
 
 	summary, err := h.getSummaryUC.Execute(c.Request().Context(), from, to)
@@ -305,18 +311,7 @@ func (h *FinanceHandler) GetOrderAllocations(c echo.Context) error {
 		channel = "ALL"
 	}
 
-	var fromPtr, toPtr *time.Time
-	if fromStr := c.QueryParam("date_from"); fromStr != "" {
-		if t, err := time.Parse("2006-01-02", fromStr); err == nil {
-			fromPtr = &t
-		}
-	}
-	if toStr := c.QueryParam("date_to"); toStr != "" {
-		if t, err := time.Parse("2006-01-02", toStr); err == nil {
-			end := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, t.Location())
-			toPtr = &end
-		}
-	}
+	fromPtr, toPtr := parseWIBDateRange(c.QueryParam("date_from"), c.QueryParam("date_to"))
 
 	summary, err := h.getOrderAllocUC.Execute(c.Request().Context(), userID, channel, fromPtr, toPtr)
 	if err != nil {

@@ -15,6 +15,7 @@ import (
 	postgresRepo "symetra-lab-backend-v2/internal/repository/postgres"
 	categoryUC "symetra-lab-backend-v2/internal/usecase/category"
 	componentUC "symetra-lab-backend-v2/internal/usecase/component"
+	dashboardUC "symetra-lab-backend-v2/internal/usecase/dashboard"
 	filamentUC "symetra-lab-backend-v2/internal/usecase/filament"
 	financeUC "symetra-lab-backend-v2/internal/usecase/finance"
 	machineUC "symetra-lab-backend-v2/internal/usecase/machine"
@@ -59,6 +60,7 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 	shopeeRepo := postgresRepo.NewShopeeRepository(db)
 	productionRepo := postgresRepo.NewProductionRepository(db)
 	financeRepo := postgresRepo.NewFinanceRepository(db)
+	dashboardRepo := postgresRepo.NewDashboardRepository(db)
 
 	shopeeClient := pkgShopee.NewClient(
 		cfg.ShopeePartnerID,
@@ -254,6 +256,9 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		listCashAccountsUC,
 	)
 
+	getDashboardOverviewUC := dashboardUC.NewGetDashboardOverviewUseCase(dashboardRepo)
+	dashboardHandler := handler.NewDashboardHandler(getDashboardOverviewUC)
+
 	e := echo.New()
 	e.HideBanner = true
 
@@ -301,6 +306,7 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		ShopConfigHandler: shopConfigHandler,
 		ProductionHandler: productionHandler,
 		FinanceHandler:    financeHandler,
+		DashboardHandler:  dashboardHandler,
 	})
 
 	log.Println("[Symetra Lab v2] Echo application initialized successfully.")

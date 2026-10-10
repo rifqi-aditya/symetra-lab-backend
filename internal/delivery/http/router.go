@@ -25,6 +25,7 @@ type RouterConfig struct {
 	ShopConfigHandler *handler.ShopConfigHandler
 	ProductionHandler *handler.ProductionHandler
 	FinanceHandler    *handler.FinanceHandler
+	DashboardHandler  *handler.DashboardHandler
 }
 
 func SetupRouter(e *echo.Echo, cfg RouterConfig) {
@@ -255,5 +256,11 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		financeGroup.DELETE("/capital/:id", cfg.FinanceHandler.DeleteCapitalRecord)
 		financeGroup.GET("/capital/total", cfg.FinanceHandler.GetTotalCapital)
 		financeGroup.GET("/cash-accounts", cfg.FinanceHandler.ListCashAccounts)
+	}
+
+	// Dashboard Overview
+	if cfg.DashboardHandler != nil {
+		dashboardGroup := protected.Group("/dashboard")
+		dashboardGroup.GET("/overview", cfg.DashboardHandler.GetOverview)
 	}
 }

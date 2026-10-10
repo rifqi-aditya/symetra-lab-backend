@@ -9,6 +9,9 @@ import (
 	financeUC "symetra-lab-backend-v2/internal/usecase/finance"
 )
 
+// Zona waktu Indonesia Barat (WIB = UTC+7)
+var wibLocation = time.FixedZone("WIB", 7*3600)
+
 // ─── FinanceTransaction DTOs ───────────────────────────────────────────────────
 
 type CreateTransactionRequest struct {
@@ -215,7 +218,7 @@ func ToCapitalRecordResponse(cr *finance.CapitalRecord) CapitalRecordResponse {
 // ─── Input mappers (Request → UseCase Input) ─────────────────────────────────
 
 func ToCreateTransactionInput(req CreateTransactionRequest) (financeUC.CreateTransactionInput, error) {
-	date, err := time.Parse("2006-01-02", req.TransactionDate)
+	date, err := time.ParseInLocation("2006-01-02", req.TransactionDate, wibLocation)
 	if err != nil {
 		return financeUC.CreateTransactionInput{}, err
 	}
@@ -243,7 +246,7 @@ func ToCreateTransactionInput(req CreateTransactionRequest) (financeUC.CreateTra
 }
 
 func ToCreatePurchaseOrderInput(req CreatePurchaseOrderRequest) (financeUC.CreatePurchaseOrderInput, error) {
-	date, err := time.Parse("2006-01-02", req.PurchaseDate)
+	date, err := time.ParseInLocation("2006-01-02", req.PurchaseDate, wibLocation)
 	if err != nil {
 		return financeUC.CreatePurchaseOrderInput{}, err
 	}
@@ -266,7 +269,7 @@ func ToCreatePurchaseOrderInput(req CreatePurchaseOrderRequest) (financeUC.Creat
 }
 
 func ToCreateCapitalRecordInput(req CreateCapitalRecordRequest) (financeUC.CreateCapitalRecordInput, error) {
-	date, err := time.Parse("2006-01-02", req.RecordDate)
+	date, err := time.ParseInLocation("2006-01-02", req.RecordDate, wibLocation)
 	if err != nil {
 		return financeUC.CreateCapitalRecordInput{}, err
 	}
