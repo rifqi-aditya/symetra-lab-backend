@@ -22,7 +22,6 @@ import (
 	orderUC "symetra-lab-backend-v2/internal/usecase/order"
 	packagingUC "symetra-lab-backend-v2/internal/usecase/packaging"
 	productUC "symetra-lab-backend-v2/internal/usecase/product"
-	productionUC "symetra-lab-backend-v2/internal/usecase/production"
 	shopeeUC "symetra-lab-backend-v2/internal/usecase/shopee"
 	shopUC "symetra-lab-backend-v2/internal/usecase/shopconfig"
 	pkgShopee "symetra-lab-backend-v2/pkg/shopee"
@@ -58,7 +57,6 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 	componentRepo := postgresRepo.NewComponentRepository(db)
 	packagingRepo := postgresRepo.NewPackagingRepository(db)
 	shopeeRepo := postgresRepo.NewShopeeRepository(db)
-	productionRepo := postgresRepo.NewProductionRepository(db)
 	financeRepo := postgresRepo.NewFinanceRepository(db)
 	dashboardRepo := postgresRepo.NewDashboardRepository(db)
 
@@ -152,9 +150,6 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 	updateMarketplaceUC := shopUC.NewUpdateMarketplaceUseCase(shopConfigRepo)
 	deleteMarketplaceUC := shopUC.NewDeleteMarketplaceUseCase(shopConfigRepo)
 
-	getProductionQueueUC := productionUC.NewGetProductionQueueUseCase(productionRepo)
-	completeJobUC := productionUC.NewCompleteJobUseCase(productionRepo)
-
 	authHandler := handler.NewAuthHandler(cfg)
 	productHandler := handler.NewProductHandler(
 		listProductsUC,
@@ -220,11 +215,6 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		createMarketplaceUC,
 		updateMarketplaceUC,
 		deleteMarketplaceUC,
-	)
-
-	productionHandler := handler.NewProductionHandler(
-		getProductionQueueUC,
-		completeJobUC,
 	)
 
 	packagingHandler := handler.NewPackagingHandler(
@@ -304,7 +294,6 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		PackagingHandler:  packagingHandler,
 		ShopeeHandler:     shopeeHandler,
 		ShopConfigHandler: shopConfigHandler,
-		ProductionHandler: productionHandler,
 		FinanceHandler:    financeHandler,
 		DashboardHandler:  dashboardHandler,
 	})

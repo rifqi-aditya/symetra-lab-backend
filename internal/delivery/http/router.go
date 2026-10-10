@@ -23,7 +23,6 @@ type RouterConfig struct {
 	PackagingHandler *handler.PackagingHandler
 	ShopeeHandler    *handler.ShopeeHandler
 	ShopConfigHandler *handler.ShopConfigHandler
-	ProductionHandler *handler.ProductionHandler
 	FinanceHandler    *handler.FinanceHandler
 	DashboardHandler  *handler.DashboardHandler
 }
@@ -231,13 +230,6 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		configGroup.DELETE("/marketplaces/:id", cfg.ShopConfigHandler.DeleteMarketplace)
 	}
 
-
-	// Production Queue & Auto-Deduct
-	if cfg.ProductionHandler != nil {
-		prodGroup := protected.Group("/production")
-		prodGroup.GET("/queue", cfg.ProductionHandler.GetQueue)
-		prodGroup.POST("/complete-job", cfg.ProductionHandler.CompleteJob)
-	}
 
 	// Finance Module
 	if cfg.FinanceHandler != nil {
