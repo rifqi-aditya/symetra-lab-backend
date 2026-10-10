@@ -918,5 +918,6 @@ func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error)
 	if res.Error != nil {
 		return 0, res.Error
 	}
+	_ = SyncCashAccountLedger(ctx, r.db)
 	return int(res.RowsAffected), nil
 }
