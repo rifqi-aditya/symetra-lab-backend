@@ -361,7 +361,7 @@ func (r *ProductRepository) GetTotalSoldMap(ctx context.Context, userID uuid.UUI
 		SELECT oi.product_id, COALESCE(SUM(oi.quantity), 0)::integer as total_sold
 		FROM order_items oi
 		JOIN orders o ON o.id = oi.order_id
-		WHERE o.status != 'CANCELLED'
+		WHERE o.status NOT IN ('CANCELLED', 'UNPAID')
 		  AND oi.product_id IS NOT NULL
 		GROUP BY oi.product_id
 	`

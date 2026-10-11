@@ -460,16 +460,105 @@ func (r *FinanceRepository) CreateCapitalRecord(ctx context.Context, cr *finance
 	return r.db.WithContext(ctx).Create(&g).Error
 }
 
-func (r *FinanceRepository) FindCapitalRecords(ctx context.Context) ([]*finance.CapitalRecord, error) {
-	var list []capitalRecordGORM
-	if err := r.db.WithContext(ctx).Order("record_date DESC").Find(&list).Error; err != nil {
+func (r *FinanceRepository) FindCapitalRecordByID(ctx context.Context, id uuid.UUID) (*finance.CapitalRecord, error) {
+	var g capitalRecordGORM
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&g).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, finance.ErrCapitalRecordNotFound
+		}
 		return nil, err
 	}
+	return mapCapitalRecordGORMToDomain(&g), nil
+}
+
+func (r *FinanceRepository) FindCapitalRecords(ctx context.Context) ([]*finance.CapitalRecord, error) {
+	records, _, err := r.FindCapitalRecordsFiltered(ctx, finance.CapitalFilter{})
+	return records, err
+}
+
+func (r *FinanceRepository) FindCapitalRecordsFiltered(ctx context.Context, filter finance.CapitalFilter) ([]*finance.CapitalRecord, int64, error) {
+	q := r.db.WithContext(ctx).Model(&capitalRecordGORM{})
+
+	if filter.Type != "" {
+		q = q.Where("type = ?", string(filter.Type))
+	}
+	if filter.Search != "" {
+		pattern := "%" + filter.Search + "%"
+		q = q.Where("description ILIKE ? OR notes ILIKE ?", pattern, pattern)
+	}
+	if filter.DateFrom != nil {
+		q = q.Where("record_date >= ?", *filter.DateFrom)
+	}
+	if filter.DateTo != nil {
+		q = q.Where("record_date <= ?", *filter.DateTo)
+	}
+
+	var totalCount int64
+	if err := q.Count(&totalCount).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Default sort by date descending, then created_at descending
+	q = q.Order("record_date DESC, created_at DESC")
+
+	if filter.Limit > 0 {
+		q = q.Limit(filter.Limit)
+	}
+	if filter.Page > 1 && filter.Limit > 0 {
+		offset := (filter.Page - 1) * filter.Limit
+		q = q.Offset(offset)
+	}
+
+	var list []capitalRecordGORM
+	if err := q.Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+
 	results := make([]*finance.CapitalRecord, len(list))
 	for i := range list {
 		results[i] = mapCapitalRecordGORMToDomain(&list[i])
 	}
-	return results, nil
+	return results, totalCount, nil
+}
+
+func (r *FinanceRepository) UpdateCapitalRecord(ctx context.Context, cr *finance.CapitalRecord) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. Update capital_records
+		updates := map[string]interface{}{
+			"type":        string(cr.RecordType()),
+			"amount":      cr.Amount(),
+			"description": cr.Description(),
+			"record_date": cr.RecordDate(),
+			"notes":       cr.Notes(),
+			"updated_at":  time.Now(),
+		}
+		if err := tx.Model(&capitalRecordGORM{}).Where("id = ?", cr.ID()).Updates(updates).Error; err != nil {
+			return err
+		}
+
+		// 2. Tentukan kategori transaksi keuangan yang sinkron
+		category := string(finance.CategoryAdditionalCapital)
+		if cr.RecordType() == finance.CapitalInitial {
+			category = string(finance.CategoryInitialCapital)
+		}
+
+		// 3. Update transaksi keuangan terkait di finance_transactions agar kas & buku besar selalu akurat
+		txUpdates := map[string]interface{}{
+			"type":             string(finance.TypeCapitalIn),
+			"category":         category,
+			"amount":           cr.Amount(),
+			"description":      cr.Description(),
+			"transaction_date": cr.RecordDate(),
+			"notes":            cr.Notes(),
+			"updated_at":       time.Now(),
+		}
+		_ = tx.Model(&financeTransactionGORM{}).
+			Where("reference_type = 'CAPITAL_RECORD' AND reference_id = ?", cr.ID().String()).
+			Updates(txUpdates).Error
+
+		_ = SyncCashAccountLedger(ctx, tx)
+		return nil
+	})
 }
 
 func (r *FinanceRepository) DeleteCapitalRecord(ctx context.Context, id uuid.UUID) error {
@@ -494,6 +583,33 @@ func (r *FinanceRepository) GetTotalCapital(ctx context.Context) (float64, error
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&total).Error
 	return total, err
+}
+
+func (r *FinanceRepository) GetCapitalSummary(ctx context.Context) (*finance.CapitalSummary, error) {
+	type summaryResult struct {
+		TotalCapital      float64 `gorm:"column:total_capital"`
+		InitialCapital    float64 `gorm:"column:initial_capital"`
+		AdditionalCapital float64 `gorm:"column:additional_capital"`
+		TotalCount        int64   `gorm:"column:total_count"`
+	}
+	var res summaryResult
+	query := `
+		SELECT 
+			COALESCE(SUM(amount), 0) AS total_capital,
+			COALESCE(SUM(CASE WHEN type = 'INITIAL' THEN amount ELSE 0 END), 0) AS initial_capital,
+			COALESCE(SUM(CASE WHEN type = 'ADDITION' THEN amount ELSE 0 END), 0) AS additional_capital,
+			COUNT(*) AS total_count
+		FROM capital_records
+	`
+	if err := r.db.WithContext(ctx).Raw(query).Scan(&res).Error; err != nil {
+		return nil, err
+	}
+	return &finance.CapitalSummary{
+		TotalCapital:      res.TotalCapital,
+		InitialCapital:    res.InitialCapital,
+		AdditionalCapital: res.AdditionalCapital,
+		TotalCount:        res.TotalCount,
+	}, nil
 }
 
 // ─── CashAccount Methods ─────────────────────────────────────────────────────────

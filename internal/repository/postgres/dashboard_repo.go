@@ -79,27 +79,27 @@ func (r *DashboardRepository) GetOverview(ctx context.Context) (*dashboard.Dashb
 	var kpi kpiRow
 	kpiQuery := `
 		SELECT
-			COALESCE(SUM(CASE WHEN status != 'CANCELLED' THEN gross_amount ELSE 0 END), 0) AS total_revenue,
-			COALESCE(SUM(CASE WHEN status != 'CANCELLED' THEN net_profit ELSE 0 END), 0) AS total_profit,
-			COUNT(CASE WHEN status NOT IN ('COMPLETED', 'CANCELLED', 'DELIVERED') THEN 1 END) AS active_orders_count,
+			COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') THEN gross_amount ELSE 0 END), 0) AS total_revenue,
+			COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') THEN net_profit ELSE 0 END), 0) AS total_profit,
+			COUNT(CASE WHEN status NOT IN ('COMPLETED', 'CANCELLED', 'DELIVERED', 'UNPAID') THEN 1 END) AS active_orders_count,
 
 			COUNT(CASE WHEN status IN ('QUEUED', 'PROCESSED', 'PENDING') THEN 1 END) AS queued_orders_count,
 			COUNT(CASE WHEN status IN ('PRINTING', 'IN_PRODUCTION') THEN 1 END) AS printing_orders_count,
 			COUNT(CASE WHEN status IN ('READY_TO_SHIP', 'DONE') THEN 1 END) AS ready_to_ship_orders_count,
 			COUNT(CASE WHEN status IN ('SHIPPED', 'TO_CONFIRM_RECEIVE') THEN 1 END) AS shipped_orders_count,
 
-			COALESCE(SUM(CASE WHEN status != 'CANCELLED' AND created_at >= ? AND created_at <= ? THEN gross_amount ELSE 0 END), 0) AS today_revenue,
-			COALESCE(SUM(CASE WHEN status != 'CANCELLED' AND created_at >= ? AND created_at <= ? THEN net_profit ELSE 0 END), 0) AS today_profit,
-			COUNT(CASE WHEN status != 'CANCELLED' AND created_at >= ? AND created_at <= ? THEN 1 END) AS today_orders_count,
+			COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') AND created_at >= ? AND created_at <= ? THEN gross_amount ELSE 0 END), 0) AS today_revenue,
+			COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') AND created_at >= ? AND created_at <= ? THEN net_profit ELSE 0 END), 0) AS today_profit,
+			COUNT(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') AND created_at >= ? AND created_at <= ? THEN 1 END) AS today_orders_count,
 
-			COALESCE(SUM(CASE WHEN status != 'CANCELLED' AND created_at >= ? AND created_at <= ? THEN gross_amount ELSE 0 END), 0) AS this_month_revenue,
-			COALESCE(SUM(CASE WHEN status != 'CANCELLED' AND created_at >= ? AND created_at <= ? THEN net_profit ELSE 0 END), 0) AS this_month_profit,
+			COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') AND created_at >= ? AND created_at <= ? THEN gross_amount ELSE 0 END), 0) AS this_month_revenue,
+			COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') AND created_at >= ? AND created_at <= ? THEN net_profit ELSE 0 END), 0) AS this_month_profit,
 
-			COALESCE(SUM(CASE WHEN status != 'CANCELLED' AND created_at >= ? AND created_at <= ? THEN gross_amount ELSE 0 END), 0) AS last_month_revenue,
-			COALESCE(SUM(CASE WHEN status != 'CANCELLED' AND created_at >= ? AND created_at <= ? THEN net_profit ELSE 0 END), 0) AS last_month_profit,
+			COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') AND created_at >= ? AND created_at <= ? THEN gross_amount ELSE 0 END), 0) AS last_month_revenue,
+			COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED', 'UNPAID') AND created_at >= ? AND created_at <= ? THEN net_profit ELSE 0 END), 0) AS last_month_profit,
 
-			COALESCE(SUM(CASE WHEN channel = 'SHOPEE' AND payment_status != 'PAID' AND status NOT IN ('CANCELLED', 'COMPLETED') THEN net_amount ELSE 0 END), 0) AS pending_escrow_amount,
-			COUNT(CASE WHEN channel = 'SHOPEE' AND payment_status != 'PAID' AND status NOT IN ('CANCELLED', 'COMPLETED') THEN 1 END) AS pending_escrow_orders_count
+			COALESCE(SUM(CASE WHEN channel = 'SHOPEE' AND payment_status != 'PAID' AND status NOT IN ('CANCELLED', 'COMPLETED', 'UNPAID') THEN net_amount ELSE 0 END), 0) AS pending_escrow_amount,
+			COUNT(CASE WHEN channel = 'SHOPEE' AND payment_status != 'PAID' AND status NOT IN ('CANCELLED', 'COMPLETED', 'UNPAID') THEN 1 END) AS pending_escrow_orders_count
 		FROM orders;
 	`
 	if err := r.db.WithContext(ctx).Raw(kpiQuery,
@@ -146,7 +146,7 @@ func (r *DashboardRepository) GetOverview(ctx context.Context) (*dashboard.Dashb
 		SELECT COUNT(*)
 		FROM orders o
 		LEFT JOIN order_marketplace_details m ON m.order_id = o.id
-		WHERE o.status NOT IN ('SHIPPED', 'TO_CONFIRM_RECEIVE', 'DELIVERED', 'COMPLETED', 'CANCELLED')
+		WHERE o.status NOT IN ('SHIPPED', 'TO_CONFIRM_RECEIVE', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'UNPAID')
 		  AND (
 		    (m.ship_by_date_time IS NOT NULL AND m.ship_by_date_time <= ?)
 		    OR (m.ship_by_date IS NOT NULL AND to_timestamp(m.ship_by_date) <= ?)
@@ -163,7 +163,7 @@ func (r *DashboardRepository) GetOverview(ctx context.Context) (*dashboard.Dashb
 		SELECT COUNT(DISTINCT o.id)
 		FROM orders o
 		JOIN order_items it ON it.order_id = o.id
-		WHERE o.status != 'CANCELLED' AND it.mapping_status = 'UNMAPPED';
+		WHERE o.status NOT IN ('CANCELLED', 'UNPAID') AND it.mapping_status = 'UNMAPPED';
 	`
 	if err := r.db.WithContext(ctx).Raw(unmappedQuery).Scan(&unmappedCount).Error; err != nil {
 		return nil, fmt.Errorf("failed to query unmapped count: %w", err)
@@ -208,7 +208,7 @@ func (r *DashboardRepository) GetOverview(ctx context.Context) (*dashboard.Dashb
 			COUNT(*) AS count,
 			COALESCE(SUM(gross_amount), 0) AS revenue
 		FROM orders
-		WHERE status != 'CANCELLED'
+		WHERE status NOT IN ('CANCELLED', 'UNPAID')
 		GROUP BY channel
 		ORDER BY revenue DESC;
 	`).Scan(&ordersBySource).Error; err != nil {
@@ -225,7 +225,7 @@ func (r *DashboardRepository) GetOverview(ctx context.Context) (*dashboard.Dashb
 			SUM(it.selling_price * it.quantity) AS total_revenue
 		FROM order_items it
 		JOIN orders o ON o.id = it.order_id
-		WHERE o.status != 'CANCELLED'
+		WHERE o.status NOT IN ('CANCELLED', 'UNPAID')
 		GROUP BY it.product_name
 		ORDER BY total_qty DESC, total_revenue DESC
 		LIMIT 5;
@@ -249,6 +249,7 @@ func (r *DashboardRepository) GetOverview(ctx context.Context) (*dashboard.Dashb
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT id, order_number, customer_name, COALESCE(channel, 'MANUAL') as channel, status, gross_amount, net_profit, created_at
 		FROM orders
+		WHERE status NOT IN ('CANCELLED', 'UNPAID')
 		ORDER BY created_at DESC
 		LIMIT 5;
 	`).Scan(&recentRows).Error; err != nil {
@@ -282,7 +283,7 @@ func (r *DashboardRepository) GetOverview(ctx context.Context) (*dashboard.Dashb
 			COALESCE(SUM(gross_amount), 0) AS omzet,
 			COALESCE(SUM(net_profit), 0) AS profit
 		FROM orders
-		WHERE status != 'CANCELLED'
+		WHERE status NOT IN ('CANCELLED', 'UNPAID')
 		  AND created_at >= ?
 		GROUP BY day_key;
 	`

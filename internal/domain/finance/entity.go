@@ -428,6 +428,40 @@ func (c *CapitalRecord) SetLinkedTransaction(txID uuid.UUID) {
 	c.updatedAt = time.Now()
 }
 
+func (c *CapitalRecord) Update(recordType CapitalRecordType, amount float64, description string, recordDate time.Time, notes string) error {
+	if amount <= 0 {
+		return ErrAmountMustBePositive
+	}
+	if description == "" {
+		return ErrDescriptionRequired
+	}
+	c.recordType = recordType
+	c.amount = amount
+	c.description = description
+	c.recordDate = recordDate
+	c.notes = notes
+	c.updatedAt = time.Now()
+	return nil
+}
+
+// ─── CapitalFilter & Summary ──────────────────────────────────────────────────
+
+type CapitalFilter struct {
+	Type     CapitalRecordType // "INITIAL", "ADDITION", or "" for all
+	Search   string            // matches description or notes
+	DateFrom *time.Time
+	DateTo   *time.Time
+	Page     int
+	Limit    int
+}
+
+type CapitalSummary struct {
+	TotalCapital      float64 `json:"total_capital"`
+	InitialCapital    float64 `json:"initial_capital"`
+	AdditionalCapital float64 `json:"additional_capital"`
+	TotalCount        int64   `json:"total_count"`
+}
+
 // ─── FinanceSummary (untuk dashboard) ────────────────────────────────────────
 
 type FinanceSummary struct {

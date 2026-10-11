@@ -459,7 +459,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 				SELECT COUNT(*) 
 				FROM order_items oi
 				JOIN orders o2 ON o2.id = oi.order_id
-				WHERE o2.user_id = ? AND oi.mapping_status = 'UNMAPPED'
+				WHERE o2.user_id = ? AND o2.status NOT IN ('CANCELLED', 'UNPAID') AND oi.mapping_status = 'UNMAPPED'
 			), 0) AS unmapped_items_count,
 			COALESCE(COUNT(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN 1 END), 0) AS pending_orders_count,
 			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN (CASE WHEN gross_amount > 0 THEN gross_amount ELSE (net_amount + channel_fee) END) ELSE 0 END), 0) AS pending_gross_sales,
@@ -467,7 +467,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 			COALESCE(SUM(CASE WHEN payment_status != 'PAID' AND channel = 'SHOPEE' THEN net_profit ELSE 0 END), 0) AS pending_net_profit
 		FROM orders
 		WHERE user_id = ? 
-		  AND status != 'CANCELLED'
+		  AND status NOT IN ('CANCELLED', 'UNPAID')
 		  AND (? = 'ALL' OR channel = ?)
 		  AND (?::timestamptz IS NULL OR created_at >= ?)
 		  AND (?::timestamptz IS NULL OR created_at <= ?)

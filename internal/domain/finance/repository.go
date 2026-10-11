@@ -29,9 +29,13 @@ type Repository interface {
 
 	// CapitalRecord
 	CreateCapitalRecord(ctx context.Context, cr *CapitalRecord) error
+	FindCapitalRecordByID(ctx context.Context, id uuid.UUID) (*CapitalRecord, error)
 	FindCapitalRecords(ctx context.Context) ([]*CapitalRecord, error)
+	FindCapitalRecordsFiltered(ctx context.Context, filter CapitalFilter) ([]*CapitalRecord, int64, error)
+	UpdateCapitalRecord(ctx context.Context, cr *CapitalRecord) error
 	DeleteCapitalRecord(ctx context.Context, id uuid.UUID) error
 	GetTotalCapital(ctx context.Context) (float64, error)
+	GetCapitalSummary(ctx context.Context) (*CapitalSummary, error)
 }
 
 type TransactionFilter struct {

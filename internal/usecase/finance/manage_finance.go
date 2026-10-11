@@ -285,6 +285,56 @@ func (uc *ListCapitalRecordsUseCase) Execute(ctx context.Context) ([]*finance.Ca
 	return uc.repo.FindCapitalRecords(ctx)
 }
 
+func (uc *ListCapitalRecordsUseCase) ExecuteFiltered(ctx context.Context, filter finance.CapitalFilter) ([]*finance.CapitalRecord, int64, error) {
+	return uc.repo.FindCapitalRecordsFiltered(ctx, filter)
+}
+
+type GetCapitalRecordByIDUseCase struct {
+	repo finance.Repository
+}
+
+func NewGetCapitalRecordByIDUseCase(repo finance.Repository) *GetCapitalRecordByIDUseCase {
+	return &GetCapitalRecordByIDUseCase{repo: repo}
+}
+
+func (uc *GetCapitalRecordByIDUseCase) Execute(ctx context.Context, id uuid.UUID) (*finance.CapitalRecord, error) {
+	return uc.repo.FindCapitalRecordByID(ctx, id)
+}
+
+type UpdateCapitalRecordInput struct {
+	ID          uuid.UUID
+	Type        finance.CapitalRecordType
+	Amount      float64
+	Description string
+	RecordDate  time.Time
+	Notes       string
+}
+
+type UpdateCapitalRecordUseCase struct {
+	repo finance.Repository
+}
+
+func NewUpdateCapitalRecordUseCase(repo finance.Repository) *UpdateCapitalRecordUseCase {
+	return &UpdateCapitalRecordUseCase{repo: repo}
+}
+
+func (uc *UpdateCapitalRecordUseCase) Execute(ctx context.Context, input UpdateCapitalRecordInput) (*finance.CapitalRecord, error) {
+	cr, err := uc.repo.FindCapitalRecordByID(ctx, input.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cr.Update(input.Type, input.Amount, input.Description, input.RecordDate, input.Notes); err != nil {
+		return nil, err
+	}
+
+	if err := uc.repo.UpdateCapitalRecord(ctx, cr); err != nil {
+		return nil, err
+	}
+
+	return cr, nil
+}
+
 type DeleteCapitalRecordUseCase struct {
 	repo finance.Repository
 }
@@ -307,6 +357,18 @@ func NewGetTotalCapitalUseCase(repo finance.Repository) *GetTotalCapitalUseCase 
 
 func (uc *GetTotalCapitalUseCase) Execute(ctx context.Context) (float64, error) {
 	return uc.repo.GetTotalCapital(ctx)
+}
+
+type GetCapitalSummaryUseCase struct {
+	repo finance.Repository
+}
+
+func NewGetCapitalSummaryUseCase(repo finance.Repository) *GetCapitalSummaryUseCase {
+	return &GetCapitalSummaryUseCase{repo: repo}
+}
+
+func (uc *GetCapitalSummaryUseCase) Execute(ctx context.Context) (*finance.CapitalSummary, error) {
+	return uc.repo.GetCapitalSummary(ctx)
 }
 
 type GetOrderAllocationUseCase struct {

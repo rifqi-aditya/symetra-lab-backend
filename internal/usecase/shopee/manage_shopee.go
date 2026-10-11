@@ -219,6 +219,20 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 			carrier = o.PackageList[0].ShippingCarrier
 		}
 
+		var itemsTotal float64
+		for _, it := range items {
+			p := it.DiscountedPrice()
+			if p <= 0 {
+				p = it.OriginalPrice()
+			}
+			itemsTotal += p * float64(it.Quantity())
+		}
+
+		var escrow *shopee.ShopeeOrderEscrow
+		if o.OrderStatus != "UNPAID" && o.OrderStatus != "CANCELLED" {
+			escrow = uc.buildEscrowForOrder(shop, o.OrderSN, o.OrderStatus, itemsTotal)
+		}
+
 		domainOrder := shopee.ReconstructOrder(
 			o.OrderSN,
 			shop.ShopID(),
@@ -235,7 +249,7 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 			o.CreateTime,
 			o.UpdateTime,
 			items,
-			nil,
+			escrow,
 			time.Unix(o.CreateTime, 0),
 			time.Unix(o.UpdateTime, 0),
 		)
@@ -346,65 +360,18 @@ func (uc *ShopeeUseCases) SyncSingleOrder(ctx context.Context, shopID uint64, or
 		shipByDateTime = &t
 	}
 
-	var escrow *shopee.ShopeeOrderEscrow
-	// Coba ambil escrow jika pesanan sudah diproses atau selesai
-	if o.OrderStatus == "COMPLETED" || o.OrderStatus == "SHIPPED" || o.OrderStatus == "PROCESSED" {
-		escrowResp, err := uc.shopeeClient.GetEscrowDetail(shop.AccessToken(), shop.ShopID(), orderSN)
-		if err == nil && escrowResp != nil {
-			inc := escrowResp.Response.OrderIncome
-			commRule := ""
-			commPct := 0.0
-			if len(inc.NetCommissionFeeInfo) > 0 {
-				commRule = inc.NetCommissionFeeInfo[0].RuleDisplayName
-				commPct = inc.NetCommissionFeeInfo[0].FeeRate
-			}
-			svcRule := ""
-			svcPct := 0.0
-			if len(inc.NetServiceFeeInfo) > 0 {
-				svcRule = inc.NetServiceFeeInfo[0].RuleDisplayName
-				svcPct = inc.NetServiceFeeInfo[0].FeeRate
-			}
-
-			totalMarketFee := inc.CommissionFee + inc.ServiceFee + inc.SellerTransactionFee + inc.SellerOrderProcessingFee
-			finStatus := "PENDING"
-			if o.OrderStatus == "COMPLETED" {
-				finStatus = "RELEASED"
-			}
-
-			sellingPrice := inc.OrderSellingPrice
-			if sellingPrice <= 0 {
-				sellingPrice = inc.SellingPrice
-			}
-			if sellingPrice <= 0 && o.TotalAmount > 0 {
-				sellingPrice = o.TotalAmount
-			}
-			if sellingPrice <= 0 && inc.EscrowAmount > 0 {
-				sellingPrice = inc.EscrowAmount + totalMarketFee
-			}
-
-			eObj := shopee.ReconstructOrderEscrow(
-				orderSN,
-				inc.EscrowAmount,
-				sellingPrice,
-				inc.CommissionFee,
-				commRule,
-				commPct,
-				inc.ServiceFee,
-				svcRule,
-				svcPct,
-				inc.SellerTransactionFee,
-				inc.SellerOrderProcessingFee,
-				inc.VoucherFromSeller,
-				totalMarketFee,
-				0, // TotalHPP (dihitung oleh repository/alokasi)
-				0, 0, 0, 0, 0, 0,
-				inc.EscrowAmount,
-				finStatus,
-				time.Now(),
-				time.Now(),
-			)
-			escrow = eObj
+	var itemsTotal float64
+	for _, it := range items {
+		p := it.DiscountedPrice()
+		if p <= 0 {
+			p = it.OriginalPrice()
 		}
+		itemsTotal += p * float64(it.Quantity())
+	}
+
+	var escrow *shopee.ShopeeOrderEscrow
+	if o.OrderStatus != "UNPAID" && o.OrderStatus != "CANCELLED" {
+		escrow = uc.buildEscrowForOrder(shop, orderSN, o.OrderStatus, itemsTotal)
 	}
 
 	carrier := o.ShippingCarrier
@@ -537,4 +504,66 @@ func (uc *ShopeeUseCases) GetCashflowSummary(ctx context.Context) (*shopee.Cashf
 
 func (uc *ShopeeUseCases) RecalculateFinances(ctx context.Context) (int, error) {
 	return uc.repo.RecalculateFinances(ctx)
+}
+
+func (uc *ShopeeUseCases) buildEscrowForOrder(shop *shopee.ShopeeShop, orderSN string, orderStatus string, itemsTotal float64) *shopee.ShopeeOrderEscrow {
+	if uc.shopeeClient == nil || shop == nil {
+		return nil
+	}
+	escrowResp, err := uc.shopeeClient.GetEscrowDetail(shop.AccessToken(), shop.ShopID(), orderSN)
+	if err != nil || escrowResp == nil {
+		return nil
+	}
+	inc := escrowResp.Response.OrderIncome
+	commRule := ""
+	commPct := 0.0
+	if len(inc.NetCommissionFeeInfo) > 0 {
+		commRule = inc.NetCommissionFeeInfo[0].RuleDisplayName
+		commPct = inc.NetCommissionFeeInfo[0].FeeRate
+	}
+	svcRule := ""
+	svcPct := 0.0
+	if len(inc.NetServiceFeeInfo) > 0 {
+		svcRule = inc.NetServiceFeeInfo[0].RuleDisplayName
+		svcPct = inc.NetServiceFeeInfo[0].FeeRate
+	}
+
+	totalMarketFee := inc.CommissionFee + inc.ServiceFee + inc.SellerTransactionFee + inc.SellerOrderProcessingFee
+	finStatus := "PENDING"
+	if orderStatus == "COMPLETED" {
+		finStatus = "RELEASED"
+	}
+
+	sellingPrice := inc.OrderSellingPrice
+	if sellingPrice <= 0 {
+		sellingPrice = inc.SellingPrice
+	}
+	if sellingPrice <= 0 && itemsTotal > 0 {
+		sellingPrice = itemsTotal
+	}
+	if sellingPrice <= 0 && inc.EscrowAmount > 0 {
+		sellingPrice = inc.EscrowAmount + totalMarketFee
+	}
+
+	return shopee.ReconstructOrderEscrow(
+		orderSN,
+		inc.EscrowAmount,
+		sellingPrice,
+		inc.CommissionFee,
+		commRule,
+		commPct,
+		inc.ServiceFee,
+		svcRule,
+		svcPct,
+		inc.SellerTransactionFee,
+		inc.SellerOrderProcessingFee,
+		inc.VoucherFromSeller,
+		totalMarketFee,
+		0, // TotalHPP (dihitung oleh repository/alokasi)
+		0, 0, 0, 0, 0, 0,
+		inc.EscrowAmount,
+		finStatus,
+		time.Now(),
+		time.Now(),
+	)
 }

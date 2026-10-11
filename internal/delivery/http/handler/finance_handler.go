@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,10 +26,13 @@ type FinanceHandler struct {
 	getPOUC    *financeUC.GetPurchaseOrderUseCase
 	deletePOUC *financeUC.DeletePurchaseOrderUseCase
 
-	createCapUC   *financeUC.CreateCapitalRecordUseCase
-	listCapUC     *financeUC.ListCapitalRecordsUseCase
-	deleteCapUC   *financeUC.DeleteCapitalRecordUseCase
-	getTotalCapUC *financeUC.GetTotalCapitalUseCase
+	createCapUC     *financeUC.CreateCapitalRecordUseCase
+	listCapUC       *financeUC.ListCapitalRecordsUseCase
+	getCapUC        *financeUC.GetCapitalRecordByIDUseCase
+	updateCapUC     *financeUC.UpdateCapitalRecordUseCase
+	deleteCapUC     *financeUC.DeleteCapitalRecordUseCase
+	getTotalCapUC   *financeUC.GetTotalCapitalUseCase
+	getCapSummaryUC *financeUC.GetCapitalSummaryUseCase
 
 	getOrderAllocUC    *financeUC.GetOrderAllocationUseCase
 	listCashAccountsUC *financeUC.ListCashAccountsUseCase
@@ -43,8 +49,11 @@ func NewFinanceHandler(
 	deletePOUC *financeUC.DeletePurchaseOrderUseCase,
 	createCapUC *financeUC.CreateCapitalRecordUseCase,
 	listCapUC *financeUC.ListCapitalRecordsUseCase,
+	getCapUC *financeUC.GetCapitalRecordByIDUseCase,
+	updateCapUC *financeUC.UpdateCapitalRecordUseCase,
 	deleteCapUC *financeUC.DeleteCapitalRecordUseCase,
 	getTotalCapUC *financeUC.GetTotalCapitalUseCase,
+	getCapSummaryUC *financeUC.GetCapitalSummaryUseCase,
 	getOrderAllocUC *financeUC.GetOrderAllocationUseCase,
 	listCashAccountsUC *financeUC.ListCashAccountsUseCase,
 ) *FinanceHandler {
@@ -59,8 +68,11 @@ func NewFinanceHandler(
 		deletePOUC:         deletePOUC,
 		createCapUC:        createCapUC,
 		listCapUC:          listCapUC,
+		getCapUC:           getCapUC,
+		updateCapUC:        updateCapUC,
 		deleteCapUC:        deleteCapUC,
 		getTotalCapUC:      getTotalCapUC,
+		getCapSummaryUC:    getCapSummaryUC,
 		getOrderAllocUC:    getOrderAllocUC,
 		listCashAccountsUC: listCashAccountsUC,
 	}
@@ -244,15 +256,76 @@ func (h *FinanceHandler) DeletePurchaseOrder(c echo.Context) error {
 
 // GET /api/v1/finance/capital
 func (h *FinanceHandler) ListCapitalRecords(c echo.Context) error {
-	records, err := h.listCapUC.Execute(c.Request().Context())
+	pageStr := c.QueryParam("page")
+	limitStr := c.QueryParam("limit")
+	search := strings.TrimSpace(c.QueryParam("search"))
+	typeFilter := strings.TrimSpace(c.QueryParam("type"))
+	fromStr := c.QueryParam("date_from")
+	toStr := c.QueryParam("date_to")
+
+	page := 0
+	limit := 0
+	isPaginated := false
+	if pageStr != "" || limitStr != "" {
+		isPaginated = true
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		} else {
+			page = 1
+		}
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		} else {
+			limit = 25
+		}
+	}
+
+	fromPtr, toPtr := parseWIBDateRange(fromStr, toStr)
+
+	filter := finance.CapitalFilter{
+		Type:     finance.CapitalRecordType(typeFilter),
+		Search:   search,
+		DateFrom: fromPtr,
+		DateTo:   toPtr,
+		Page:     page,
+		Limit:    limit,
+	}
+
+	records, totalCount, err := h.listCapUC.ExecuteFiltered(c.Request().Context(), filter)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dto.Fail("Failed to retrieve capital records", err.Error()))
 	}
+
 	resp := make([]dto.CapitalRecordResponse, len(records))
 	for i, cr := range records {
 		resp[i] = dto.ToCapitalRecordResponse(cr)
 	}
+
+	if isPaginated {
+		totalPages := 0
+		if totalCount > 0 && limit > 0 {
+			totalPages = int(math.Ceil(float64(totalCount) / float64(limit)))
+		}
+		return c.JSON(http.StatusOK, dto.SuccessPaginated(resp, totalCount, page, limit, totalPages))
+	}
+
 	return c.JSON(http.StatusOK, dto.Success(resp))
+}
+
+// GET /api/v1/finance/capital/:id
+func (h *FinanceHandler) GetCapitalRecordByID(c echo.Context) error {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid capital record ID", err.Error()))
+	}
+
+	cr, err := h.getCapUC.Execute(c.Request().Context(), id)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, dto.Fail("Capital record not found", err.Error()))
+	}
+
+	return c.JSON(http.StatusOK, dto.Success(dto.ToCapitalRecordResponse(cr)))
 }
 
 // POST /api/v1/finance/capital
@@ -275,6 +348,32 @@ func (h *FinanceHandler) CreateCapitalRecord(c echo.Context) error {
 	return c.JSON(http.StatusCreated, dto.Success(dto.ToCapitalRecordResponse(cr)))
 }
 
+// PUT /api/v1/finance/capital/:id
+func (h *FinanceHandler) UpdateCapitalRecord(c echo.Context) error {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid capital record ID", err.Error()))
+	}
+
+	var req dto.UpdateCapitalRecordRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid request body", err.Error()))
+	}
+
+	input, err := dto.ToUpdateCapitalRecordInput(id, req)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid date format (use YYYY-MM-DD)", err.Error()))
+	}
+
+	cr, err := h.updateCapUC.Execute(c.Request().Context(), input)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dto.Fail("Failed to update capital record", err.Error()))
+	}
+
+	return c.JSON(http.StatusOK, dto.Success(dto.ToCapitalRecordResponse(cr)))
+}
+
 // GET /api/v1/finance/capital/total
 func (h *FinanceHandler) GetTotalCapital(c echo.Context) error {
 	total, err := h.getTotalCapUC.Execute(c.Request().Context())
@@ -282,6 +381,20 @@ func (h *FinanceHandler) GetTotalCapital(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dto.Fail("Failed to get total capital", err.Error()))
 	}
 	return c.JSON(http.StatusOK, dto.Success(map[string]float64{"total_capital": total}))
+}
+
+// GET /api/v1/finance/capital/summary
+func (h *FinanceHandler) GetCapitalSummary(c echo.Context) error {
+	summary, err := h.getCapSummaryUC.Execute(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dto.Fail("Failed to get capital summary", err.Error()))
+	}
+	return c.JSON(http.StatusOK, dto.Success(dto.CapitalSummaryResponse{
+		TotalCapital:      summary.TotalCapital,
+		InitialCapital:    summary.InitialCapital,
+		AdditionalCapital: summary.AdditionalCapital,
+		TotalCount:        summary.TotalCount,
+	}))
 }
 
 // DELETE /api/v1/finance/capital/:id

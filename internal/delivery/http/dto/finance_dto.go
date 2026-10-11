@@ -281,3 +281,33 @@ func ToCreateCapitalRecordInput(req CreateCapitalRecordRequest) (financeUC.Creat
 		Notes:       req.Notes,
 	}, nil
 }
+
+type UpdateCapitalRecordRequest struct {
+	Type        string  `json:"type"` // INITIAL | ADDITION
+	Amount      float64 `json:"amount"`
+	Description string  `json:"description"`
+	RecordDate  string  `json:"record_date"` // Format: "2006-01-02"
+	Notes       string  `json:"notes,omitempty"`
+}
+
+func ToUpdateCapitalRecordInput(id uuid.UUID, req UpdateCapitalRecordRequest) (financeUC.UpdateCapitalRecordInput, error) {
+	date, err := time.ParseInLocation("2006-01-02", req.RecordDate, wibLocation)
+	if err != nil {
+		return financeUC.UpdateCapitalRecordInput{}, err
+	}
+	return financeUC.UpdateCapitalRecordInput{
+		ID:          id,
+		Type:        finance.CapitalRecordType(req.Type),
+		Amount:      req.Amount,
+		Description: req.Description,
+		RecordDate:  date,
+		Notes:       req.Notes,
+	}, nil
+}
+
+type CapitalSummaryResponse struct {
+	TotalCapital      float64 `json:"total_capital"`
+	InitialCapital    float64 `json:"initial_capital"`
+	AdditionalCapital float64 `json:"additional_capital"`
+	TotalCount        int64   `json:"total_count"`
+}

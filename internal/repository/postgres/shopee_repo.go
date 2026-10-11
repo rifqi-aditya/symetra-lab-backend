@@ -489,6 +489,16 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			orderID = uuid.New()
 		}
 
+		// 1. Hitung total harga barang toko (subtotal produk sebelum voucher subsidi marketplace)
+		var itemsTotal float64
+		for _, it := range o.Items() {
+			p := it.DiscountedPrice()
+			if p <= 0 {
+				p = it.OriginalPrice()
+			}
+			itemsTotal += p * float64(it.Quantity())
+		}
+
 		var grossAmount, netAmount, channelFee float64
 		paymentStatus := "UNPAID"
 
@@ -496,7 +506,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			e := o.Escrow()
 			grossAmount = e.SellingPrice()
 			if grossAmount <= 0 {
-				grossAmount = o.TotalAmount()
+				grossAmount = itemsTotal
 			}
 			if grossAmount <= 0 {
 				grossAmount = e.EscrowAmount() + e.TotalMarketplaceFee()
@@ -507,23 +517,31 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				paymentStatus = "PAID"
 			}
 		} else {
-			grossAmount = o.TotalAmount()
-			if channelFee > 0 {
-				netAmount = grossAmount - channelFee
+			// Jika belum ada data escrow, omzet toko adalah subtotal harga produk (BUKAN pembayaran customer o.TotalAmount)
+			if itemsTotal > 0 {
+				grossAmount = itemsTotal
 			} else {
-				netAmount = grossAmount
+				grossAmount = o.TotalAmount()
+			}
+
+			// Pertahankan netAmount dan channelFee jika record sebelumnya sudah pernah punya data dari escrow
+			if existingOrder.ID != uuid.Nil && existingOrder.NetAmount > 0 {
+				netAmount = existingOrder.NetAmount
+				channelFee = existingOrder.ChannelFee
+				paymentStatus = existingOrder.PaymentStatus
+				if grossAmount <= 0 && existingOrder.GrossAmount > 0 {
+					grossAmount = existingOrder.GrossAmount
+				}
+			} else {
+				if channelFee > 0 {
+					netAmount = grossAmount - channelFee
+				} else {
+					netAmount = grossAmount
+				}
 			}
 		}
 
-		if grossAmount <= 0 {
-			var itemsTotal float64
-			for _, it := range o.Items() {
-				p := it.DiscountedPrice()
-				if p <= 0 {
-					p = it.OriginalPrice()
-				}
-				itemsTotal += p * float64(it.Quantity())
-			}
+		if grossAmount <= 0 && itemsTotal > 0 {
 			grossAmount = itemsTotal
 		}
 		if grossAmount <= 0 && netAmount > 0 {
@@ -907,13 +925,34 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 }
 
 func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error) {
+	// 1. Sinkronkan nilai gross_amount pesanan yang keliru agar sesuai dengan subtotal item produk toko
+	_ = r.db.WithContext(ctx).Exec(`
+		UPDATE orders o
+		SET gross_amount = sub.items_total,
+		    net_amount = CASE 
+		        WHEN o.channel_fee > 0 THEN sub.items_total - o.channel_fee
+		        WHEN o.net_amount = o.gross_amount OR o.net_amount <= 0 THEN sub.items_total
+		        ELSE o.net_amount 
+		    END,
+		    updated_at = NOW()
+		FROM (
+		    SELECT order_id, COALESCE(SUM(selling_price * quantity), 0) AS items_total
+		    FROM order_items
+		    GROUP BY order_id
+		    HAVING SUM(selling_price * quantity) > 0
+		) sub
+		WHERE o.id = sub.order_id
+		  AND (o.gross_amount != sub.items_total OR o.gross_amount <= 0)
+	`)
+
+	// 2. Perbarui alokasi COGS, laba bersih, dan pos laba untuk semua pesanan aktif
 	res := r.db.WithContext(ctx).Exec(`
 		UPDATE orders 
 		SET fund_net_profit = net_amount - (fund_filament + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation),
 		    net_profit = net_amount - (fund_filament + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation),
 		    cogs_amount = (fund_filament + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation),
 		    updated_at = NOW() 
-		WHERE payment_status = 'PAID'
+		WHERE status NOT IN ('CANCELLED', 'UNPAID')
 	`)
 	if res.Error != nil {
 		return 0, res.Error
