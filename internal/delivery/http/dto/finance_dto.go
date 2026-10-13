@@ -19,11 +19,14 @@ type CreateTransactionRequest struct {
 	Category        string  `json:"category"`
 	CashAccountID   string  `json:"cash_account_id,omitempty"` // UUID string, nullable
 	Amount          float64 `json:"amount"`
+	Quantity        float64 `json:"quantity,omitempty"`
 	Description     string  `json:"description"`
 	TransactionDate string  `json:"transaction_date"` // Format: "2006-01-02"
 	ReferenceType   string  `json:"reference_type,omitempty"`
 	ReferenceID     string  `json:"reference_id,omitempty"`
 	Notes           string  `json:"notes,omitempty"`
+	AttachmentURL   string  `json:"attachment_url,omitempty"`
+	PurchasedBy     string  `json:"purchased_by,omitempty"`
 }
 
 type FinanceTransactionResponse struct {
@@ -32,11 +35,14 @@ type FinanceTransactionResponse struct {
 	Category        string     `json:"category"`
 	CashAccountID   *uuid.UUID `json:"cash_account_id,omitempty"`
 	Amount          float64    `json:"amount"`
+	Quantity        float64    `json:"quantity"`
 	Description     string     `json:"description"`
 	TransactionDate string     `json:"transaction_date"`
 	ReferenceType   string     `json:"reference_type,omitempty"`
 	ReferenceID     string     `json:"reference_id,omitempty"`
 	Notes           string     `json:"notes,omitempty"`
+	AttachmentURL   string     `json:"attachment_url,omitempty"`
+	PurchasedBy     string     `json:"purchased_by,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
@@ -48,11 +54,14 @@ func ToFinanceTransactionResponse(t *finance.FinanceTransaction) FinanceTransact
 		Category:        string(t.Category()),
 		CashAccountID:   t.CashAccountID(),
 		Amount:          t.Amount(),
+		Quantity:        t.Quantity(),
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate().Format("2006-01-02"),
 		ReferenceType:   t.ReferenceType(),
 		ReferenceID:     t.ReferenceID(),
 		Notes:           t.Notes(),
+		AttachmentURL:   t.AttachmentURL(),
+		PurchasedBy:     t.PurchasedBy(),
 		CreatedAt:       t.CreatedAt(),
 		UpdatedAt:       t.UpdatedAt(),
 	}
@@ -237,11 +246,14 @@ func ToCreateTransactionInput(req CreateTransactionRequest) (financeUC.CreateTra
 		Category:        finance.TransactionCategory(req.Category),
 		CashAccountID:   cashAccountID,
 		Amount:          req.Amount,
+		Quantity:        req.Quantity,
 		Description:     req.Description,
 		TransactionDate: date,
 		ReferenceType:   req.ReferenceType,
 		ReferenceID:     req.ReferenceID,
 		Notes:           req.Notes,
+		AttachmentURL:   req.AttachmentURL,
+		PurchasedBy:     req.PurchasedBy,
 	}, nil
 }
 

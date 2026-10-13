@@ -593,6 +593,9 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 				spentMaintenance += e.TotalSpent
 			case "MACHINE_PURCHASE":
 				spentDepreciation += e.TotalSpent
+			case "REIMBURSEMENT":
+				// Pelunasan talangan tidak memotong kas lagi karena anggaran belanja sudah dipotong saat transaksi dicatat
+				continue
 			default:
 				spentNetProfit += e.TotalSpent
 			}

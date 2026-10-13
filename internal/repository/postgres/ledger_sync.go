@@ -54,8 +54,8 @@ func SyncCashAccountLedger(ctx context.Context, db *gorm.DB) error {
 
 		UPDATE cash_accounts SET 
 			allocated_amount = COALESCE((SELECT SUM(fund_net_profit) FROM orders WHERE payment_status = 'PAID'), 0),
-			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE')), 0),
-			current_balance = COALESCE((SELECT SUM(fund_net_profit) FROM orders WHERE payment_status = 'PAID'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE')), 0),
+			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','REIMBURSEMENT')), 0),
+			current_balance = COALESCE((SELECT SUM(fund_net_profit) FROM orders WHERE payment_status = 'PAID'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','REIMBURSEMENT')), 0),
 			updated_at = NOW()
 		WHERE code = 'NET_PROFIT';
 	`

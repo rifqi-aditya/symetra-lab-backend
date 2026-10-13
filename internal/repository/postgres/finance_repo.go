@@ -19,11 +19,14 @@ type financeTransactionGORM struct {
 	Category        string     `gorm:"column:category"`
 	CashAccountID   *uuid.UUID `gorm:"column:cash_account_id;type:uuid"`
 	Amount          float64    `gorm:"column:amount"`
+	Quantity        float64    `gorm:"column:quantity;default:1"`
 	Description     string     `gorm:"column:description"`
 	TransactionDate time.Time  `gorm:"column:transaction_date"`
 	ReferenceType   string     `gorm:"column:reference_type"`
 	ReferenceID     string     `gorm:"column:reference_id"`
 	Notes           string     `gorm:"column:notes"`
+	AttachmentURL   string     `gorm:"column:attachment_url"`
+	PurchasedBy     string     `gorm:"column:purchased_by"`
 	CreatedAt       time.Time  `gorm:"column:created_at"`
 	UpdatedAt       time.Time  `gorm:"column:updated_at"`
 }
@@ -102,17 +105,24 @@ func NewFinanceRepository(db *gorm.DB) *FinanceRepository {
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
 func mapFinanceTxGORMToDomain(g *financeTransactionGORM) *finance.FinanceTransaction {
+	qty := g.Quantity
+	if qty <= 0 {
+		qty = 1
+	}
 	return finance.ReconstructFinanceTransaction(
 		g.ID,
 		finance.TransactionType(g.Type),
 		finance.TransactionCategory(g.Category),
 		g.CashAccountID,
 		g.Amount,
+		qty,
 		g.Description,
 		g.TransactionDate,
 		g.ReferenceType,
 		g.ReferenceID,
 		g.Notes,
+		g.AttachmentURL,
+		g.PurchasedBy,
 		g.CreatedAt,
 		g.UpdatedAt,
 	)
@@ -157,17 +167,24 @@ func mapCapitalRecordGORMToDomain(g *capitalRecordGORM) *finance.CapitalRecord {
 // ─── FinanceTransaction Methods ───────────────────────────────────────────────
 
 func (r *FinanceRepository) CreateTransaction(ctx context.Context, t *finance.FinanceTransaction) error {
+	qty := t.Quantity()
+	if qty <= 0 {
+		qty = 1
+	}
 	g := financeTransactionGORM{
 		ID:              t.ID(),
 		Type:            string(t.Type()),
 		Category:        string(t.Category()),
 		CashAccountID:   t.CashAccountID(),
 		Amount:          t.Amount(),
+		Quantity:        qty,
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate(),
 		ReferenceType:   t.ReferenceType(),
 		ReferenceID:     t.ReferenceID(),
 		Notes:           t.Notes(),
+		AttachmentURL:   t.AttachmentURL(),
+		PurchasedBy:     t.PurchasedBy(),
 		CreatedAt:       t.CreatedAt(),
 		UpdatedAt:       t.UpdatedAt(),
 	}
@@ -180,17 +197,24 @@ func (r *FinanceRepository) CreateTransaction(ctx context.Context, t *finance.Fi
 
 // CreateTransactionIfNotExists: idempotent insert — skip if reference already exists
 func (r *FinanceRepository) CreateTransactionIfNotExists(ctx context.Context, t *finance.FinanceTransaction) error {
+	qty := t.Quantity()
+	if qty <= 0 {
+		qty = 1
+	}
 	g := financeTransactionGORM{
 		ID:              t.ID(),
 		Type:            string(t.Type()),
 		Category:        string(t.Category()),
 		CashAccountID:   t.CashAccountID(),
 		Amount:          t.Amount(),
+		Quantity:        qty,
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate(),
 		ReferenceType:   t.ReferenceType(),
 		ReferenceID:     t.ReferenceID(),
 		Notes:           t.Notes(),
+		AttachmentURL:   t.AttachmentURL(),
+		PurchasedBy:     t.PurchasedBy(),
 		CreatedAt:       t.CreatedAt(),
 		UpdatedAt:       t.UpdatedAt(),
 	}
@@ -344,7 +368,9 @@ func (r *FinanceRepository) GetSummary(ctx context.Context, from, to time.Time) 
 		case finance.TypeIncome:
 			summary.TotalIncome += rw.Total
 		case finance.TypeExpense:
-			summary.TotalExpense += rw.Total
+			if rw.Category != string(finance.CategoryReimbursement) {
+				summary.TotalExpense += rw.Total
+			}
 		case finance.TypeCapitalIn:
 			summary.TotalCapitalIn += rw.Total
 		}

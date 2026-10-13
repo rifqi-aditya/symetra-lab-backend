@@ -294,10 +294,12 @@ func (uc *ShopeeUseCases) SyncReleasedEscrows(ctx context.Context, shopID uint64
 			finance.CategorySalesShopee,
 			nil,
 			item.PayoutAmount,
+			1,
 			"Escrow Shopee - Order "+item.OrderSN,
 			releaseDate,
 			"SHOPEE_ESCROW",
 			item.OrderSN,
+			"",
 			"",
 		)
 		if txErr == nil && uc.financeRepo != nil {
@@ -426,10 +428,12 @@ func (uc *ShopeeUseCases) HandleOrderStatusPush(ctx context.Context, shopID uint
 			finance.CategorySalesShopee,
 			nil,
 			ord.Escrow().EscrowAmount(),
+			1,
 			"Escrow Shopee - Order "+orderSN,
 			releaseDate,
 			"SHOPEE_ESCROW",
 			orderSN,
+			"",
 			"",
 		)
 		if txErr == nil {

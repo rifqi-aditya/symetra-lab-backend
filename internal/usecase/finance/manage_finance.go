@@ -17,11 +17,14 @@ type CreateTransactionInput struct {
 	Category        finance.TransactionCategory
 	CashAccountID   *uuid.UUID // nullable — pos kas yang digunakan
 	Amount          float64
+	Quantity        float64
 	Description     string
 	TransactionDate time.Time
 	ReferenceType   string
 	ReferenceID     string
 	Notes           string
+	AttachmentURL   string
+	PurchasedBy     string
 }
 
 type ListTransactionsUseCase struct {
@@ -45,19 +48,28 @@ func NewCreateTransactionUseCase(repo finance.Repository) *CreateTransactionUseC
 }
 
 func (uc *CreateTransactionUseCase) Execute(ctx context.Context, input CreateTransactionInput) (*finance.FinanceTransaction, error) {
+	qty := input.Quantity
+	if qty <= 0 {
+		qty = 1
+	}
 	tx, err := finance.NewFinanceTransaction(
 		input.Type,
 		input.Category,
 		input.CashAccountID,
 		input.Amount,
+		qty,
 		input.Description,
 		input.TransactionDate,
 		input.ReferenceType,
 		input.ReferenceID,
 		input.Notes,
+		input.AttachmentURL,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if input.PurchasedBy != "" {
+		tx.SetPurchasedBy(input.PurchasedBy)
 	}
 	if err := uc.repo.CreateTransaction(ctx, tx); err != nil {
 		return nil, err
@@ -151,16 +163,25 @@ func (uc *CreatePurchaseOrderUseCase) Execute(ctx context.Context, input CreateP
 	}
 
 	// 3. Otomatis buat finance_transaction EXPENSE yang ter-link ke PO ini
+	var totalQty float64
+	for _, it := range input.Items {
+		totalQty += it.Quantity
+	}
+	if totalQty <= 0 {
+		totalQty = 1
+	}
 	tx, err := finance.NewFinanceTransaction(
 		finance.TypeExpense,
 		category,
 		nil,
 		po.TotalAmount(),
+		totalQty,
 		"Pembelian dari "+input.SupplierName,
 		input.PurchaseDate,
 		"PURCHASE_ORDER",
 		po.ID().String(),
 		input.Notes,
+		"",
 	)
 	if err != nil {
 		return nil, err
@@ -256,11 +277,13 @@ func (uc *CreateCapitalRecordUseCase) Execute(ctx context.Context, input CreateC
 		category,
 		nil,
 		input.Amount,
+		1,
 		input.Description,
 		input.RecordDate,
 		"CAPITAL_RECORD",
 		cr.ID().String(),
 		input.Notes,
+		"",
 	)
 	if err != nil {
 		return nil, err

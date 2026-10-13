@@ -36,6 +36,7 @@ const (
 	CategoryMarketing          TransactionCategory = "MARKETING"
 	CategoryRent               TransactionCategory = "RENT"
 	CategoryOtherExpense       TransactionCategory = "OTHER_EXPENSE"
+	CategoryReimbursement      TransactionCategory = "REIMBURSEMENT"
 
 	// CAPITAL_IN categories
 	CategoryInitialCapital    TransactionCategory = "INITIAL_CAPITAL"
@@ -116,11 +117,14 @@ type FinanceTransaction struct {
 	category        TransactionCategory
 	cashAccountID   *uuid.UUID // nullable — pos kas yang digunakan
 	amount          float64
+	quantity        float64
 	description     string
 	transactionDate time.Time
 	referenceType   string
 	referenceID     string
 	notes           string
+	attachmentURL   string
+	purchasedBy     string
 	createdAt       time.Time
 	updatedAt       time.Time
 }
@@ -131,15 +135,19 @@ func NewFinanceTransaction(
 	category TransactionCategory,
 	cashAccountID *uuid.UUID,
 	amount float64,
+	quantity float64,
 	description string,
 	transactionDate time.Time,
-	referenceType, referenceID, notes string,
+	referenceType, referenceID, notes, attachmentURL string,
 ) (*FinanceTransaction, error) {
 	if amount <= 0 {
 		return nil, ErrAmountMustBePositive
 	}
 	if description == "" {
 		return nil, ErrDescriptionRequired
+	}
+	if quantity <= 0 {
+		quantity = 1
 	}
 	now := time.Now()
 	return &FinanceTransaction{
@@ -148,11 +156,13 @@ func NewFinanceTransaction(
 		category:        category,
 		cashAccountID:   cashAccountID,
 		amount:          amount,
+		quantity:        quantity,
 		description:     description,
 		transactionDate: transactionDate,
 		referenceType:   referenceType,
 		referenceID:     referenceID,
 		notes:           notes,
+		attachmentURL:   attachmentURL,
 		createdAt:       now,
 		updatedAt:       now,
 	}, nil
@@ -165,25 +175,36 @@ func ReconstructFinanceTransaction(
 	category TransactionCategory,
 	cashAccountID *uuid.UUID,
 	amount float64,
+	quantity float64,
 	description string,
 	transactionDate time.Time,
-	referenceType, referenceID, notes string,
+	referenceType, referenceID, notes, attachmentURL, purchasedBy string,
 	createdAt, updatedAt time.Time,
 ) *FinanceTransaction {
+	if quantity <= 0 {
+		quantity = 1
+	}
 	return &FinanceTransaction{
 		id:              id,
 		txType:          txType,
 		category:        category,
 		cashAccountID:   cashAccountID,
 		amount:          amount,
+		quantity:        quantity,
 		description:     description,
 		transactionDate: transactionDate,
 		referenceType:   referenceType,
 		referenceID:     referenceID,
 		notes:           notes,
+		attachmentURL:   attachmentURL,
+		purchasedBy:     purchasedBy,
 		createdAt:       createdAt,
 		updatedAt:       updatedAt,
 	}
+}
+
+func (t *FinanceTransaction) SetPurchasedBy(p string) {
+	t.purchasedBy = p
 }
 
 // Getters
@@ -192,11 +213,14 @@ func (t *FinanceTransaction) Type()            TransactionType     { return t.tx
 func (t *FinanceTransaction) Category()        TransactionCategory { return t.category }
 func (t *FinanceTransaction) CashAccountID()   *uuid.UUID          { return t.cashAccountID }
 func (t *FinanceTransaction) Amount()          float64             { return t.amount }
+func (t *FinanceTransaction) Quantity()        float64             { return t.quantity }
 func (t *FinanceTransaction) Description()     string              { return t.description }
 func (t *FinanceTransaction) TransactionDate() time.Time           { return t.transactionDate }
 func (t *FinanceTransaction) ReferenceType()   string              { return t.referenceType }
 func (t *FinanceTransaction) ReferenceID()     string              { return t.referenceID }
 func (t *FinanceTransaction) Notes()           string              { return t.notes }
+func (t *FinanceTransaction) AttachmentURL()   string              { return t.attachmentURL }
+func (t *FinanceTransaction) PurchasedBy()     string              { return t.purchasedBy }
 func (t *FinanceTransaction) CreatedAt()       time.Time           { return t.createdAt }
 func (t *FinanceTransaction) UpdatedAt()       time.Time           { return t.updatedAt }
 

@@ -16,17 +16,25 @@ func TestNewFinanceTransaction(t *testing.T) {
 		finance.CategorySalesShopee,
 		nil,
 		150000,
+		1,
 		"Order Shopee 123",
 		now,
 		"SHOPEE_ESCROW",
 		"123",
 		"Test notes",
+		"https://example.com/receipt.jpg",
 	)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	if tx.Amount() != 150000 {
 		t.Errorf("expected amount 150000, got %f", tx.Amount())
+	}
+	if tx.Quantity() != 1 {
+		t.Errorf("expected quantity 1, got %f", tx.Quantity())
+	}
+	if tx.AttachmentURL() != "https://example.com/receipt.jpg" {
+		t.Errorf("expected attachment URL, got %s", tx.AttachmentURL())
 	}
 	if tx.Type() != finance.TypeIncome {
 		t.Errorf("expected TypeIncome, got %s", tx.Type())
@@ -38,9 +46,10 @@ func TestNewFinanceTransaction(t *testing.T) {
 		finance.CategorySalesShopee,
 		nil,
 		0,
+		1,
 		"Invalid amount",
 		now,
-		"", "", "",
+		"", "", "", "",
 	)
 	if err != finance.ErrAmountMustBePositive {
 		t.Errorf("expected ErrAmountMustBePositive, got %v", err)
@@ -52,9 +61,10 @@ func TestNewFinanceTransaction(t *testing.T) {
 		finance.CategoryFilament,
 		nil,
 		50000,
+		1,
 		"",
 		now,
-		"", "", "",
+		"", "", "", "",
 	)
 	if err != finance.ErrDescriptionRequired {
 		t.Errorf("expected ErrDescriptionRequired, got %v", err)
