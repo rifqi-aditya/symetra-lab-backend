@@ -22,6 +22,7 @@ func TestShopeeOrder_Reconstruct(t *testing.T) {
 		"",
 		now.Unix(),
 		now.Unix(),
+		now.Unix(),
 		nil,
 		nil,
 		now,

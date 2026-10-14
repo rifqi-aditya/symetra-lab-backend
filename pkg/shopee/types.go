@@ -39,6 +39,7 @@ type ShopeeOrderDetailItem struct {
 	BuyerCancelReason       string           `json:"buyer_cancel_reason"`
 	CreateTime              int64            `json:"create_time"`
 	UpdateTime              int64            `json:"update_time"`
+	PayTime                 int64            `json:"pay_time"`
 	ItemList                []ShopeeItemInfo `json:"item_list"`
 }
 

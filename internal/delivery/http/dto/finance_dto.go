@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -56,7 +58,7 @@ func ToFinanceTransactionResponse(t *finance.FinanceTransaction) FinanceTransact
 		Amount:          t.Amount(),
 		Quantity:        t.Quantity(),
 		Description:     t.Description(),
-		TransactionDate: t.TransactionDate().Format("2006-01-02"),
+		TransactionDate: t.TransactionDate().In(wibLocation).Format("2006-01-02 15:04:05"),
 		ReferenceType:   t.ReferenceType(),
 		ReferenceID:     t.ReferenceID(),
 		Notes:           t.Notes(),
@@ -224,10 +226,44 @@ func ToCapitalRecordResponse(cr *finance.CapitalRecord) CapitalRecordResponse {
 	}
 }
 
-// ─── Input mappers (Request → UseCase Input) ─────────────────────────────────
+// parseTransactionDateTime mem-parse string tanggal/waktu transaksi secara fleksibel dengan zona waktu WIB
+func parseTransactionDateTime(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Now().In(wibLocation), nil
+	}
+	// 1. ISO8601 / RFC3339 dengan timezone
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.In(wibLocation), nil
+	}
+	// 2. Format lengkap dengan detik (pemisah T)
+	if t, err := time.ParseInLocation("2006-01-02T15:04:05", s, wibLocation); err == nil {
+		return t, nil
+	}
+	// 3. Format lengkap dengan detik (pemisah spasi)
+	if t, err := time.ParseInLocation("2006-01-02 15:04:05", s, wibLocation); err == nil {
+		return t, nil
+	}
+	// 4. Format tanpa detik (pemisah T) -> detik ambil dari waktu sekarang
+	if t, err := time.ParseInLocation("2006-01-02T15:04", s, wibLocation); err == nil {
+		now := time.Now().In(wibLocation)
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), now.Second(), 0, wibLocation), nil
+	}
+	// 5. Format tanpa detik (pemisah spasi)
+	if t, err := time.ParseInLocation("2006-01-02 15:04", s, wibLocation); err == nil {
+		now := time.Now().In(wibLocation)
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), now.Second(), 0, wibLocation), nil
+	}
+	// 6. Tanggal saja (YYYY-MM-DD) -> gunakan jam, menit, dan detik saat ini di WIB
+	if t, err := time.ParseInLocation("2006-01-02", s, wibLocation); err == nil {
+		now := time.Now().In(wibLocation)
+		return time.Date(t.Year(), t.Month(), t.Day(), now.Hour(), now.Minute(), now.Second(), 0, wibLocation), nil
+	}
+	return time.Time{}, fmt.Errorf("format tanggal tidak valid: %s", s)
+}
 
 func ToCreateTransactionInput(req CreateTransactionRequest) (financeUC.CreateTransactionInput, error) {
-	date, err := time.ParseInLocation("2006-01-02", req.TransactionDate, wibLocation)
+	date, err := parseTransactionDateTime(req.TransactionDate)
 	if err != nil {
 		return financeUC.CreateTransactionInput{}, err
 	}
@@ -258,7 +294,7 @@ func ToCreateTransactionInput(req CreateTransactionRequest) (financeUC.CreateTra
 }
 
 func ToCreatePurchaseOrderInput(req CreatePurchaseOrderRequest) (financeUC.CreatePurchaseOrderInput, error) {
-	date, err := time.ParseInLocation("2006-01-02", req.PurchaseDate, wibLocation)
+	date, err := time.Parse("2006-01-02", req.PurchaseDate)
 	if err != nil {
 		return financeUC.CreatePurchaseOrderInput{}, err
 	}
@@ -281,7 +317,7 @@ func ToCreatePurchaseOrderInput(req CreatePurchaseOrderRequest) (financeUC.Creat
 }
 
 func ToCreateCapitalRecordInput(req CreateCapitalRecordRequest) (financeUC.CreateCapitalRecordInput, error) {
-	date, err := time.ParseInLocation("2006-01-02", req.RecordDate, wibLocation)
+	date, err := time.Parse("2006-01-02", req.RecordDate)
 	if err != nil {
 		return financeUC.CreateCapitalRecordInput{}, err
 	}
@@ -303,7 +339,7 @@ type UpdateCapitalRecordRequest struct {
 }
 
 func ToUpdateCapitalRecordInput(id uuid.UUID, req UpdateCapitalRecordRequest) (financeUC.UpdateCapitalRecordInput, error) {
-	date, err := time.ParseInLocation("2006-01-02", req.RecordDate, wibLocation)
+	date, err := time.Parse("2006-01-02", req.RecordDate)
 	if err != nil {
 		return financeUC.UpdateCapitalRecordInput{}, err
 	}

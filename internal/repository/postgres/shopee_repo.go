@@ -108,6 +108,7 @@ type shopeeUnifiedOrderGORM struct {
 	FundMaintenance  float64                     `gorm:"column:fund_maintenance"`
 	FundDepreciation float64                     `gorm:"column:fund_depreciation"`
 	FundNetProfit    float64                     `gorm:"column:fund_net_profit"`
+	PaidAt           *time.Time                  `gorm:"column:paid_at"`
 	CreatedAt        time.Time                   `gorm:"column:created_at"`
 	UpdatedAt        time.Time                   `gorm:"column:updated_at"`
 	Marketplace      *shopeeOrderMarketplaceGORM `gorm:"foreignKey:OrderID;references:ID"`
@@ -227,6 +228,11 @@ func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.Shopee
 		shipByDateTime = m.ShipByDateTime
 	}
 
+	var payTimeShopee int64
+	if o.PaidAt != nil {
+		payTimeShopee = o.PaidAt.Unix()
+	}
+
 	return shopee.ReconstructOrder(
 		o.OrderNumber,
 		shopID,
@@ -242,6 +248,7 @@ func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.Shopee
 		"",
 		0,
 		0,
+		payTimeShopee,
 		items,
 		escrow,
 		o.CreatedAt,
@@ -700,6 +707,11 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		netProfit := netAmount - cogsAmount
 		fNetProfit := netProfit
 
+		paidAt := o.PaidAt()
+		if paidAt == nil && existingOrder.PaidAt != nil {
+			paidAt = existingOrder.PaidAt
+		}
+
 		// 2. Simpan induk tabel orders TERLEBIH DAHULU agar Foreign Key tidak error
 		orderRecord := shopeeUnifiedOrderGORM{
 			ID:               orderID,
@@ -721,13 +733,14 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			FundMaintenance:  totMaint,
 			FundDepreciation: totDep,
 			FundNetProfit:    fNetProfit,
+			PaidAt:           paidAt,
 			CreatedAt:        orderCreatedAt,
 			UpdatedAt:        orderUpdatedAt,
 		}
 
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"customer_name", "status", "payment_status", "gross_amount", "channel_fee", "net_amount", "cogs_amount", "net_profit", "fund_filament", "fund_component", "fund_packaging", "fund_electricity", "fund_maintenance", "fund_depreciation", "fund_net_profit", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"customer_name", "status", "payment_status", "gross_amount", "channel_fee", "net_amount", "cogs_amount", "net_profit", "fund_filament", "fund_component", "fund_packaging", "fund_electricity", "fund_maintenance", "fund_depreciation", "fund_net_profit", "paid_at", "updated_at"}),
 		}).Create(&orderRecord).Error; err != nil {
 			return err
 		}

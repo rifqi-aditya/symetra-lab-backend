@@ -252,6 +252,8 @@ type ShopeeOrder struct {
 	buyerCancelReason string
 	createTimeShopee  int64
 	updateTimeShopee  int64
+	payTimeShopee     int64
+	paidAt            *time.Time
 	items             []ShopeeOrderItem
 	escrow            *ShopeeOrderEscrow
 	createdAt         time.Time
@@ -261,9 +263,14 @@ type ShopeeOrder struct {
 func ReconstructOrder(
 	orderSN string, shopID uint64, orderStatus string, buyerUserID uint64, buyerUsername, msg string,
 	shipByDate int64, shipByDateTime *time.Time, shippingCarrier, trackingNumber string,
-	totalAmount float64, cancelReason string, createTimeShopee, updateTimeShopee int64,
+	totalAmount float64, cancelReason string, createTimeShopee, updateTimeShopee, payTimeShopee int64,
 	items []ShopeeOrderItem, escrow *ShopeeOrderEscrow, createdAt, updatedAt time.Time,
 ) *ShopeeOrder {
+	var paidAt *time.Time
+	if payTimeShopee > 0 {
+		t := time.Unix(payTimeShopee, 0)
+		paidAt = &t
+	}
 	return &ShopeeOrder{
 		orderSN:           orderSN,
 		shopID:            shopID,
@@ -279,6 +286,8 @@ func ReconstructOrder(
 		buyerCancelReason: cancelReason,
 		createTimeShopee:  createTimeShopee,
 		updateTimeShopee:  updateTimeShopee,
+		payTimeShopee:     payTimeShopee,
+		paidAt:            paidAt,
 		items:             items,
 		escrow:            escrow,
 		createdAt:         createdAt,
@@ -300,6 +309,9 @@ func (o *ShopeeOrder) TotalAmount() float64        { return o.totalAmount }
 func (o *ShopeeOrder) BuyerCancelReason() string   { return o.buyerCancelReason }
 func (o *ShopeeOrder) CreateTimeShopee() int64     { return o.createTimeShopee }
 func (o *ShopeeOrder) UpdateTimeShopee() int64     { return o.updateTimeShopee }
+func (o *ShopeeOrder) PayTimeShopee() int64        { return o.payTimeShopee }
+func (o *ShopeeOrder) PaidAt() *time.Time          { return o.paidAt }
+func (o *ShopeeOrder) SetPaidAt(t *time.Time)      { o.paidAt = t }
 func (o *ShopeeOrder) Items() []ShopeeOrderItem    { return o.items }
 func (o *ShopeeOrder) Escrow() *ShopeeOrderEscrow  { return o.escrow }
 func (o *ShopeeOrder) CreatedAt() time.Time        { return o.createdAt }
