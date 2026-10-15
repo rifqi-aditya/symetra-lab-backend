@@ -161,102 +161,118 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 	now := time.Now().Unix()
 	timeFrom := now - (14 * 86400) // last 14 days
 
-	listResp, err := uc.shopeeClient.GetOrderList(shop.AccessToken(), shop.ShopID(), timeFrom, now, "", "")
-	if err != nil {
-		return 0, err
-	}
-
-	orderSNs := make([]string, len(listResp.Response.OrderList))
-	for i, o := range listResp.Response.OrderList {
-		orderSNs[i] = o.OrderSN
+	cursor := ""
+	var orderSNs []string
+	for {
+		listResp, err := uc.shopeeClient.GetOrderList(shop.AccessToken(), shop.ShopID(), timeFrom, now, "", cursor)
+		if err != nil {
+			return 0, err
+		}
+		for _, o := range listResp.Response.OrderList {
+			orderSNs = append(orderSNs, o.OrderSN)
+		}
+		if !listResp.Response.More || listResp.Response.NextCursor == "" {
+			break
+		}
+		cursor = listResp.Response.NextCursor
 	}
 
 	if len(orderSNs) == 0 {
 		return 0, nil
 	}
 
-	detailResp, err := uc.shopeeClient.GetOrderDetail(shop.AccessToken(), shop.ShopID(), orderSNs)
-	if err != nil {
-		return 0, err
-	}
-
 	savedCount := 0
-	for _, o := range detailResp.Response.OrderList {
-		items := make([]shopee.ShopeeOrderItem, len(o.ItemList))
-		for j, it := range o.ItemList {
-			items[j] = shopee.ReconstructOrderItem(
-				0,
-				o.OrderSN,
-				it.ItemID,
-				it.ItemName,
-				it.ItemSKU,
-				it.ModelID,
-				it.ModelName,
-				it.ModelSKU,
-				it.ModelQuantityPurchased,
-				it.ModelOriginalPrice,
-				it.ModelDiscountedPrice,
-				nil,
-				"",
-				"UNMAPPED",
-				0, 0, 0, 0, 0, 0, 0, 0, 0,
-				time.Now(),
-				time.Now(),
-			)
+	// Batch detail fetch in chunks of 50 (Shopee API limit per request)
+	chunkSize := 50
+	for i := 0; i < len(orderSNs); i += chunkSize {
+		end := i + chunkSize
+		if end > len(orderSNs) {
+			end = len(orderSNs)
+		}
+		batchSNs := orderSNs[i:end]
+
+		detailResp, err := uc.shopeeClient.GetOrderDetail(shop.AccessToken(), shop.ShopID(), batchSNs)
+		if err != nil {
+			return savedCount, err
 		}
 
-		var shipByDateTime *time.Time
-		if o.ShipByDate > 0 {
-			t := time.Unix(o.ShipByDate, 0)
-			shipByDateTime = &t
-		}
-
-		carrier := o.ShippingCarrier
-		if carrier == "" {
-			carrier = o.CheckoutShippingCarrier
-		}
-		if carrier == "" && len(o.PackageList) > 0 {
-			carrier = o.PackageList[0].ShippingCarrier
-		}
-
-		var itemsTotal float64
-		for _, it := range items {
-			p := it.DiscountedPrice()
-			if p <= 0 {
-				p = it.OriginalPrice()
+		for _, o := range detailResp.Response.OrderList {
+			items := make([]shopee.ShopeeOrderItem, len(o.ItemList))
+			for j, it := range o.ItemList {
+				items[j] = shopee.ReconstructOrderItem(
+					0,
+					o.OrderSN,
+					it.ItemID,
+					it.ItemName,
+					it.ItemSKU,
+					it.ModelID,
+					it.ModelName,
+					it.ModelSKU,
+					it.ModelQuantityPurchased,
+					it.ModelOriginalPrice,
+					it.ModelDiscountedPrice,
+					nil,
+					"",
+					"UNMAPPED",
+					0, 0, 0, 0, 0, 0, 0, 0, 0,
+					time.Now(),
+					time.Now(),
+				)
 			}
-			itemsTotal += p * float64(it.Quantity())
-		}
 
-		var escrow *shopee.ShopeeOrderEscrow
-		if o.OrderStatus != "UNPAID" && o.OrderStatus != "CANCELLED" {
-			escrow = uc.buildEscrowForOrder(shop, o.OrderSN, o.OrderStatus, itemsTotal)
-		}
+			var shipByDateTime *time.Time
+			if o.ShipByDate > 0 {
+				t := time.Unix(o.ShipByDate, 0)
+				shipByDateTime = &t
+			}
 
-		domainOrder := shopee.ReconstructOrder(
-			o.OrderSN,
-			shop.ShopID(),
-			o.OrderStatus,
-			o.BuyerUserID,
-			o.BuyerUsername,
-			o.MessageToSeller,
-			o.ShipByDate,
-			shipByDateTime,
-			carrier,
-			"",
-			o.TotalAmount,
-			o.BuyerCancelReason,
-			o.CreateTime,
-			o.UpdateTime,
-			o.PayTime,
-			items,
-			escrow,
-			time.Unix(o.CreateTime, 0),
-			time.Unix(o.UpdateTime, 0),
-		)
+			carrier := o.ShippingCarrier
+			if carrier == "" {
+				carrier = o.CheckoutShippingCarrier
+			}
+			if carrier == "" && len(o.PackageList) > 0 {
+				carrier = o.PackageList[0].ShippingCarrier
+			}
 
-		if err := uc.repo.SaveOrder(ctx, domainOrder); err == nil {
-			savedCount++
+			var itemsTotal float64
+			for _, it := range items {
+				p := it.DiscountedPrice()
+				if p <= 0 {
+					p = it.OriginalPrice()
+				}
+				itemsTotal += p * float64(it.Quantity())
+			}
+
+			var escrow *shopee.ShopeeOrderEscrow
+			if o.OrderStatus != "UNPAID" && o.OrderStatus != "CANCELLED" {
+				escrow = uc.buildEscrowForOrder(shop, o.OrderSN, o.OrderStatus, itemsTotal)
+			}
+
+			domainOrder := shopee.ReconstructOrder(
+				o.OrderSN,
+				shop.ShopID(),
+				o.OrderStatus,
+				o.BuyerUserID,
+				o.BuyerUsername,
+				o.MessageToSeller,
+				o.ShipByDate,
+				shipByDateTime,
+				carrier,
+				"",
+				o.TotalAmount,
+				o.BuyerCancelReason,
+				o.CreateTime,
+				o.UpdateTime,
+				o.PayTime,
+				items,
+				escrow,
+				time.Unix(o.CreateTime, 0),
+				time.Unix(o.UpdateTime, 0),
+			)
+
+			if err := uc.repo.SaveOrder(ctx, domainOrder); err == nil {
+				savedCount++
+			}
 		}
 	}
 
@@ -284,12 +300,17 @@ func (uc *ShopeeUseCases) SyncReleasedEscrows(ctx context.Context, shopID uint64
 		return 0, err
 	}
 
+	wibLocation := time.FixedZone("WIB", 7*3600)
 	syncedCount := 0
 	for _, item := range escrowResp.Response.EscrowList {
 		if item.EscrowReleaseTime <= 0 || item.PayoutAmount <= 0 {
 			continue
 		}
-		releaseDate := time.Unix(item.EscrowReleaseTime, 0)
+
+		// Pastikan status order & order_marketplace_details juga tersinkronisasi menjadi COMPLETED & RELEASED
+		_, _ = uc.SyncSingleOrder(ctx, shop.ShopID(), item.OrderSN)
+
+		releaseDate := time.Unix(item.EscrowReleaseTime, 0).In(wibLocation)
 		tx, txErr := finance.NewFinanceTransaction(
 			finance.TypeIncome,
 			finance.CategorySalesShopee,

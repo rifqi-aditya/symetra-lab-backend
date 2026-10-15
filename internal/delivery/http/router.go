@@ -209,6 +209,8 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		shopeeGroup.GET("/shops", cfg.ShopeeHandler.ListShops)
 		shopeeGroup.POST("/shops/:shop_id/refresh", cfg.ShopeeHandler.RefreshToken)
 		shopeeGroup.POST("/sync-shopee", cfg.ShopeeHandler.SyncShopee)
+		shopeeGroup.POST("/shops/:shop_id/sync-orders", cfg.ShopeeHandler.SyncShopee)
+		shopeeGroup.POST("/sync-orders", cfg.ShopeeHandler.SyncShopee)
 		shopeeGroup.GET("/orders", cfg.ShopeeHandler.ListOrders)
 		shopeeGroup.GET("/orders/:order_sn", cfg.ShopeeHandler.GetOrderDetail)
 		shopeeGroup.POST("/link-sku", cfg.ShopeeHandler.LinkSKU)
