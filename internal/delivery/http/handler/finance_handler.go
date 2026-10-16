@@ -440,6 +440,7 @@ func (h *FinanceHandler) GetOrderAllocations(c echo.Context) error {
 		TotalNetProfit:       summary.TotalNetProfit,
 		AverageProfitMargin:  summary.AverageProfitMargin,
 		FundFilament:         summary.FundFilament,
+		FundEmergency:        summary.FundEmergency,
 		FundComponent:        summary.FundComponent,
 		FundPackaging:        summary.FundPackaging,
 		FundElectricity:      summary.FundElectricity,
@@ -448,6 +449,7 @@ func (h *FinanceHandler) GetOrderAllocations(c echo.Context) error {
 		FundNetProfit:        summary.FundNetProfit,
 		UnmappedItemsCount:   summary.UnmappedItemsCount,
 		AllocatedFilament:     summary.AllocatedFilament,
+		AllocatedEmergency:   summary.AllocatedEmergency,
 		AllocatedComponent:    summary.AllocatedComponent,
 		AllocatedPackaging:    summary.AllocatedPackaging,
 		AllocatedElectricity:  summary.AllocatedElectricity,
@@ -455,6 +457,7 @@ func (h *FinanceHandler) GetOrderAllocations(c echo.Context) error {
 		AllocatedDepreciation: summary.AllocatedDepreciation,
 		AllocatedNetProfit:    summary.AllocatedNetProfit,
 		SpentFilament:         summary.SpentFilament,
+		SpentEmergency:       summary.SpentEmergency,
 		SpentComponent:        summary.SpentComponent,
 		SpentPackaging:        summary.SpentPackaging,
 		SpentElectricity:      summary.SpentElectricity,
@@ -476,6 +479,7 @@ func (h *FinanceHandler) GetOrderAllocations(c echo.Context) error {
 		KasMaintenance:        summary.FundMaintenance,
 		KasDepresiasi:         summary.FundDepreciation,
 		KasLabaBersih:         summary.FundNetProfit,
+		KasCadanganRisiko:     summary.FundEmergency,
 	}))
 }
 

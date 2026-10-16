@@ -1,10 +1,14 @@
-﻿package costing
+package costing
 
 import "math"
 
 // ProductCostBreakdown defines the exact HPP and pricing calculation breakdown.
 type ProductCostBreakdown struct {
+	// FilamentCost is the NET filament cost (without the failure buffer).
 	FilamentCost           float64 `json:"filament_cost"`
+	// EmergencyFundCost is the isolated failure buffer (e.g. 10% of base filament cost).
+	// This is allocated to the dedicated Kas Cadangan Risiko (EMERGENCY) cash account.
+	EmergencyFundCost      float64 `json:"emergency_fund_cost"`
 	HardwareCost           float64 `json:"hardware_cost"`
 	PackagingCost          float64 `json:"packaging_cost"`
 	ElectricityCost        float64 `json:"electricity_cost"`

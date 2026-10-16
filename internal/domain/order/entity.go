@@ -2,6 +2,7 @@ package order
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 
@@ -21,6 +22,7 @@ type Order struct {
 	cogsAmount       float64
 	netProfit        float64
 	fundFilament     float64
+	fundEmergency    float64
 	fundComponent    float64
 	fundPackaging    float64
 	fundElectricity  float64
@@ -166,6 +168,15 @@ func NewOrder(
 	}
 
 	netProfit := totalRev - totalHPP
+	emergencyFromBuffer := math.Round(totalFilament*0.090909*100) / 100
+	netFilament := math.Round((totalFilament-emergencyFromBuffer)*100) / 100
+	var profitCut float64
+	if netProfit > 0 {
+		profitCut = math.Round(netProfit*0.05*100) / 100
+	}
+	totalEmergency := math.Round((emergencyFromBuffer+profitCut)*100) / 100
+	finalNetProfit := math.Round((netProfit-profitCut)*100) / 100
+
 	now := time.Now()
 	return &Order{
 		id:               orderID,
@@ -179,13 +190,14 @@ func NewOrder(
 		netAmount:        totalRev,
 		cogsAmount:       totalHPP,
 		netProfit:        netProfit,
-		fundFilament:     totalFilament,
+		fundFilament:     netFilament,
+		fundEmergency:    totalEmergency,
 		fundComponent:    totalComponent,
 		fundPackaging:    totalPackaging,
 		fundElectricity:  totalElectricity,
 		fundMaintenance:  totalMaintenance,
 		fundDepreciation: totalDepreciation,
-		fundNetProfit:    netProfit,
+		fundNetProfit:    finalNetProfit,
 		totalRevenue:     totalRev,
 		totalHPP:         totalHPP,
 		totalProfit:      netProfit,
@@ -203,7 +215,7 @@ func ReconstructOrder(
 	id, userID uuid.UUID,
 	orderNumber, customerName, customerContact, channel string,
 	grossAmount, channelFee, netAmount, cogsAmount, netProfit float64,
-	fundFilament, fundComponent, fundPackaging, fundElectricity, fundMaintenance, fundDepreciation, fundNetProfit float64,
+	fundFilament, fundEmergency, fundComponent, fundPackaging, fundElectricity, fundMaintenance, fundDepreciation, fundNetProfit float64,
 	totalRevenue, totalHPP, totalProfit float64,
 	status, notes, source, paymentStatus string,
 	startedAt, completedAt *time.Time,
@@ -223,6 +235,7 @@ func ReconstructOrder(
 		cogsAmount:       cogsAmount,
 		netProfit:        netProfit,
 		fundFilament:     fundFilament,
+		fundEmergency:    fundEmergency,
 		fundComponent:    fundComponent,
 		fundPackaging:    fundPackaging,
 		fundElectricity:  fundElectricity,
@@ -351,6 +364,7 @@ func (o *Order) NetAmount() float64         { return o.netAmount }
 func (o *Order) CogsAmount() float64        { return o.cogsAmount }
 func (o *Order) NetProfit() float64         { return o.netProfit }
 func (o *Order) FundFilament() float64      { return o.fundFilament }
+func (o *Order) FundEmergency() float64     { return o.fundEmergency }
 func (o *Order) FundComponent() float64     { return o.fundComponent }
 func (o *Order) FundPackaging() float64     { return o.fundPackaging }
 func (o *Order) FundElectricity() float64   { return o.fundElectricity }

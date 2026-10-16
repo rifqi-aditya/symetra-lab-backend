@@ -116,6 +116,7 @@ type OrderAllocationSummaryResponse struct {
 	TotalNetProfit      float64 `json:"total_net_profit"`
 	AverageProfitMargin float64 `json:"average_profit_margin"`
 	FundFilament        float64 `json:"fund_filament"`
+	FundEmergency       float64 `json:"fund_emergency"`  // Kas Cadangan Risiko
 	FundComponent       float64 `json:"fund_component"`
 	FundPackaging       float64 `json:"fund_packaging"`
 	FundElectricity     float64 `json:"fund_electricity"`
@@ -126,6 +127,7 @@ type OrderAllocationSummaryResponse struct {
 
 	// Inflow Alokasi dari Penjualan Pesanan
 	AllocatedFilament    float64 `json:"allocated_filament"`
+	AllocatedEmergency   float64 `json:"allocated_emergency"`  // Inflow ke Kas Cadangan Risiko
 	AllocatedComponent   float64 `json:"allocated_component"`
 	AllocatedPackaging   float64 `json:"allocated_packaging"`
 	AllocatedElectricity float64 `json:"allocated_electricity"`
@@ -135,6 +137,7 @@ type OrderAllocationSummaryResponse struct {
 
 	// Outflow Pengeluaran Belanja (PO & Expenses)
 	SpentFilament        float64 `json:"spent_filament"`
+	SpentEmergency       float64 `json:"spent_emergency"`  // Drawdown dari Kas Cadangan
 	SpentComponent       float64 `json:"spent_component"`
 	SpentPackaging       float64 `json:"spent_packaging"`
 	SpentElectricity     float64 `json:"spent_electricity"`
@@ -160,6 +163,7 @@ type OrderAllocationSummaryResponse struct {
 	KasMaintenance       float64 `json:"kas_maintenance"`
 	KasDepresiasi        float64 `json:"kas_depresiasi"`
 	KasLabaBersih        float64 `json:"kas_laba_bersih"`
+	KasCadanganRisiko    float64 `json:"kas_cadangan_risiko"` // Legacy alias for fund_emergency
 }
 
 func ToOrderItemResponse(it *order.OrderItem) OrderItemResponse {

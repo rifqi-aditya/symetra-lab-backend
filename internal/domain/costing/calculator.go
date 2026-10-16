@@ -1,4 +1,4 @@
-﻿package costing
+package costing
 
 import (
 	"math"
@@ -20,10 +20,11 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 		}
 	}
 
-	bufferMultiplier := 1.0 + (cfg.FailureBufferPercent / 100.0)
-
-	// 1. Filament Cost
+	// 1. Filament Cost — calculated WITHOUT the buffer multiplier.
+	// The buffer amount is isolated into EmergencyFundCost below so it can be
+	// allocated to the dedicated Kas Cadangan Risiko cash account.
 	filamentCost := 0.0
+	emergencyFundCost := 0.0
 	if input.DefaultWeightGrams > 0 {
 		costPerGram := input.CustomRatePerGram
 		if costPerGram <= 0 {
@@ -46,7 +47,12 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 				}
 			}
 		}
-		filamentCost = input.DefaultWeightGrams * bufferMultiplier * costPerGram
+		// Base filament cost (pure material, no buffer).
+		filamentCost = input.DefaultWeightGrams * costPerGram
+		// Emergency fund = isolated failure buffer amount.
+		emergencyFundCost = filamentCost * (cfg.FailureBufferPercent / 100.0)
+		// NOTE: filamentCost intentionally stays as the BASE value (without buffer).
+		// emergencyFundCost + filamentCost = old buffered filamentCost ✓
 	}
 
 	// 2. Hardware / Components Cost
@@ -94,7 +100,8 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 	depreciationCost := depreciationPerHour * hours
 
 	// 5. Base HPP
-	baseHPP := filamentCost + hardwareCost + packagingCost + electricityCost + depreciationCost
+	// emergencyFundCost + filamentCost = old buffered filamentCost, so BaseHPP is unchanged.
+	baseHPP := filamentCost + emergencyFundCost + hardwareCost + packagingCost + electricityCost + depreciationCost
 	if baseHPP == 0 && input.BaseHPP > 0 {
 		baseHPP = input.BaseHPP
 	}
@@ -130,6 +137,7 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 
 	return ProductCostBreakdown{
 		FilamentCost:           RoundTwo(filamentCost),
+		EmergencyFundCost:      RoundTwo(emergencyFundCost),
 		HardwareCost:           RoundTwo(hardwareCost),
 		PackagingCost:          RoundTwo(packagingCost),
 		ElectricityCost:        RoundTwo(electricityCost),

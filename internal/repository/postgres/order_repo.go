@@ -28,6 +28,7 @@ type orderGORM struct {
 	CogsAmount       float64         `gorm:"column:cogs_amount"`
 	NetProfit        float64         `gorm:"column:net_profit"`
 	FundFilament     float64         `gorm:"column:fund_filament"`
+	FundEmergency    float64         `gorm:"column:fund_emergency"`
 	FundComponent    float64         `gorm:"column:fund_component"`
 	FundPackaging    float64         `gorm:"column:fund_packaging"`
 	FundElectricity  float64         `gorm:"column:fund_electricity"`
@@ -188,6 +189,7 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		cogs,
 		profit,
 		g.FundFilament,
+		g.FundEmergency,
 		g.FundComponent,
 		g.FundPackaging,
 		g.FundElectricity,
@@ -295,6 +297,7 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 			CogsAmount:       o.CogsAmount(),
 			NetProfit:        o.NetProfit(),
 			FundFilament:     o.FundFilament(),
+			FundEmergency:    o.FundEmergency(),
 			FundComponent:    o.FundComponent(),
 			FundPackaging:    o.FundPackaging(),
 			FundElectricity:  o.FundElectricity(),
@@ -498,9 +501,9 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 	}
 
 	// 2. Query cash_accounts running ledger (O(1) direct read) for All-Time without custom filters
-	var fundFilament, fundComponent, fundPackaging, fundElectricity, fundMaintenance, fundDepreciation, fundNetProfit float64
-	var spentFilament, spentComponent, spentPackaging, spentElectricity, spentMaintenance, spentDepreciation, spentNetProfit float64
-	var allocFilament, allocComponent, allocPackaging, allocElectricity, allocMaintenance, allocDepreciation, allocNetProfit float64
+	var fundFilament, fundEmergency, fundComponent, fundPackaging, fundElectricity, fundMaintenance, fundDepreciation, fundNetProfit float64
+	var spentFilament, spentEmergency, spentComponent, spentPackaging, spentElectricity, spentMaintenance, spentDepreciation, spentNetProfit float64
+	var allocFilament, allocEmergency, allocComponent, allocPackaging, allocElectricity, allocMaintenance, allocDepreciation, allocNetProfit float64
 
 	isAllTime := dateFrom == nil && dateTo == nil && (channel == "" || channel == "ALL")
 	useLedger := false
@@ -526,6 +529,10 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 					fundFilament = acc.CurrentBalance
 					spentFilament = acc.SpentAmount
 					allocFilament = acc.AllocatedAmount
+				case "EMERGENCY":
+					fundEmergency = acc.CurrentBalance
+					spentEmergency = acc.SpentAmount
+					allocEmergency = acc.AllocatedAmount
 				case "COMPONENT":
 					fundComponent = acc.CurrentBalance
 					spentComponent = acc.SpentAmount
@@ -610,6 +617,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		allocNetProfit = agg.FundNetProfit
 
 		fundFilament = allocFilament - spentFilament
+		fundEmergency = allocEmergency - spentEmergency
 		fundComponent = allocComponent - spentComponent
 		fundPackaging = allocPackaging - spentPackaging
 		fundElectricity = allocElectricity - spentElectricity
@@ -627,6 +635,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		TotalNetProfit:        agg.TotalNetProfit,
 
 		FundFilament:          fundFilament,
+		FundEmergency:         fundEmergency,
 		FundComponent:         fundComponent,
 		FundPackaging:         fundPackaging,
 		FundElectricity:       fundElectricity,
@@ -635,6 +644,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		FundNetProfit:         fundNetProfit,
 
 		AllocatedFilament:     allocFilament,
+		AllocatedEmergency:    allocEmergency,
 		AllocatedComponent:    allocComponent,
 		AllocatedPackaging:    allocPackaging,
 		AllocatedElectricity:  allocElectricity,
@@ -643,6 +653,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		AllocatedNetProfit:    allocNetProfit,
 
 		SpentFilament:         spentFilament,
+		SpentEmergency:        spentEmergency,
 		SpentComponent:        spentComponent,
 		SpentPackaging:        spentPackaging,
 		SpentElectricity:      spentElectricity,

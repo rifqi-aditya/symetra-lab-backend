@@ -7,7 +7,7 @@ import (
 )
 
 // SyncCashAccountLedger synchronizes running allocated_amount, spent_amount, and current_balance
-// across all 7 cash accounts in the database from settled orders and recorded expenses.
+// across all 8 cash accounts in the database from settled orders and recorded expenses.
 func SyncCashAccountLedger(ctx context.Context, db *gorm.DB) error {
 	syncSQL := `
 		UPDATE cash_accounts SET 
@@ -16,6 +16,13 @@ func SyncCashAccountLedger(ctx context.Context, db *gorm.DB) error {
 			current_balance = COALESCE((SELECT SUM(fund_filament) FROM orders WHERE payment_status = 'PAID'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'FILAMENT'), 0),
 			updated_at = NOW()
 		WHERE code = 'FILAMENT';
+
+		UPDATE cash_accounts SET 
+			allocated_amount = COALESCE((SELECT SUM(fund_emergency) FROM orders WHERE payment_status = 'PAID'), 0),
+			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'EMERGENCY_FUND'), 0),
+			current_balance = COALESCE((SELECT SUM(fund_emergency) FROM orders WHERE payment_status = 'PAID'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'EMERGENCY_FUND'), 0),
+			updated_at = NOW()
+		WHERE code = 'EMERGENCY';
 
 		UPDATE cash_accounts SET 
 			allocated_amount = COALESCE((SELECT SUM(fund_component) FROM orders WHERE payment_status = 'PAID'), 0),
@@ -54,8 +61,8 @@ func SyncCashAccountLedger(ctx context.Context, db *gorm.DB) error {
 
 		UPDATE cash_accounts SET 
 			allocated_amount = COALESCE((SELECT SUM(fund_net_profit) FROM orders WHERE payment_status = 'PAID'), 0),
-			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','REIMBURSEMENT')), 0),
-			current_balance = COALESCE((SELECT SUM(fund_net_profit) FROM orders WHERE payment_status = 'PAID'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','REIMBURSEMENT')), 0),
+			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','EMERGENCY_FUND','REIMBURSEMENT')), 0),
+			current_balance = COALESCE((SELECT SUM(fund_net_profit) FROM orders WHERE payment_status = 'PAID'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','EMERGENCY_FUND','REIMBURSEMENT')), 0),
 			updated_at = NOW()
 		WHERE code = 'NET_PROFIT';
 	`

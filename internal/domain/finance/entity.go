@@ -37,6 +37,9 @@ const (
 	CategoryRent               TransactionCategory = "RENT"
 	CategoryOtherExpense       TransactionCategory = "OTHER_EXPENSE"
 	CategoryReimbursement      TransactionCategory = "REIMBURSEMENT"
+	// CategoryEmergencyFund records drawdowns from the Kas Cadangan Risiko account
+	// (e.g. writing off failed prints, compensating operational losses).
+	CategoryEmergencyFund      TransactionCategory = "EMERGENCY_FUND"
 
 	// CAPITAL_IN categories
 	CategoryInitialCapital    TransactionCategory = "INITIAL_CAPITAL"
@@ -497,7 +500,7 @@ type FinanceSummary struct {
 	ByCategory map[TransactionCategory]float64
 }
 
-// ─── OrderAllocationSummary (7-Bucket Fund Allocation) ───────────────────────
+// ─── OrderAllocationSummary (8-Bucket Fund Allocation) ───────────────────────
 
 type OrderAllocationSummary struct {
 	TotalOrders         int64
@@ -509,6 +512,7 @@ type OrderAllocationSummary struct {
 
 	// Net Available Fund Balances (Saldo Tersedia = Allocated - Spent)
 	FundFilament        float64
+	FundEmergency       float64 // Kas Cadangan Risiko (isolated failure buffer)
 	FundComponent       float64
 	FundPackaging       float64
 	FundElectricity     float64
@@ -518,6 +522,7 @@ type OrderAllocationSummary struct {
 
 	// Allocated Inflow from Orders
 	AllocatedFilament    float64
+	AllocatedEmergency   float64 // Kas Cadangan Risiko inflow from orders
 	AllocatedComponent   float64
 	AllocatedPackaging   float64
 	AllocatedElectricity float64
@@ -527,6 +532,7 @@ type OrderAllocationSummary struct {
 
 	// Actual Spent Outflow (PO & Expenses)
 	SpentFilament        float64
+	SpentEmergency       float64 // Emergency fund drawdowns
 	SpentComponent       float64
 	SpentPackaging       float64
 	SpentElectricity     float64
