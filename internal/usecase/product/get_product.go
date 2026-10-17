@@ -1,4 +1,4 @@
-﻿package product
+package product
 
 import (
 	"context"
@@ -90,13 +90,27 @@ func (uc *GetProductUseCase) buildDetailOutput(ctx context.Context, userID uuid.
 
 	// Machine
 	var machInput *costing.MachineCostInput
+	var activeM *machine.Machine
 	if p.DefaultMachineID() != nil {
 		if m, err := uc.machineRepo.FindByID(ctx, userID, *p.DefaultMachineID()); err == nil && m != nil {
-			machInput = &costing.MachineCostInput{
-				TotalPurchaseCost: m.TotalPurchaseCost(),
-				LifespanHours:     float64(m.LifespanHours()),
-				AvgPowerWatts:     m.AvgPowerWatts(),
-			}
+			activeM = m
+		}
+	}
+	if activeM == nil {
+		if ms, err := uc.machineRepo.FindAll(ctx, userID); err == nil && len(ms) > 0 {
+			activeM = ms[0]
+		}
+	}
+	if activeM != nil {
+		salvage := 0.0
+		if activeM.SalvageValue() != nil {
+			salvage = *activeM.SalvageValue()
+		}
+		machInput = &costing.MachineCostInput{
+			TotalPurchaseCost: activeM.TotalPurchaseCost(),
+			SalvageValue:      salvage,
+			LifespanHours:     float64(activeM.LifespanHours()),
+			AvgPowerWatts:     activeM.AvgPowerWatts(),
 		}
 	}
 

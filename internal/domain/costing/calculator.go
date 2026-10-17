@@ -85,6 +85,7 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 
 	machinePrice := cfg.PrinterPrice
 	lifespanHours := cfg.PrinterLifespanHours
+	salvageValue := 0.0
 	if input.Machine != nil {
 		if input.Machine.TotalPurchaseCost > 0 {
 			machinePrice = input.Machine.TotalPurchaseCost
@@ -92,16 +93,21 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 		if input.Machine.LifespanHours > 0 {
 			lifespanHours = input.Machine.LifespanHours
 		}
+		salvageValue = input.Machine.SalvageValue
 	}
 	depreciationPerHour := 0.0
 	if lifespanHours > 0 {
-		depreciationPerHour = machinePrice / lifespanHours
+		depreciationPerHour = (machinePrice - salvageValue) / lifespanHours
+		if depreciationPerHour < 0 {
+			depreciationPerHour = 0
+		}
 	}
 	depreciationCost := depreciationPerHour * hours
+	maintenanceCost := RoundTwo(depreciationCost * 0.5)
 
 	// 5. Base HPP
 	// emergencyFundCost + filamentCost = old buffered filamentCost, so BaseHPP is unchanged.
-	baseHPP := filamentCost + emergencyFundCost + hardwareCost + packagingCost + electricityCost + depreciationCost
+	baseHPP := filamentCost + emergencyFundCost + hardwareCost + packagingCost + electricityCost + depreciationCost + maintenanceCost
 	if baseHPP == 0 && input.BaseHPP > 0 {
 		baseHPP = input.BaseHPP
 	}
@@ -141,7 +147,7 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 		HardwareCost:           RoundTwo(hardwareCost),
 		PackagingCost:          RoundTwo(packagingCost),
 		ElectricityCost:        RoundTwo(electricityCost),
-		MaintenanceCost:        RoundTwo(depreciationCost * 0.5),
+		MaintenanceCost:        maintenanceCost,
 		DepreciationCost:       RoundTwo(depreciationCost),
 		BaseHPP:                RoundTwo(baseHPP),
 		TargetMarginPercent:    marginPercent,

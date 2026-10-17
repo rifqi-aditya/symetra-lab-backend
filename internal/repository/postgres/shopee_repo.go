@@ -367,7 +367,60 @@ func (r *ShopeeRepository) FindOrders(ctx context.Context, status, carrier, sear
 	return results, nil
 }
 
+type costingContextCache struct {
+	compPrices    map[uuid.UUID]float64
+	packUnitCosts map[uuid.UUID]float64
+	machines      map[uuid.UUID]machineGORM
+	defaultMach   *machineGORM
+	shopCfg       *shopConfigGORM
+}
+
+func loadCostingContextCache(tx *gorm.DB) *costingContextCache {
+	cache := &costingContextCache{
+		compPrices:    make(map[uuid.UUID]float64),
+		packUnitCosts: make(map[uuid.UUID]float64),
+		machines:      make(map[uuid.UUID]machineGORM),
+	}
+	var comps []componentGORM
+	if err := tx.Find(&comps).Error; err == nil {
+		for _, c := range comps {
+			cache.compPrices[c.ID] = c.PricePerUnit
+		}
+	}
+	var packs []packagingItemGORM
+	if err := tx.Find(&packs).Error; err == nil {
+		for _, p := range packs {
+			uCost := p.UnitCost
+			if uCost <= 0 && p.PurchaseQuantity > 0 {
+				uCost = p.PurchasePrice / p.PurchaseQuantity
+			}
+			cache.packUnitCosts[p.ID] = uCost
+		}
+	}
+	var machs []machineGORM
+	if err := tx.Find(&machs).Error; err == nil {
+		for _, m := range machs {
+			cache.machines[m.ID] = m
+			if cache.defaultMach == nil {
+				mCopy := m
+				cache.defaultMach = &mCopy
+			}
+		}
+	}
+	var sc shopConfigGORM
+	if err := tx.First(&sc).Error; err == nil {
+		cache.shopCfg = &sc
+	}
+	return cache
+}
+
 func computeItemCostsFromProduct(tx *gorm.DB, prod *productGORM, qty int, sellingPrice float64) (
+	filCost, emergencyCost, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, netProf float64,
+) {
+	return computeItemCostsFromProductWithCache(tx, prod, qty, sellingPrice, nil)
+}
+
+func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty int, sellingPrice float64, cache *costingContextCache) (
 	filCost, emergencyCost, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, netProf float64,
 ) {
 	if qty <= 0 {
@@ -375,13 +428,22 @@ func computeItemCostsFromProduct(tx *gorm.DB, prod *productGORM, qty int, sellin
 	}
 	q := float64(qty)
 
+	if cache == nil {
+		cache = loadCostingContextCache(tx)
+	}
+
 	var compInputs []costing.ComponentCostInput
 	for _, c := range prod.Components {
 		price := 0.0
 		if c.ComponentID != nil {
-			var comp componentGORM
-			if err := tx.Where("id = ?", *c.ComponentID).First(&comp).Error; err == nil {
-				price = comp.PricePerUnit
+			if cp, ok := cache.compPrices[*c.ComponentID]; ok {
+				price = cp
+			} else {
+				var comp componentGORM
+				if err := tx.Where("id = ?", *c.ComponentID).First(&comp).Error; err == nil {
+					price = comp.PricePerUnit
+					cache.compPrices[*c.ComponentID] = price
+				}
 			}
 		}
 		compInputs = append(compInputs, costing.ComponentCostInput{
@@ -394,11 +456,16 @@ func computeItemCostsFromProduct(tx *gorm.DB, prod *productGORM, qty int, sellin
 	var packInputs []costing.PackagingCostInput
 	for _, p := range prod.PackagingItems {
 		uCost := 0.0
-		var pack packagingItemGORM
-		if err := tx.Where("id = ?", p.PackagingItemID).First(&pack).Error; err == nil {
-			uCost = pack.UnitCost
-			if uCost <= 0 && pack.PurchaseQuantity > 0 {
-				uCost = pack.PurchasePrice / pack.PurchaseQuantity
+		if pu, ok := cache.packUnitCosts[p.PackagingItemID]; ok {
+			uCost = pu
+		} else {
+			var pack packagingItemGORM
+			if err := tx.Where("id = ?", p.PackagingItemID).First(&pack).Error; err == nil {
+				uCost = pack.UnitCost
+				if uCost <= 0 && pack.PurchaseQuantity > 0 {
+					uCost = pack.PurchasePrice / pack.PurchaseQuantity
+				}
+				cache.packUnitCosts[p.PackagingItemID] = uCost
 			}
 		}
 		packInputs = append(packInputs, costing.PackagingCostInput{
@@ -412,6 +479,43 @@ func computeItemCostsFromProduct(tx *gorm.DB, prod *productGORM, qty int, sellin
 		batchSize = 1
 	}
 
+	var machInput *costing.MachineCostInput
+	var m *machineGORM
+	if prod.DefaultMachineID != nil {
+		if mach, ok := cache.machines[*prod.DefaultMachineID]; ok {
+			m = &mach
+		}
+	}
+	if m == nil {
+		m = cache.defaultMach
+	}
+	if m != nil {
+		salvage := 0.0
+		if m.SalvageValue != nil {
+			salvage = *m.SalvageValue
+		}
+		machInput = &costing.MachineCostInput{
+			TotalPurchaseCost: m.TotalPurchaseCost,
+			SalvageValue:      salvage,
+			LifespanHours:     float64(m.LifespanHours),
+			AvgPowerWatts:     m.AvgPowerWatts,
+		}
+	}
+
+	var shopCfgInput *costing.ShopConfigInput
+	if cache.shopCfg != nil {
+		sc := cache.shopCfg
+		shopCfgInput = &costing.ShopConfigInput{
+			FilamentPricePerRoll:    sc.FilamentPricePerRoll,
+			FilamentWeightGrams:     sc.FilamentWeightGrams,
+			ElectricityTariffPerKwh: sc.ElectricityTariffPerKwh,
+			PrinterPowerWatts:       sc.PrinterPowerWatts,
+			PrinterPrice:            sc.PrinterPrice,
+			PrinterLifespanHours:    sc.PrinterLifespanHours,
+			FailureBufferPercent:    sc.FailureBufferPercent,
+		}
+	}
+
 	cb := costing.Calculate(costing.CalculationInput{
 		MaterialType:          prod.MaterialType,
 		DefaultWeightGrams:    prod.DefaultWeightGrams,
@@ -422,6 +526,8 @@ func computeItemCostsFromProduct(tx *gorm.DB, prod *productGORM, qty int, sellin
 		BaseSellingPrice:      prod.BaseSellingPrice,
 		Components:            compInputs,
 		PackagingItems:        packInputs,
+		Machine:               machInput,
+		ShopConfig:            shopCfgInput,
 	})
 
 	filCost = cb.FilamentCost * q       // net filament cost (no buffer)
@@ -476,13 +582,16 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 		if netBase <= 0 {
 			netBase = ord.GrossAmount
 		}
-		// Emergency fund = isolated failure buffer from filament cost + 5% from positive net profit.
-		// Formula: emergency_buffer ≈ filament_gross * (rate / (1 + rate))
-		// At 10% rate: filament_gross * 0.090909
-		bufferEmergency := costing.RoundTwo(sums.Filament * 0.090909)
-		netFilament := costing.RoundTwo(sums.Filament - bufferEmergency)
+		// Emergency fund = 10% failure buffer from pure filament cost + 5% from positive net profit.
+		bufferEmergency := costing.RoundTwo(sums.Filament * 0.10)
+		netFilament := sums.Filament
 
-		rawProfit := netBase - sums.TotalCOGS
+		actualCOGS := costing.RoundTwo(netFilament + bufferEmergency + sums.Component + sums.Packaging + sums.Electricity + sums.Maintenance + sums.Depreciation)
+		if sums.TotalCOGS < actualCOGS {
+			sums.TotalCOGS = actualCOGS
+		}
+
+		rawProfit := costing.RoundTwo(netBase - sums.TotalCOGS)
 		var profitCut float64
 		if rawProfit > 0 {
 			profitCut = costing.RoundTwo(rawProfit * 0.05)
@@ -616,6 +725,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			maintCost := item.MaintenanceCost()
 			depCost := item.DepreciationCost()
 			baseHPP := item.BaseHPP()
+			emergencyCost := filCost * 0.10
 
 			if productID == nil && existingItem.ProductID != nil {
 				productID = existingItem.ProductID
@@ -645,7 +755,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 							matchedSKU = *p.SKU
 						}
 						mappingStatus = "MATCHED"
-						filCost, _, compCost, packCost, elecCost, maintCost, depCost, baseHPP, _ = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
+						filCost, emergencyCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, _ = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
 					}
 				}
 
@@ -665,14 +775,14 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 								matchedSKU = *p.SKU
 							}
 							mappingStatus = "MATCHED"
-							filCost, _, compCost, packCost, elecCost, maintCost, depCost, baseHPP, _ = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
+							filCost, emergencyCost, compCost, packCost, elecCost, maintCost, depCost, baseHPP, _ = computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
 						}
 					}
 				}
 			}
 
 			totFil += filCost
-			totEmergency += costing.RoundTwo(filCost * 0.090909) // emergency = ~9.09% of gross filament
+			totEmergency += emergencyCost
 			totComp += compCost
 			totPack += packCost
 			totElec += elecCost
@@ -753,7 +863,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			NetAmount:        netAmount,
 			COGSAmount:       cogsAmount,
 			NetProfit:        netProfit,
-			FundFilament:     costing.RoundTwo(totFil - totEmergency), // net (buffer removed)
+			FundFilament:     costing.RoundTwo(totFil), // pure filament cost
 			FundEmergency:    totalEmergency,
 			FundComponent:    totComp,
 			FundPackaging:    totPack,
@@ -967,6 +1077,56 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 }
 
 func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error) {
+	// 0. Cache all context (components, packaging, machines, shop_config)
+	costingCache := loadCostingContextCache(r.db)
+
+	var prods []productGORM
+	if err := r.db.WithContext(ctx).Preload("Components").Preload("PackagingItems").Find(&prods).Error; err == nil {
+		prodMap := make(map[uuid.UUID]productGORM)
+		for _, p := range prods {
+			prodMap[p.ID] = p
+
+			// Recompute product base_hpp with updated machine depreciation
+			_, _, _, _, _, _, _, totalCOGS, _ := computeItemCostsFromProductWithCache(r.db, &p, 1, p.BaseSellingPrice, costingCache)
+			if totalCOGS > 0 {
+				_ = r.db.WithContext(ctx).Table("products").Where("id = ?", p.ID).Update("base_hpp", totalCOGS).Error
+			}
+		}
+
+		type itemInfo struct {
+			ID           uuid.UUID `gorm:"column:id"`
+			ProductID    uuid.UUID `gorm:"column:product_id"`
+			Quantity     int       `gorm:"column:quantity"`
+			SellingPrice float64   `gorm:"column:selling_price"`
+		}
+		var items []itemInfo
+		r.db.WithContext(ctx).Table("order_items").
+			Select("id, product_id, quantity, selling_price").
+			Where("product_id IS NOT NULL").
+			Scan(&items)
+
+		// Recalculate each item's cost based on real machine depreciation in a transaction
+		_ = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			for _, it := range items {
+				p, ok := prodMap[it.ProductID]
+				if !ok {
+					continue
+				}
+				filCost, _, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, _ := computeItemCostsFromProductWithCache(tx, &p, it.Quantity, it.SellingPrice, costingCache)
+				_ = tx.Table("order_items").Where("id = ?", it.ID).Updates(map[string]interface{}{
+					"filament_cost":     filCost,
+					"component_cost":    compCost,
+					"packaging_cost":    packCost,
+					"energy_cost":       elecCost,
+					"maintenance_cost":  maintCost,
+					"depreciation_cost": depCost,
+					"hpp":               totalCOGS,
+				}).Error
+			}
+			return nil
+		})
+	}
+
 	// 1. Sinkronkan nilai gross_amount pesanan yang keliru agar sesuai dengan subtotal item produk toko
 	_ = r.db.WithContext(ctx).Exec(`
 		UPDATE orders o
@@ -987,32 +1147,42 @@ func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error)
 		  AND (o.gross_amount != sub.items_total OR o.gross_amount <= 0)
 	`)
 
-	// 2. Perbarui alokasi COGS, laba bersih, dan 8 pos kas untuk semua pesanan aktif:
-	//    - fund_filament = filamen bersih
-	//    - buffer_kegagalan = 10% dari fund_filament
-	//    - cogs_amount = total HPP 7 komponen produksi (termasuk buffer kegagalan)
-	//    - net_profit = laba bersih pesanan (net_amount - cogs_amount)
-	//    - fund_emergency = buffer_kegagalan + 5% dari laba bersih pesanan (jika positif)
-	//    - fund_net_profit = 95% dari laba bersih pesanan (jika positif)
+	// 2. Perbarui alokasi pos kas orders dari order_items yang sudah dikalkulasi ulang
 	res := r.db.WithContext(ctx).Exec(`
-		UPDATE orders
+		UPDATE orders o
 		SET 
-			cogs_amount = ROUND((fund_filament + ROUND(fund_filament * 0.10, 2) + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation)::numeric, 2),
-			net_profit  = ROUND((net_amount - (fund_filament + ROUND(fund_filament * 0.10, 2) + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation))::numeric, 2),
-			fund_emergency = ROUND(fund_filament * 0.10, 2) + 
-				CASE 
-					WHEN (net_amount - (fund_filament + ROUND(fund_filament * 0.10, 2) + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation)) > 0 
-					THEN ROUND(((net_amount - (fund_filament + ROUND(fund_filament * 0.10, 2) + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation)) * 0.05)::numeric, 2)
-					ELSE 0 
-				END,
-			fund_net_profit = (net_amount - (fund_filament + ROUND(fund_filament * 0.10, 2) + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation)) -
-				CASE 
-					WHEN (net_amount - (fund_filament + ROUND(fund_filament * 0.10, 2) + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation)) > 0 
-					THEN ROUND(((net_amount - (fund_filament + ROUND(fund_filament * 0.10, 2) + fund_component + fund_packaging + fund_electricity + fund_maintenance + fund_depreciation)) * 0.05)::numeric, 2)
-					ELSE 0 
-				END,
+			fund_depreciation = sub.tot_dep,
+			fund_electricity = sub.tot_elec,
+			fund_maintenance = sub.tot_maint,
+			fund_component = sub.tot_comp,
+			fund_packaging = sub.tot_pack,
+			fund_filament = sub.tot_fil,
+			cogs_amount = sub.calculated_cogs,
+			net_profit = (CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs,
+			fund_emergency = ROUND((sub.tot_fil * 0.10)::numeric, 2) + 
+				CASE WHEN ((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) > 0
+				     THEN ROUND((((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) * 0.05)::numeric, 2)
+				     ELSE 0 END,
+			fund_net_profit = ((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) -
+				CASE WHEN ((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) > 0
+				     THEN ROUND((((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) * 0.05)::numeric, 2)
+				     ELSE 0 END,
 			updated_at = NOW()
-		WHERE status NOT IN ('CANCELLED', 'UNPAID')
+		FROM (
+			SELECT 
+				order_id,
+				COALESCE(SUM(depreciation_cost), 0) AS tot_dep,
+				COALESCE(SUM(energy_cost), 0) AS tot_elec,
+				COALESCE(SUM(maintenance_cost), 0) AS tot_maint,
+				COALESCE(SUM(component_cost), 0) AS tot_comp,
+				COALESCE(SUM(packaging_cost), 0) AS tot_pack,
+				COALESCE(SUM(filament_cost), 0) AS tot_fil,
+				COALESCE(SUM(filament_cost * 1.10 + component_cost + packaging_cost + energy_cost + maintenance_cost + depreciation_cost), 0) AS calculated_cogs
+			FROM order_items
+			GROUP BY order_id
+		) sub
+		WHERE o.id = sub.order_id
+		  AND o.status NOT IN ('CANCELLED', 'UNPAID')
 	`)
 	if res.Error != nil {
 		return 0, res.Error

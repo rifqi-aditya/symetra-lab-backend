@@ -52,6 +52,7 @@ type PackagingCostInput struct {
 
 type MachineCostInput struct {
 	TotalPurchaseCost float64
+	SalvageValue      float64
 	LifespanHours     float64
 	AvgPowerWatts     int
 }
