@@ -13,6 +13,20 @@ import (
 
 // ─── GORM Structs ─────────────────────────────────────────────────────────────
 
+func stringToNullablePtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func nullablePtrToString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 type financeTransactionGORM struct {
 	ID              uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
 	Type            string     `gorm:"column:type"`
@@ -22,8 +36,8 @@ type financeTransactionGORM struct {
 	Quantity        float64    `gorm:"column:quantity;default:1"`
 	Description     string     `gorm:"column:description"`
 	TransactionDate time.Time  `gorm:"column:transaction_date"`
-	ReferenceType   string     `gorm:"column:reference_type"`
-	ReferenceID     string     `gorm:"column:reference_id"`
+	ReferenceType   *string    `gorm:"column:reference_type"`
+	ReferenceID     *string    `gorm:"column:reference_id"`
 	Notes           string     `gorm:"column:notes"`
 	AttachmentURL   string     `gorm:"column:attachment_url"`
 	PurchasedBy     string     `gorm:"column:purchased_by"`
@@ -118,8 +132,8 @@ func mapFinanceTxGORMToDomain(g *financeTransactionGORM) *finance.FinanceTransac
 		qty,
 		g.Description,
 		g.TransactionDate,
-		g.ReferenceType,
-		g.ReferenceID,
+		nullablePtrToString(g.ReferenceType),
+		nullablePtrToString(g.ReferenceID),
 		g.Notes,
 		g.AttachmentURL,
 		g.PurchasedBy,
@@ -180,8 +194,8 @@ func (r *FinanceRepository) CreateTransaction(ctx context.Context, t *finance.Fi
 		Quantity:        qty,
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate(),
-		ReferenceType:   t.ReferenceType(),
-		ReferenceID:     t.ReferenceID(),
+		ReferenceType:   stringToNullablePtr(t.ReferenceType()),
+		ReferenceID:     stringToNullablePtr(t.ReferenceID()),
 		Notes:           t.Notes(),
 		AttachmentURL:   t.AttachmentURL(),
 		PurchasedBy:     t.PurchasedBy(),
@@ -210,8 +224,8 @@ func (r *FinanceRepository) CreateTransactionIfNotExists(ctx context.Context, t 
 		Quantity:        qty,
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate(),
-		ReferenceType:   t.ReferenceType(),
-		ReferenceID:     t.ReferenceID(),
+		ReferenceType:   stringToNullablePtr(t.ReferenceType()),
+		ReferenceID:     stringToNullablePtr(t.ReferenceID()),
 		Notes:           t.Notes(),
 		AttachmentURL:   t.AttachmentURL(),
 		PurchasedBy:     t.PurchasedBy(),
@@ -272,8 +286,8 @@ func (r *FinanceRepository) UpsertShopeeEscrowTransaction(ctx context.Context, t
 		Amount:          t.Amount(),
 		Description:     t.Description(),
 		TransactionDate: t.TransactionDate(),
-		ReferenceType:   t.ReferenceType(),
-		ReferenceID:     t.ReferenceID(),
+		ReferenceType:   stringToNullablePtr(t.ReferenceType()),
+		ReferenceID:     stringToNullablePtr(t.ReferenceID()),
 		Notes:           t.Notes(),
 		CreatedAt:       t.CreatedAt(),
 		UpdatedAt:       t.UpdatedAt(),
@@ -328,8 +342,8 @@ func (r *FinanceRepository) DeleteTransaction(ctx context.Context, id uuid.UUID)
 		var txRecord financeTransactionGORM
 		if err := tx.Where("id = ?", id).First(&txRecord).Error; err == nil {
 			// Jika berasal dari modal usaha (CAPITAL_RECORD), hapus juga dari capital_records
-			if txRecord.ReferenceType == "CAPITAL_RECORD" && txRecord.ReferenceID != "" {
-				if crID, parseErr := uuid.Parse(txRecord.ReferenceID); parseErr == nil {
+			if txRecord.ReferenceType != nil && *txRecord.ReferenceType == "CAPITAL_RECORD" && txRecord.ReferenceID != nil && *txRecord.ReferenceID != "" {
+				if crID, parseErr := uuid.Parse(*txRecord.ReferenceID); parseErr == nil {
 					_ = tx.Where("id = ?", crID).Delete(&capitalRecordGORM{}).Error
 				}
 			}
