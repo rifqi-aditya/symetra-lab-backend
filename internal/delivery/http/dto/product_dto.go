@@ -1,4 +1,4 @@
-﻿package dto
+package dto
 
 import (
 	"time"
@@ -161,21 +161,24 @@ func ToProductResponse(p *product.Product, totalSold int, cb costing.ProductCost
 }
 
 type ProductListItemResponse struct {
-	ID                    uuid.UUID `json:"id"`
-	Name                  string    `json:"name"`
-	ParentSKU             *string   `json:"parent_sku"`
-	SKU                   *string   `json:"sku"`
-	Category              string    `json:"category"`
-	ThumbnailURL          *string   `json:"thumbnail_url"`
-	MaterialType          string    `json:"material_type"`
-	DefaultWeightGrams    float64   `json:"default_weight_grams"`
-	DefaultPrintTimeHours float64   `json:"default_print_time_hours"`
-	BatchSize             int       `json:"batch_size"`
-	BaseHPP               float64   `json:"base_hpp"`
-	BaseSellingPrice      float64   `json:"base_selling_price"`
-	TargetMarginPercent   int       `json:"target_margin_percent"`
-	TotalSold             int       `json:"total_sold"`
-	CreatedAt             time.Time `json:"created_at"`
+	ID                    uuid.UUID  `json:"id"`
+	Name                  string     `json:"name"`
+	ParentSKU             *string    `json:"parent_sku"`
+	SKU                   *string    `json:"sku"`
+	Category              string     `json:"category"`
+	ThumbnailURL          *string    `json:"thumbnail_url"`
+	MaterialType          string     `json:"material_type"`
+	DefaultWeightGrams    float64    `json:"default_weight_grams"`
+	DefaultPrintTimeHours float64    `json:"default_print_time_hours"`
+	DefaultMachineID      *uuid.UUID `json:"default_machine_id"`
+	PackagingPresetID     *uuid.UUID `json:"packaging_preset_id"`
+	BatchSize             int        `json:"batch_size"`
+	PackingFeeIDR         int        `json:"packing_fee_idr"`
+	BaseHPP               float64    `json:"base_hpp"`
+	BaseSellingPrice      float64    `json:"base_selling_price"`
+	TargetMarginPercent   int        `json:"target_margin_percent"`
+	TotalSold             int        `json:"total_sold"`
+	CreatedAt             time.Time  `json:"created_at"`
 }
 
 func ToProductListItemResponse(p *product.Product, totalSold int) ProductListItemResponse {
@@ -189,7 +192,10 @@ func ToProductListItemResponse(p *product.Product, totalSold int) ProductListIte
 		MaterialType:          p.MaterialType(),
 		DefaultWeightGrams:    p.DefaultWeightGrams(),
 		DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
+		DefaultMachineID:      p.DefaultMachineID(),
+		PackagingPresetID:     p.PackagingPresetID(),
 		BatchSize:             p.BatchSize(),
+		PackingFeeIDR:         p.PackingFeeIDR(),
 		BaseHPP:               p.BaseHPP(),
 		BaseSellingPrice:      p.BaseSellingPrice(),
 		TargetMarginPercent:   p.TargetMarginPercent(),
