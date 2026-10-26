@@ -443,24 +443,43 @@ func (uc *ShopeeUseCases) HandleOrderStatusPush(ctx context.Context, shopID uint
 		return nil, err
 	}
 
-	// Auto-create/update finance_transaction saat pesanan COMPLETED dengan tanggal pelepasan uang (cash settlement date)
-	if ord != nil && ord.OrderStatus() == "COMPLETED" && ord.Escrow() != nil && uc.financeRepo != nil {
-		releaseDate := time.Now()
-		tx, txErr := finance.NewFinanceTransaction(
-			finance.TypeIncome,
-			finance.CategorySalesShopee,
-			nil,
-			ord.Escrow().EscrowAmount(),
-			1,
-			"Escrow Shopee - Order "+orderSN,
-			releaseDate,
-			"SHOPEE_ESCROW",
-			orderSN,
-			"",
-			"",
-		)
-		if txErr == nil {
-			_ = uc.financeRepo.UpsertShopeeEscrowTransaction(ctx, tx)
+	// Auto-create/update/void finance_transaction saat pesanan selesai atau di-refund
+	if ord != nil && ord.Escrow() != nil && uc.financeRepo != nil {
+		if ord.Escrow().FinancialStatus() == "REFUNDED" || ord.Escrow().EscrowAmount() <= 0 {
+			tx, txErr := finance.NewFinanceTransaction(
+				finance.TypeIncome,
+				finance.CategorySalesShopee,
+				nil,
+				0,
+				1,
+				"Escrow Shopee - Order "+orderSN+" [REFUNDED]",
+				time.Now(),
+				"SHOPEE_ESCROW",
+				orderSN,
+				"",
+				"",
+			)
+			if txErr == nil {
+				_ = uc.financeRepo.UpsertShopeeEscrowTransaction(ctx, tx)
+			}
+		} else if ord.OrderStatus() == "COMPLETED" && ord.Escrow().EscrowAmount() > 0 {
+			releaseDate := time.Now()
+			tx, txErr := finance.NewFinanceTransaction(
+				finance.TypeIncome,
+				finance.CategorySalesShopee,
+				nil,
+				ord.Escrow().EscrowAmount(),
+				1,
+				"Escrow Shopee - Order "+orderSN,
+				releaseDate,
+				"SHOPEE_ESCROW",
+				orderSN,
+				"",
+				"",
+			)
+			if txErr == nil {
+				_ = uc.financeRepo.UpsertShopeeEscrowTransaction(ctx, tx)
+			}
 		}
 	}
 
@@ -557,8 +576,14 @@ func (uc *ShopeeUseCases) buildEscrowForOrder(shop *shopee.ShopeeShop, orderSN s
 
 	totalMarketFee := inc.CommissionFee + inc.ServiceFee + inc.SellerTransactionFee + inc.SellerOrderProcessingFee
 	finStatus := "PENDING"
-	if orderStatus == "COMPLETED" {
-		finStatus = "RELEASED"
+	if orderStatus == "COMPLETED" || orderStatus == "SHIPPED" || orderStatus == "TO_CONFIRM_RECEIVE" {
+		if inc.EscrowAmount == 0 && (inc.BuyerTotalAmount > 0 || itemsTotal > 0) {
+			finStatus = "REFUNDED"
+		} else if orderStatus == "COMPLETED" {
+			finStatus = "RELEASED"
+		}
+	} else if orderStatus == "CANCELLED" || orderStatus == "IN_CANCEL" {
+		finStatus = "CANCELLED"
 	}
 
 	sellingPrice := inc.OrderSellingPrice

@@ -258,6 +258,18 @@ func (r *FinanceRepository) UpsertShopeeEscrowTransaction(ctx context.Context, t
 	err := r.db.WithContext(ctx).
 		Where("reference_type = ? AND reference_id = ?", t.ReferenceType(), t.ReferenceID()).
 		First(&existing).Error
+
+	// Jika amount <= 0 (misal pesanan di-refund penuh): batalkan/hapus transaksi pencairan kas
+	if t.Amount() <= 0 {
+		if err == nil {
+			if delErr := r.db.WithContext(ctx).Delete(&existing).Error; delErr != nil {
+				return delErr
+			}
+			_ = SyncCashAccountLedger(ctx, r.db)
+		}
+		return nil
+	}
+
 	if err == nil {
 		// Update transaction_date dan amount jika ada pembaruan tanggal pencairan
 		updateFields := map[string]interface{}{

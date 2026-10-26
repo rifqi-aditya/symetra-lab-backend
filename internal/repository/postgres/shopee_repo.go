@@ -578,6 +578,24 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 
 	var ord shopeeUnifiedOrderGORM
 	if err := tx.Where("id = ?", orderID).First(&ord).Error; err == nil {
+		if ord.PaymentStatus == "REFUNDED" {
+			_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
+				"net_amount":        0,
+				"fund_filament":     0,
+				"fund_emergency":    0,
+				"fund_component":    0,
+				"fund_packaging":    0,
+				"fund_electricity":  0,
+				"fund_maintenance":  0,
+				"fund_depreciation": 0,
+				"cogs_amount":       sums.TotalCOGS,
+				"net_profit":        -sums.TotalCOGS,
+				"fund_net_profit":   -sums.TotalCOGS,
+				"updated_at":        time.Now(),
+			}).Error
+			return
+		}
+
 		netBase := ord.NetAmount
 		if netBase <= 0 {
 			netBase = ord.GrossAmount
@@ -638,7 +656,21 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		var grossAmount, netAmount, channelFee float64
 		paymentStatus := "UNPAID"
 
-		if o.Escrow() != nil && o.Escrow().EscrowAmount() > 0 {
+		isRefunded := false
+		if o.Escrow() != nil && o.Escrow().FinancialStatus() == "REFUNDED" {
+			isRefunded = true
+		} else if o.Escrow() != nil && o.Escrow().EscrowAmount() == 0 && (o.OrderStatus() == "COMPLETED" || o.OrderStatus() == "SHIPPED") && (itemsTotal > 0 || (existingOrder.ID != uuid.Nil && existingOrder.NetAmount > 0)) {
+			isRefunded = true
+		} else if existingOrder.ID != uuid.Nil && existingOrder.PaymentStatus == "REFUNDED" {
+			isRefunded = true
+		}
+
+		if isRefunded {
+			grossAmount = 0
+			netAmount = 0
+			channelFee = 0
+			paymentStatus = "REFUNDED"
+		} else if o.Escrow() != nil && o.Escrow().EscrowAmount() > 0 {
 			e := o.Escrow()
 			grossAmount = e.SellingPrice()
 			if grossAmount <= 0 {
@@ -844,6 +876,22 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		totalEmergency := costing.RoundTwo(totEmergency + profitCut)
 		fNetProfit := costing.RoundTwo(netProfit - profitCut)
 
+		if isRefunded {
+			totFil = 0
+			totalEmergency = 0
+			totComp = 0
+			totPack = 0
+			totElec = 0
+			totMaint = 0
+			totDep = 0
+			netProfit = -cogsAmount
+			fNetProfit = -cogsAmount
+
+			// Batalkan / hapus catatan penerimaan kas escrow sebelumnya jika pernah ada
+			_ = tx.Where("reference_type = ? AND reference_id = ?", "SHOPEE_ESCROW", o.OrderSN()).
+				Delete(&financeTransactionGORM{}).Error
+		}
+
 		paidAt := o.PaidAt()
 		if paidAt == nil && existingOrder.PaidAt != nil {
 			paidAt = existingOrder.PaidAt
@@ -909,6 +957,10 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			mDetails.TotalMarketplaceFee = e.TotalMarketplaceFee()
 			mDetails.EscrowAmount = e.EscrowAmount()
 			mDetails.FinancialStatus = e.FinancialStatus()
+		}
+		if isRefunded {
+			mDetails.FinancialStatus = "REFUNDED"
+			mDetails.EscrowAmount = 0
 		}
 
 		if err := tx.Clauses(clause.OnConflict{
