@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -303,6 +304,11 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		FinanceHandler:    financeHandler,
 		DashboardHandler:  dashboardHandler,
 	})
+
+	// Pastikan buku kas & transaksi order manual sinkron saat aplikasi dimulai
+	if err := postgresRepo.SyncCashAccountLedger(context.Background(), db); err != nil {
+		log.Printf("[Symetra Lab v2] Warning: Initial SyncCashAccountLedger failed: %v", err)
+	}
 
 	log.Println("[Symetra Lab v2] Echo application initialized successfully.")
 	return e, cfg, nil

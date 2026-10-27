@@ -378,6 +378,7 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, userID, id uuid.UUID
 	if res.RowsAffected == 0 {
 		return order.ErrOrderNotFound
 	}
+	_ = SyncCashAccountLedger(ctx, r.db)
 	return nil
 }
 
