@@ -64,13 +64,25 @@ func (uc *UseCase) GetShopeeClient(ctx context.Context) (*pkgShopee.Client, erro
 		partnerIDInt, parseErr := strconv.ParseInt(cred.PartnerID(), 10, 64)
 		if parseErr == nil && partnerIDInt > 0 {
 			redirectURL := cred.RedirectURL()
-			if redirectURL == "" && uc.cfg != nil {
-				redirectURL = uc.cfg.ShopeeRedirectURL
+			isProd := cred.IsProduction()
+			if uc.cfg != nil && (strings.EqualFold(uc.cfg.AppEnv, "production") || strings.EqualFold(uc.cfg.AppEnv, "prod")) {
+				isProd = true
 			}
+
+			if redirectURL == "" || (isProd && strings.Contains(redirectURL, "localhost")) {
+				if uc.cfg != nil && uc.cfg.ShopeeRedirectURL != "" && (!isProd || !strings.Contains(uc.cfg.ShopeeRedirectURL, "localhost")) {
+					redirectURL = uc.cfg.ShopeeRedirectURL
+				} else if isProd {
+					redirectURL = "https://symetra-lab-backend.vercel.app/api/v1/shopee/callback"
+				} else {
+					redirectURL = "http://localhost:8080/api/v1/shopee/callback"
+				}
+			}
+
 			return pkgShopee.NewClient(
 				partnerIDInt,
 				cred.PartnerKey(),
-				cred.IsProduction(),
+				isProd,
 				redirectURL,
 			), nil
 		}

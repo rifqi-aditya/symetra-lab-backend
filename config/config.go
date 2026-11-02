@@ -49,17 +49,29 @@ func Load() *Config {
 	tikTokIsProdStr := getEnv("TIKTOK_IS_PRODUCTION", "false")
 	tikTokIsProd, _ := strconv.ParseBool(tikTokIsProdStr)
 
+	appEnv := getEnv("APP_ENV", "development")
+	isProdEnv := strings.EqualFold(appEnv, "production") || strings.EqualFold(appEnv, "prod")
+
+	defaultShopeeRedirect := "http://localhost:8080/api/v1/shopee/callback"
+	if isProdEnv {
+		defaultShopeeRedirect = "https://symetra-lab-backend.vercel.app/api/v1/shopee/callback"
+	}
+	shopeeRedirectURL := getEnv("SHOPEE_REDIRECT_URL", defaultShopeeRedirect)
+	if isProdEnv && strings.Contains(shopeeRedirectURL, "localhost") {
+		shopeeRedirectURL = "https://symetra-lab-backend.vercel.app/api/v1/shopee/callback"
+	}
+
 	return &Config{
 		Port:                 getEnv("PORT", "8081"),
 		DatabaseURL:          getEnv("DATABASE_URL", ""),
-		AppEnv:               getEnv("APP_ENV", "development"),
+		AppEnv:               appEnv,
 		SupabaseURL:          getEnv("SUPABASE_URL", ""),
 		SupabaseAnonKey:      getEnv("SUPABASE_ANON_KEY", ""),
 		ShopeePartnerID:      partnerID,
 		ShopeePartnerKey:     getEnv("SHOPEE_PARTNER_KEY", ""),
 		ShopeePushPartnerKey: getEnv("SHOPEE_PUSH_PARTNER_KEY", ""),
 		ShopeeIsProduction:   isProd,
-		ShopeeRedirectURL:    getEnv("SHOPEE_REDIRECT_URL", "http://localhost:8080/api/v1/shopee/callback"),
+		ShopeeRedirectURL:    shopeeRedirectURL,
 		TikTokAppKey:         getEnv("TIKTOK_APP_KEY", ""),
 		TikTokAppSecret:      getEnv("TIKTOK_APP_SECRET", ""),
 		TikTokIsProduction:   tikTokIsProd,
