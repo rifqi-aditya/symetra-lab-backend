@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"symetra-lab-backend-v2/internal/domain/marketplacecred"
 	"symetra-lab-backend-v2/pkg/crypto"
@@ -113,18 +114,20 @@ func (r *MarketplaceCredentialRepository) Save(ctx context.Context, cred *market
 		UpdatedAt:    cred.UpdatedAt(),
 	}
 
-	// Upsert berdasarkan kolom unik 'platform'
+	// Upsert atomik native PostgreSQL dengan ON CONFLICT (platform)
 	return r.db.WithContext(ctx).
-		Where("platform = ?", m.Platform).
-		Assign(map[string]interface{}{
-			"partner_id":    m.PartnerID,
-			"partner_key":   m.PartnerKey,
-			"redirect_url":  m.RedirectURL,
-			"is_production": m.IsProduction,
-			"is_active":     m.IsActive,
-			"updated_at":    m.UpdatedAt,
+		Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "platform"}},
+			DoUpdates: clause.AssignmentColumns([]string{
+				"partner_id",
+				"partner_key",
+				"redirect_url",
+				"is_production",
+				"is_active",
+				"updated_at",
+			}),
 		}).
-		FirstOrCreate(&m).Error
+		Create(&m).Error
 }
 
 func (r *MarketplaceCredentialRepository) Delete(ctx context.Context, id uuid.UUID) error {
