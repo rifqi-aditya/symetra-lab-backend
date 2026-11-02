@@ -51,15 +51,11 @@ func (uc *UseCase) SaveCredential(
 		if partnerKey == "KEEP_EXISTING" || partnerKey == "" {
 			if uc.cfg != nil && uc.cfg.ShopeePartnerKey != "" {
 				partnerKey = uc.cfg.ShopeePartnerKey
-			} else if platform == domainCred.PlatformShopee {
-				partnerKey = "shpk676b516461596a455257534a557973446969466f44455268686f6d727756"
 			}
 		}
 		if pushKey == "KEEP_EXISTING" || pushKey == "" {
 			if uc.cfg != nil && uc.cfg.ShopeePushPartnerKey != "" {
 				pushKey = uc.cfg.ShopeePushPartnerKey
-			} else if platform == domainCred.PlatformShopee {
-				pushKey = "4d68734e79635058547376725a6b505765555279544867476d57456f54774455"
 			}
 		}
 	}
@@ -116,7 +112,7 @@ func (uc *UseCase) GetShopeeClient(ctx context.Context) (*pkgShopee.Client, erro
 		}
 	}
 
-	// Fallback to verified credentials if DB is unconfigured or corrupted
+	// Fallback to config if DB is unconfigured
 	if uc.cfg != nil && uc.cfg.ShopeePartnerID > 0 && uc.cfg.ShopeePartnerKey != "" {
 		return pkgShopee.NewClient(
 			uc.cfg.ShopeePartnerID,
@@ -125,12 +121,8 @@ func (uc *UseCase) GetShopeeClient(ctx context.Context) (*pkgShopee.Client, erro
 			uc.cfg.ShopeeRedirectURL,
 		), nil
 	}
-	return pkgShopee.NewClient(
-		2044497,
-		"shpk676b516461596a455257534a557973446969466f44455268686f6d727756",
-		true,
-		"https://symetra-lab-backend.vercel.app/api/v1/shopee/callback",
-	), nil
+
+	return nil, errors.New("kredensial Shopee Partner belum dikonfigurasi di database. Silakan isi melalui tombol Kredensial API di halaman Marketplace")
 }
 
 // GetShopeePushKey mengembalikan PushKey aktif (atau fallback ke PartnerKey) dari database
