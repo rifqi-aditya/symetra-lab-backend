@@ -23,36 +23,6 @@ func getEchoEngine() (*echo.Echo, error) {
 			log.Printf("[Vercel Handler] Error initializing Echo app: %v", initErr)
 			return
 		}
-
-		// Daftarkan Pre-middleware untuk rewrite path URL dari query param atau header Vercel
-		echoEngine.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
-			return func(c echo.Context) error {
-				req := c.Request()
-				requestedPath := ""
-
-				if qPath := req.URL.Query().Get("path"); qPath != "" {
-					requestedPath = qPath
-				} else if origPath := req.Header.Get("x-matched-path"); origPath != "" {
-					requestedPath = origPath
-				} else if origPath := req.Header.Get("x-vercel-matched-path"); origPath != "" {
-					requestedPath = origPath
-				}
-
-				if requestedPath != "" {
-					q := req.URL.Query()
-					q.Del("path")
-					req.URL.Path = requestedPath
-					req.URL.RawPath = requestedPath
-					req.URL.RawQuery = q.Encode()
-					if q.Encode() != "" {
-						req.RequestURI = requestedPath + "?" + q.Encode()
-					} else {
-						req.RequestURI = requestedPath
-					}
-				}
-				return next(c)
-			}
-		})
 	})
 	return echoEngine, initErr
 }
