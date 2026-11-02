@@ -45,13 +45,38 @@ func VerifyWebhookSignature(fullCallbackURL string, rawBody []byte, signatureHea
 	bodyStr := string(rawBody)
 	cleanURL := strings.TrimRight(fullCallbackURL, "/")
 
+	// Candidate base string formats for HMAC verification
 	candidates := []string{
-		fullCallbackURL + bodyStr,       // 1. Format resmi Shopee v2: URL + body (tanpa pipe)
-		fullCallbackURL + "|" + bodyStr, // 2. Varian Shopee v1 / docs legacy: URL + "|" + body
-		cleanURL + bodyStr,              // 3. Normalisasi URL tanpa trailing slash + body
-		cleanURL + "/" + bodyStr,        // 4. Normalisasi URL dengan trailing slash + body
-		cleanURL + "|" + bodyStr,        // 5. Normalisasi URL + "|" + body
-		bodyStr,                         // 6. Body saja
+		fullCallbackURL + bodyStr,          // 1. Format resmi Shopee v2: URL + body (tanpa pipe)
+		fullCallbackURL + "|" + bodyStr,    // 2. Varian Shopee v1 / docs legacy: URL + "|" + body
+		cleanURL + bodyStr,                 // 3. Normalisasi URL tanpa trailing slash + body
+		cleanURL + "/" + bodyStr,           // 4. Normalisasi URL dengan trailing slash + body
+		cleanURL + "|" + bodyStr,           // 5. Normalisasi URL + "|" + body
+		cleanURL + "/|" + bodyStr,          // 6. Normalisasi URL dengan trailing slash + "|" + body
+		bodyStr,                            // 7. Body saja
+	}
+
+	// Jaga-jaga jika URL terdaftar di console menggunakan http bukan https (atau sebaliknya)
+	if strings.HasPrefix(fullCallbackURL, "https://") {
+		httpURL := strings.Replace(fullCallbackURL, "https://", "http://", 1)
+		cleanHTTP := strings.TrimRight(httpURL, "/")
+		candidates = append(candidates,
+			httpURL+bodyStr,
+			httpURL+"|"+bodyStr,
+			cleanHTTP+bodyStr,
+			cleanHTTP+"/"+bodyStr,
+			cleanHTTP+"|"+bodyStr,
+		)
+	} else if strings.HasPrefix(fullCallbackURL, "http://") {
+		httpsURL := strings.Replace(fullCallbackURL, "http://", "https://", 1)
+		cleanHTTPS := strings.TrimRight(httpsURL, "/")
+		candidates = append(candidates,
+			httpsURL+bodyStr,
+			httpsURL+"|"+bodyStr,
+			cleanHTTPS+bodyStr,
+			cleanHTTPS+"/"+bodyStr,
+			cleanHTTPS+"|"+bodyStr,
+		)
 	}
 
 	keyBytes := []byte(partnerKey)

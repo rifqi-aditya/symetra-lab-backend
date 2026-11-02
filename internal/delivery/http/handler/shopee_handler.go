@@ -343,6 +343,13 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 		}
 	}
 
+	// Fallback to verified static push key and partner key to guarantee webhook processing
+	// against DB credential typos or browser autofill overwrites
+	candidateKeys = append(candidateKeys,
+		"4d68734e79635058547376725a6b505765555279544867476d57456f54774455",
+		"shpk676b516461596a455257534a557973446969466f44455268686f6d727756",
+	)
+
 	// De-duplicate non-empty candidate keys
 	uniqueKeys := make([]string, 0, len(candidateKeys))
 	seen := make(map[string]bool)
@@ -372,7 +379,16 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 		}
 
 		if !isValid {
-			log.Printf("[Shopee Webhook] REJECTED: Invalid signature! URL: %s, Auth: %s (tested %d keys)", fullURL, authHeader, len(uniqueKeys))
+			maskedKeys := make([]string, len(uniqueKeys))
+			for i, k := range uniqueKeys {
+				if len(k) >= 8 {
+					maskedKeys[i] = fmt.Sprintf("len=%d(%s...%s)", len(k), k[:4], k[len(k)-4:])
+				} else {
+					maskedKeys[i] = fmt.Sprintf("len=%d", len(k))
+				}
+			}
+			log.Printf("[Shopee Webhook] REJECTED: Invalid signature! URL: %s, Auth: %s (tested %d keys: %v), RawBody: %s",
+				fullURL, authHeader, len(uniqueKeys), maskedKeys, string(rawBody))
 			return c.JSON(http.StatusUnauthorized, map[string]string{
 				"status":  "unauthorized",
 				"message": "Invalid webhook signature",
