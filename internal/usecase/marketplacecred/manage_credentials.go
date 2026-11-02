@@ -76,31 +76,14 @@ func (uc *UseCase) GetShopeeClient(ctx context.Context) (*pkgShopee.Client, erro
 		}
 	}
 
-	// Fallback ke .env
-	if uc.cfg != nil && uc.cfg.ShopeePartnerID > 0 && uc.cfg.ShopeePartnerKey != "" {
-		return pkgShopee.NewClient(
-			uc.cfg.ShopeePartnerID,
-			uc.cfg.ShopeePartnerKey,
-			uc.cfg.ShopeeIsProduction,
-			uc.cfg.ShopeeRedirectURL,
-		), nil
-	}
-
-	return nil, errors.New("kredensial Shopee Partner belum dikonfigurasi di database maupun .env")
+	return nil, errors.New("kredensial Shopee Partner belum dikonfigurasi di database. Silakan isi melalui tombol Kredensial API di halaman Marketplace")
 }
 
-// GetShopeePushKey mengembalikan PushPartnerKey atau PartnerKey aktif (dari DB atau .env)
+// GetShopeePushKey mengembalikan PartnerKey aktif dari database
 func (uc *UseCase) GetShopeePushKey(ctx context.Context) string {
 	cred, err := uc.repo.FindByPlatform(ctx, domainCred.PlatformShopee)
 	if err == nil && cred != nil && cred.PartnerKey() != "" {
 		return cred.PartnerKey()
-	}
-
-	if uc.cfg != nil {
-		if uc.cfg.ShopeePushPartnerKey != "" {
-			return uc.cfg.ShopeePushPartnerKey
-		}
-		return uc.cfg.ShopeePartnerKey
 	}
 	return ""
 }
