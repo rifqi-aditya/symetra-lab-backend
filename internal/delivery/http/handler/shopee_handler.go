@@ -330,6 +330,9 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 		if dbKey := h.credUC.GetShopeePushKey(req.Context()); dbKey != "" {
 			candidateKeys = append(candidateKeys, dbKey)
 		}
+		if dbPartnerKey := h.credUC.GetShopeePartnerKey(req.Context()); dbPartnerKey != "" {
+			candidateKeys = append(candidateKeys, dbPartnerKey)
+		}
 	}
 	if h.cfg != nil {
 		if h.cfg.ShopeePushPartnerKey != "" {

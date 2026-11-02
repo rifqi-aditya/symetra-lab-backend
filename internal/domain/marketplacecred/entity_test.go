@@ -33,6 +33,14 @@ func TestMarketplaceCredential_Entity(t *testing.T) {
 		if !maskedMatches(masked, "shpk...7756") {
 			t.Fatalf("expected masked key format shpk...7756, got: %s", masked)
 		}
+
+		cred.SetPushKey("4d68734e79635058547376725a6b505765555279544867476d57456f54774455")
+		if cred.PushKey() != "4d68734e79635058547376725a6b505765555279544867476d57456f54774455" {
+			t.Fatalf("expected push key to be set, got: %s", cred.PushKey())
+		}
+		if !maskedMatches(cred.MaskedPushKey(), "4d68...4455") {
+			t.Fatalf("expected masked push key 4d68...4455, got: %s", cred.MaskedPushKey())
+		}
 	})
 
 	t.Run("should validate required fields", func(t *testing.T) {

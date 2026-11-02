@@ -12,6 +12,7 @@ type SaveMarketplaceCredentialRequest struct {
 	Platform     string `json:"platform"`
 	PartnerID    string `json:"partner_id"`
 	PartnerKey   string `json:"partner_key"`
+	PushKey      string `json:"push_key"`
 	RedirectURL  string `json:"redirect_url"`
 	IsProduction bool   `json:"is_production"`
 }
@@ -21,6 +22,7 @@ type MarketplaceCredentialResponse struct {
 	Platform         string    `json:"platform"`
 	PartnerID        string    `json:"partner_id"`
 	MaskedPartnerKey string    `json:"masked_partner_key"` // PartnerKey asli tidak pernah diekspos ke client
+	MaskedPushKey    string    `json:"masked_push_key,omitempty"` // PushKey disamarkan
 	RedirectURL      string    `json:"redirect_url"`
 	IsProduction     bool      `json:"is_production"`
 	IsActive         bool      `json:"is_active"`
@@ -34,6 +36,7 @@ func ToMarketplaceCredentialResponse(m *domainCred.MarketplaceCredential) Market
 		Platform:         string(m.Platform()),
 		PartnerID:        m.PartnerID(),
 		MaskedPartnerKey: m.MaskedPartnerKey(),
+		MaskedPushKey:    m.MaskedPushKey(),
 		RedirectURL:      m.RedirectURL(),
 		IsProduction:     m.IsProduction(),
 		IsActive:         m.IsActive(),

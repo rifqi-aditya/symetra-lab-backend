@@ -43,6 +43,7 @@ func (h *MarketplaceCredHandler) SaveCredential(c echo.Context) error {
 		req.Platform,
 		req.PartnerID,
 		req.PartnerKey,
+		req.PushKey,
 		req.RedirectURL,
 		req.IsProduction,
 	)

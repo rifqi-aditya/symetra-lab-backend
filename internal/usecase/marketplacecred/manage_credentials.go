@@ -33,14 +33,31 @@ func (uc *UseCase) ListCredentials(ctx context.Context) ([]*domainCred.Marketpla
 // SaveCredential menyimpan atau memperbarui kredensial untuk platform tertentu
 func (uc *UseCase) SaveCredential(
 	ctx context.Context,
-	platformStr, partnerID, partnerKey, redirectURL string,
+	platformStr, partnerID, partnerKey, pushKey, redirectURL string,
 	isProduction bool,
 ) (*domainCred.MarketplaceCredential, error) {
 	platform := domainCred.Platform(strings.ToUpper(strings.TrimSpace(platformStr)))
+
+	// Tangani kasus KEEP_EXISTING jika kredensial sudah ada sebelumnya
+	existing, _ := uc.repo.FindByPlatform(ctx, platform)
+	if existing != nil {
+		if partnerKey == "KEEP_EXISTING" || partnerKey == "" {
+			partnerKey = existing.PartnerKey()
+		}
+		if pushKey == "KEEP_EXISTING" {
+			pushKey = existing.PushKey()
+		}
+	} else {
+		if pushKey == "KEEP_EXISTING" {
+			pushKey = ""
+		}
+	}
+
 	cred, err := domainCred.NewMarketplaceCredential(platform, partnerID, partnerKey, redirectURL, isProduction)
 	if err != nil {
 		return nil, err
 	}
+	cred.SetPushKey(pushKey)
 
 	if err := uc.repo.Save(ctx, cred); err != nil {
 		return nil, err
@@ -91,8 +108,22 @@ func (uc *UseCase) GetShopeeClient(ctx context.Context) (*pkgShopee.Client, erro
 	return nil, errors.New("kredensial Shopee Partner belum dikonfigurasi di database. Silakan isi melalui tombol Kredensial API di halaman Marketplace")
 }
 
-// GetShopeePushKey mengembalikan PartnerKey aktif dari database
+// GetShopeePushKey mengembalikan PushKey aktif (atau fallback ke PartnerKey) dari database
 func (uc *UseCase) GetShopeePushKey(ctx context.Context) string {
+	cred, err := uc.repo.FindByPlatform(ctx, domainCred.PlatformShopee)
+	if err == nil && cred != nil {
+		if cred.PushKey() != "" {
+			return cred.PushKey()
+		}
+		if cred.PartnerKey() != "" {
+			return cred.PartnerKey()
+		}
+	}
+	return ""
+}
+
+// GetShopeePartnerKey mengembalikan PartnerKey aktif dari database
+func (uc *UseCase) GetShopeePartnerKey(ctx context.Context) string {
 	cred, err := uc.repo.FindByPlatform(ctx, domainCred.PlatformShopee)
 	if err == nil && cred != nil && cred.PartnerKey() != "" {
 		return cred.PartnerKey()

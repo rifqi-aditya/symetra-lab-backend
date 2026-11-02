@@ -19,6 +19,7 @@ type marketplaceCredentialGORM struct {
 	Platform     string    `gorm:"column:platform;uniqueIndex;type:varchar(50)"`
 	PartnerID    string    `gorm:"column:partner_id;type:varchar(100)"`
 	PartnerKey   string    `gorm:"column:partner_key;type:text"` // Ciphertext AES-256-GCM
+	PushKey      string    `gorm:"column:push_key;type:text"`    // Ciphertext AES-256-GCM
 	RedirectURL  string    `gorm:"column:redirect_url;type:text"`
 	IsProduction bool      `gorm:"column:is_production"`
 	IsActive     bool      `gorm:"column:is_active"`
@@ -102,11 +103,21 @@ func (r *MarketplaceCredentialRepository) Save(ctx context.Context, cred *market
 		return fmt.Errorf("failed to encrypt partner key: %w", err)
 	}
 
+	encryptedPushKey := ""
+	if cred.PushKey() != "" {
+		enc, err := crypto.Encrypt(cred.PushKey(), r.encryptionKey)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt push key: %w", err)
+		}
+		encryptedPushKey = enc
+	}
+
 	m := marketplaceCredentialGORM{
 		ID:           cred.ID(),
 		Platform:     string(cred.Platform()),
 		PartnerID:    cred.PartnerID(),
 		PartnerKey:   encryptedKey,
+		PushKey:      encryptedPushKey,
 		RedirectURL:  cred.RedirectURL(),
 		IsProduction: cred.IsProduction(),
 		IsActive:     cred.IsActive(),
@@ -121,6 +132,7 @@ func (r *MarketplaceCredentialRepository) Save(ctx context.Context, cred *market
 			DoUpdates: clause.AssignmentColumns([]string{
 				"partner_id",
 				"partner_key",
+				"push_key",
 				"redirect_url",
 				"is_production",
 				"is_active",
@@ -148,11 +160,20 @@ func (r *MarketplaceCredentialRepository) toDomain(m *marketplaceCredentialGORM)
 		return nil, fmt.Errorf("failed to decrypt partner key for platform %s: %w", m.Platform, err)
 	}
 
+	// Dekripsi PushKey jika ada
+	decryptedPushKey := ""
+	if m.PushKey != "" {
+		if dec, err := crypto.Decrypt(m.PushKey, r.encryptionKey); err == nil {
+			decryptedPushKey = dec
+		}
+	}
+
 	return marketplacecred.ReconstructMarketplaceCredential(
 		m.ID,
 		marketplacecred.Platform(m.Platform),
 		m.PartnerID,
 		decryptedKey,
+		decryptedPushKey,
 		m.RedirectURL,
 		m.IsProduction,
 		m.IsActive,
