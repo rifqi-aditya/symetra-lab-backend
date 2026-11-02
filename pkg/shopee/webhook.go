@@ -8,25 +8,23 @@ import (
 	"strings"
 )
 
-// WebhookPushPayload merepresentasikan root payload push notification dari Shopee Open Platform
+// WebhookPushPayload represents the webhook payload pushed by Shopee Open Platform.
 type WebhookPushPayload struct {
-	Code      int                `json:"code"`
-	ShopID    uint64             `json:"shop_id"`
-	Timestamp int64              `json:"timestamp"`
-	Data      OrderStatusPushData `json:"data"`
+	ShopID    int64             `json:"shop_id"`
+	Code      int               `json:"code"`
+	Timestamp int64             `json:"timestamp"`
+	Data      WebhookPushDetail `json:"data"`
 }
 
-// OrderStatusPushData merepresentasikan detail saat Code == 3 (order_status_push)
-type OrderStatusPushData struct {
-	OrderSN           string        `json:"ordersn"`
-	OrderSNAlt        string        `json:"order_sn,omitempty"`
-	Status            string        `json:"status"`
-	CompletedScenario string        `json:"completed_scenario,omitempty"`
-	UpdateTime        int64         `json:"update_time"`
-	Items             []interface{} `json:"items,omitempty"`
+// WebhookPushDetail holds event-specific fields in the push payload.
+type WebhookPushDetail struct {
+	OrderSN    string `json:"ordersn"`
+	OrderSNAlt string `json:"order_sn"`
+	Status     string `json:"status"`
+	UpdateTime int64  `json:"update_time"`
 }
 
-func (d *OrderStatusPushData) GetOrderSN() string {
+func (d *WebhookPushDetail) GetOrderSN() string {
 	if d.OrderSN != "" {
 		return d.OrderSN
 	}
@@ -34,6 +32,7 @@ func (d *OrderStatusPushData) GetOrderSN() string {
 }
 
 // VerifyWebhookSignature memverifikasi keaslian webhook Shopee menggunakan HMAC-SHA256
+// Mendukung format Shopee v2 resmi (URL + body) maupun varian v1/legacy (URL + "|" + body)
 func VerifyWebhookSignature(fullCallbackURL string, rawBody []byte, signatureHeader string, partnerKey string) bool {
 	if signatureHeader == "" || partnerKey == "" {
 		return false
@@ -43,20 +42,28 @@ func VerifyWebhookSignature(fullCallbackURL string, rawBody []byte, signatureHea
 	sig = strings.TrimPrefix(sig, "SHA256 ")
 	sig = strings.TrimPrefix(sig, "sha256 ")
 
-	// 1. Format standar Shopee: fullCallbackURL + "|" + rawBody
-	baseString := fullCallbackURL + "|" + string(rawBody)
-	h := hmac.New(sha256.New, []byte(partnerKey))
-	h.Write([]byte(baseString))
-	expectedSign := hex.EncodeToString(h.Sum(nil))
+	bodyStr := string(rawBody)
+	cleanURL := strings.TrimRight(fullCallbackURL, "/")
 
-	if subtle.ConstantTimeCompare([]byte(strings.ToLower(sig)), []byte(strings.ToLower(expectedSign))) == 1 {
-		return true
+	candidates := []string{
+		fullCallbackURL + bodyStr,       // 1. Format resmi Shopee v2: URL + body (tanpa pipe)
+		fullCallbackURL + "|" + bodyStr, // 2. Varian Shopee v1 / docs legacy: URL + "|" + body
+		cleanURL + bodyStr,              // 3. Normalisasi URL tanpa trailing slash + body
+		cleanURL + "/" + bodyStr,        // 4. Normalisasi URL dengan trailing slash + body
+		cleanURL + "|" + bodyStr,        // 5. Normalisasi URL + "|" + body
+		bodyStr,                         // 6. Body saja
 	}
 
-	// 2. Format alternatif: rawBody saja
-	h2 := hmac.New(sha256.New, []byte(partnerKey))
-	h2.Write(rawBody)
-	expectedSign2 := hex.EncodeToString(h2.Sum(nil))
+	keyBytes := []byte(partnerKey)
+	for _, base := range candidates {
+		h := hmac.New(sha256.New, keyBytes)
+		h.Write([]byte(base))
+		expectedSign := hex.EncodeToString(h.Sum(nil))
 
-	return subtle.ConstantTimeCompare([]byte(strings.ToLower(sig)), []byte(strings.ToLower(expectedSign2))) == 1
+		if subtle.ConstantTimeCompare([]byte(strings.ToLower(sig)), []byte(strings.ToLower(expectedSign))) == 1 {
+			return true
+		}
+	}
+
+	return false
 }

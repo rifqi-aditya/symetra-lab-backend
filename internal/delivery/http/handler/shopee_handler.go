@@ -325,41 +325,59 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 		fullURL = fmt.Sprintf("%s://%s%s", scheme, req.Host, req.RequestURI)
 	}
 
-	pushKey := ""
+	var candidateKeys []string
 	if h.credUC != nil {
-		pushKey = h.credUC.GetShopeePushKey(req.Context())
+		if dbKey := h.credUC.GetShopeePushKey(req.Context()); dbKey != "" {
+			candidateKeys = append(candidateKeys, dbKey)
+		}
 	}
-	if pushKey == "" && h.cfg != nil {
-		pushKey = h.cfg.ShopeePushPartnerKey
-		if pushKey == "" {
-			pushKey = h.cfg.ShopeePartnerKey
+	if h.cfg != nil {
+		if h.cfg.ShopeePushPartnerKey != "" {
+			candidateKeys = append(candidateKeys, h.cfg.ShopeePushPartnerKey)
+		}
+		if h.cfg.ShopeePartnerKey != "" {
+			candidateKeys = append(candidateKeys, h.cfg.ShopeePartnerKey)
 		}
 	}
 
-	if pushKey != "" {
-
-		if pushKey != "" {
-			if authHeader == "" {
-				log.Printf("[Shopee Webhook] REJECTED: Missing signature header (URL: %s)", fullURL)
-				return c.JSON(http.StatusUnauthorized, map[string]string{
-					"status":  "unauthorized",
-					"message": "Missing webhook signature header",
-				})
-			}
-
-			isValid := pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, pushKey)
-			if !isValid && h.cfg.ShopeePartnerKey != "" && h.cfg.ShopeePartnerKey != pushKey {
-				isValid = pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, h.cfg.ShopeePartnerKey)
-			}
-			if !isValid {
-				log.Printf("[Shopee Webhook] REJECTED: Invalid signature! URL: %s, Auth: %s", fullURL, authHeader)
-				return c.JSON(http.StatusUnauthorized, map[string]string{
-					"status":  "unauthorized",
-					"message": "Invalid webhook signature",
-				})
-			}
-			log.Printf("[Shopee Webhook] Signature verified successfully")
+	// De-duplicate non-empty candidate keys
+	uniqueKeys := make([]string, 0, len(candidateKeys))
+	seen := make(map[string]bool)
+	for _, k := range candidateKeys {
+		kTrim := strings.TrimSpace(k)
+		if kTrim != "" && !seen[kTrim] {
+			seen[kTrim] = true
+			uniqueKeys = append(uniqueKeys, kTrim)
 		}
+	}
+
+	if len(uniqueKeys) > 0 {
+		if authHeader == "" {
+			log.Printf("[Shopee Webhook] REJECTED: Missing signature header (URL: %s)", fullURL)
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"status":  "unauthorized",
+				"message": "Missing webhook signature header",
+			})
+		}
+
+		isValid := false
+		for _, key := range uniqueKeys {
+			if pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, key) {
+				isValid = true
+				break
+			}
+		}
+
+		if !isValid {
+			log.Printf("[Shopee Webhook] REJECTED: Invalid signature! URL: %s, Auth: %s (tested %d keys)", fullURL, authHeader, len(uniqueKeys))
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"status":  "unauthorized",
+				"message": "Invalid webhook signature",
+			})
+		}
+		log.Printf("[Shopee Webhook] Signature verified successfully")
+	} else {
+		log.Printf("[Shopee Webhook] WARNING: No partner key found in DB or ENV. Cannot verify signature for URL: %s", fullURL)
 	}
 
 	// 3. Parse Webhook Push Payload
@@ -384,7 +402,7 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 		shopID := push.ShopID
 
 		// Jalankan proses sinkronisasi order & escrow realtime
-		updatedOrder, err := h.uc.HandleOrderStatusPush(ctx, shopID, orderSN, status)
+		updatedOrder, err := h.uc.HandleOrderStatusPush(ctx, uint64(shopID), orderSN, status)
 		if err != nil {
 			log.Printf("[Shopee Webhook] Error syncing order %s: %v", orderSN, err)
 			// Shopee mengharapkan status 200 OK agar tidak me-retry terus menerus
