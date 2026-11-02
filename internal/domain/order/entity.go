@@ -168,11 +168,11 @@ func NewOrder(
 	}
 
 	netProfit := totalRev - totalHPP
-	emergencyFromBuffer := math.Round(totalFilament*0.090909*100) / 100
+	emergencyFromBuffer := math.Round(totalFilament*GrossFilamentToBufferRatio*100) / 100
 	netFilament := math.Round((totalFilament-emergencyFromBuffer)*100) / 100
 	var profitCut float64
 	if netProfit > 0 {
-		profitCut = math.Round(netProfit*0.05*100) / 100
+		profitCut = math.Round(netProfit*NetProfitEmergencyCutPercent*100) / 100
 	}
 	totalEmergency := math.Round((emergencyFromBuffer+profitCut)*100) / 100
 	finalNetProfit := math.Round((netProfit-profitCut)*100) / 100

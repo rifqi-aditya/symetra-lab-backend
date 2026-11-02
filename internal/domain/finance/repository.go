@@ -19,6 +19,7 @@ type Repository interface {
 
 	// CashAccount (Pos Kas)
 	ListCashAccounts(ctx context.Context) ([]*CashAccount, error)
+	SyncRunningBalances(ctx context.Context) error
 
 	// PurchaseOrder
 	CreatePurchaseOrder(ctx context.Context, po *PurchaseOrder) error

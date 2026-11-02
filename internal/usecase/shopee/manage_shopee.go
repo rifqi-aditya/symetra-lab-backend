@@ -11,14 +11,36 @@ import (
 	"symetra-lab-backend-v2/config"
 	"symetra-lab-backend-v2/internal/domain/finance"
 	"symetra-lab-backend-v2/internal/domain/shopee"
+	credUC "symetra-lab-backend-v2/internal/usecase/marketplacecred"
 	pkgShopee "symetra-lab-backend-v2/pkg/shopee"
 )
 
 type ShopeeUseCases struct {
-	cfg          *config.Config
-	repo         shopee.Repository
-	shopeeClient *pkgShopee.Client
-	financeRepo  finance.Repository
+	cfg            *config.Config
+	repo           shopee.Repository
+	shopeeClient   *pkgShopee.Client
+	financeRepo    finance.Repository
+	processOrderUC *ProcessShopeeOrderUseCase
+	linkSKUUC      *LinkShopeeSKUUseCase
+	recalcUC       *RecalculateFinancesUseCase
+	credUC         *credUC.UseCase
+}
+
+func (uc *ShopeeUseCases) WithCredUseCase(c *credUC.UseCase) *ShopeeUseCases {
+	uc.credUC = c
+	return uc
+}
+
+func (uc *ShopeeUseCases) getClient(ctx context.Context) (*pkgShopee.Client, error) {
+	if uc.credUC != nil {
+		if cl, err := uc.credUC.GetShopeeClient(ctx); err == nil && cl != nil {
+			return cl, nil
+		}
+	}
+	if uc.shopeeClient != nil && uc.shopeeClient.PartnerID > 0 {
+		return uc.shopeeClient, nil
+	}
+	return nil, shopee.ErrPartnerNotConfig
 }
 
 func NewShopeeUseCases(
@@ -26,29 +48,37 @@ func NewShopeeUseCases(
 	repo shopee.Repository,
 	client *pkgShopee.Client,
 	financeRepo finance.Repository,
+	processOrderUC *ProcessShopeeOrderUseCase,
+	linkSKUUC *LinkShopeeSKUUseCase,
+	recalcUC *RecalculateFinancesUseCase,
 ) *ShopeeUseCases {
 	return &ShopeeUseCases{
-		cfg:          cfg,
-		repo:         repo,
-		shopeeClient: client,
-		financeRepo:  financeRepo,
+		cfg:            cfg,
+		repo:           repo,
+		shopeeClient:   client,
+		financeRepo:    financeRepo,
+		processOrderUC: processOrderUC,
+		linkSKUUC:      linkSKUUC,
+		recalcUC:       recalcUC,
 	}
 }
 
 // 1. Auth & Shops
-func (uc *ShopeeUseCases) GetAuthURL() (string, error) {
-	if uc.shopeeClient == nil || uc.shopeeClient.PartnerID == 0 || uc.shopeeClient.PartnerKey == "" {
-		return "", shopee.ErrPartnerNotConfig
+func (uc *ShopeeUseCases) GetAuthURL(ctx context.Context) (string, error) {
+	client, err := uc.getClient(ctx)
+	if err != nil {
+		return "", err
 	}
-	return uc.shopeeClient.BuildAuthURL()
+	return client.BuildAuthURL()
 }
 
 func (uc *ShopeeUseCases) HandleCallback(ctx context.Context, code string, shopID uint64) (*shopee.ShopeeShop, error) {
-	if uc.shopeeClient == nil {
-		return nil, shopee.ErrPartnerNotConfig
+	client, err := uc.getClient(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	tokenResp, err := uc.shopeeClient.GetAccessToken(code, shopID)
+	tokenResp, err := client.GetAccessToken(code, shopID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,11 +117,12 @@ func (uc *ShopeeUseCases) RefreshToken(ctx context.Context, shopID uint64) (*sho
 		return nil, err
 	}
 
-	if uc.shopeeClient == nil {
-		return nil, shopee.ErrPartnerNotConfig
+	client, err := uc.getClient(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	resp, err := uc.shopeeClient.RefreshAccessToken(shop.RefreshToken(), shop.ShopID())
+	resp, err := client.RefreshAccessToken(shop.RefreshToken(), shop.ShopID())
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +176,9 @@ func (uc *ShopeeUseCases) GetOrderDetail(ctx context.Context, orderSN string) (*
 }
 
 func (uc *ShopeeUseCases) LinkSKU(ctx context.Context, itemID, modelID uint64, productID uuid.UUID) error {
+	if uc.linkSKUUC != nil {
+		return uc.linkSKUUC.Execute(ctx, itemID, modelID, productID)
+	}
 	return uc.repo.LinkSKU(ctx, itemID, modelID, productID)
 }
 
@@ -154,8 +188,9 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 		return 0, err
 	}
 
-	if uc.shopeeClient == nil {
-		return 0, shopee.ErrPartnerNotConfig
+	client, err := uc.getClient(ctx)
+	if err != nil {
+		return 0, err
 	}
 
 	now := time.Now().Unix()
@@ -164,7 +199,7 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 	cursor := ""
 	var orderSNs []string
 	for {
-		listResp, err := uc.shopeeClient.GetOrderList(shop.AccessToken(), shop.ShopID(), timeFrom, now, "", cursor)
+		listResp, err := client.GetOrderList(shop.AccessToken(), shop.ShopID(), timeFrom, now, "", cursor)
 		if err != nil {
 			return 0, err
 		}
@@ -191,7 +226,7 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 		}
 		batchSNs := orderSNs[i:end]
 
-		detailResp, err := uc.shopeeClient.GetOrderDetail(shop.AccessToken(), shop.ShopID(), batchSNs)
+		detailResp, err := client.GetOrderDetail(shop.AccessToken(), shop.ShopID(), batchSNs)
 		if err != nil {
 			return savedCount, err
 		}
@@ -270,7 +305,13 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 				time.Unix(o.UpdateTime, 0),
 			)
 
-			if err := uc.repo.SaveOrder(ctx, domainOrder); err == nil {
+			saveErr := error(nil)
+			if uc.processOrderUC != nil {
+				saveErr = uc.processOrderUC.Execute(ctx, domainOrder, nil)
+			} else {
+				saveErr = uc.repo.SaveOrder(ctx, domainOrder)
+			}
+			if saveErr == nil {
 				savedCount++
 			}
 		}
@@ -288,14 +329,15 @@ func (uc *ShopeeUseCases) SyncReleasedEscrows(ctx context.Context, shopID uint64
 	if err != nil {
 		return 0, err
 	}
-	if uc.shopeeClient == nil {
-		return 0, shopee.ErrPartnerNotConfig
+	client, err := uc.getClient(ctx)
+	if err != nil {
+		return 0, err
 	}
 
 	now := time.Now().Unix()
 	timeFrom := now - (14 * 86400) // 14 hari terakhir
 
-	escrowResp, err := uc.shopeeClient.GetEscrowList(shop.AccessToken(), shop.ShopID(), timeFrom, now, 50)
+	escrowResp, err := client.GetEscrowList(shop.AccessToken(), shop.ShopID(), timeFrom, now, 50)
 	if err != nil {
 		return 0, err
 	}
@@ -341,11 +383,12 @@ func (uc *ShopeeUseCases) SyncSingleOrder(ctx context.Context, shopID uint64, or
 		return nil, fmt.Errorf("failed to get valid shop for id %d: %w", shopID, err)
 	}
 
-	if uc.shopeeClient == nil {
-		return nil, shopee.ErrPartnerNotConfig
+	client, err := uc.getClient(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	detailResp, err := uc.shopeeClient.GetOrderDetail(shop.AccessToken(), shop.ShopID(), []string{orderSN})
+	detailResp, err := client.GetOrderDetail(shop.AccessToken(), shop.ShopID(), []string{orderSN})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch order detail from shopee: %w", err)
 	}
@@ -428,8 +471,14 @@ func (uc *ShopeeUseCases) SyncSingleOrder(ctx context.Context, shopID uint64, or
 		time.Unix(o.UpdateTime, 0),
 	)
 
-	if err := uc.repo.SaveOrder(ctx, domainOrder); err != nil {
-		return nil, fmt.Errorf("failed to save order to database: %w", err)
+	if uc.processOrderUC != nil {
+		if err := uc.processOrderUC.Execute(ctx, domainOrder, nil); err != nil {
+			return nil, fmt.Errorf("failed to process and save order: %w", err)
+		}
+	} else {
+		if err := uc.repo.SaveOrder(ctx, domainOrder); err != nil {
+			return nil, fmt.Errorf("failed to save order to database: %w", err)
+		}
 	}
 
 	return uc.repo.FindOrder(ctx, orderSN)
@@ -498,7 +547,12 @@ func (uc *ShopeeUseCases) ShipOrder(ctx context.Context, orderSN string) (map[st
 		return nil, err
 	}
 
-	paramResp, err := uc.shopeeClient.GetShippingParameter(shop.AccessToken(), shop.ShopID(), orderSN)
+	client, err := uc.getClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	paramResp, err := client.GetShippingParameter(shop.AccessToken(), shop.ShopID(), orderSN)
 	if err != nil {
 		return nil, err
 	}
@@ -516,7 +570,7 @@ func (uc *ShopeeUseCases) ShipOrder(ctx context.Context, orderSN string) (map[st
 		shipReq.Dropoff = &pkgShopee.ShopeeShipDropoff{}
 	}
 
-	shipResp, err := uc.shopeeClient.ShipOrder(shop.AccessToken(), shop.ShopID(), shipReq)
+	shipResp, err := client.ShipOrder(shop.AccessToken(), shop.ShopID(), shipReq)
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +594,11 @@ func (uc *ShopeeUseCases) DownloadShippingLabel(ctx context.Context, orderSN str
 		return nil, err
 	}
 
-	return uc.shopeeClient.DownloadShippingDocument(shop.AccessToken(), shop.ShopID(), orderSN)
+	client, err := uc.getClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return client.DownloadShippingDocument(shop.AccessToken(), shop.ShopID(), orderSN)
 }
 
 // 4. Financial & 7 Pos Kas Escrow
@@ -549,14 +607,18 @@ func (uc *ShopeeUseCases) GetCashflowSummary(ctx context.Context) (*shopee.Cashf
 }
 
 func (uc *ShopeeUseCases) RecalculateFinances(ctx context.Context) (int, error) {
+	if uc.recalcUC != nil {
+		return uc.recalcUC.Execute(ctx)
+	}
 	return uc.repo.RecalculateFinances(ctx)
 }
 
 func (uc *ShopeeUseCases) buildEscrowForOrder(shop *shopee.ShopeeShop, orderSN string, orderStatus string, itemsTotal float64) *shopee.ShopeeOrderEscrow {
-	if uc.shopeeClient == nil || shop == nil {
+	client, err := uc.getClient(context.Background())
+	if err != nil || client == nil || shop == nil {
 		return nil
 	}
-	escrowResp, err := uc.shopeeClient.GetEscrowDetail(shop.AccessToken(), shop.ShopID(), orderSN)
+	escrowResp, err := client.GetEscrowDetail(shop.AccessToken(), shop.ShopID(), orderSN)
 	if err != nil || escrowResp == nil {
 		return nil
 	}

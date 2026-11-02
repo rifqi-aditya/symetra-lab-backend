@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"symetra-lab-backend-v2/internal/domain/finance"
 	"symetra-lab-backend-v2/internal/domain/order"
 )
 
@@ -422,7 +421,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 	userID uuid.UUID,
 	channel string,
 	dateFrom, dateTo *time.Time,
-) (*finance.OrderAllocationSummary, error) {
+) (*order.OrderAllocationSummary, error) {
 	type aggResult struct {
 		TotalOrders         int64   `gorm:"column:total_orders"`
 		TotalGrossSales     float64 `gorm:"column:total_gross_sales"`
@@ -627,7 +626,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		fundNetProfit = allocNetProfit - spentNetProfit
 	}
 
-	return &finance.OrderAllocationSummary{
+	return &order.OrderAllocationSummary{
 		TotalOrders:           agg.TotalOrders,
 		TotalGrossSales:       agg.TotalGrossSales,
 		TotalChannelFees:      agg.TotalChannelFees,

@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"symetra-lab-backend-v2/internal/domain/costing"
+	"symetra-lab-backend-v2/internal/domain/finance"
 	"symetra-lab-backend-v2/internal/domain/shopee"
 )
 
@@ -600,35 +601,30 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 		if netBase <= 0 {
 			netBase = ord.GrossAmount
 		}
-		// Emergency fund = 10% failure buffer from pure filament cost + 5% from positive net profit.
-		bufferEmergency := costing.RoundTwo(sums.Filament * 0.10)
-		netFilament := sums.Filament
 
-		actualCOGS := costing.RoundTwo(netFilament + bufferEmergency + sums.Component + sums.Packaging + sums.Electricity + sums.Maintenance + sums.Depreciation)
-		if sums.TotalCOGS < actualCOGS {
-			sums.TotalCOGS = actualCOGS
-		}
-
-		rawProfit := costing.RoundTwo(netBase - sums.TotalCOGS)
-		var profitCut float64
-		if rawProfit > 0 {
-			profitCut = costing.RoundTwo(rawProfit * 0.05)
-		}
-		totalEmergency := costing.RoundTwo(bufferEmergency + profitCut)
-		finalNetProfit := costing.RoundTwo(rawProfit - profitCut)
+		alloc := finance.AllocateOrderFunds(finance.FundAllocationInput{
+			GrossAmount:      netBase,
+			ChannelFee:       0,
+			FilamentCost:     sums.Filament,
+			ComponentCost:    sums.Component,
+			PackagingCost:    sums.Packaging,
+			ElectricityCost:  sums.Electricity,
+			MaintenanceCost:  sums.Maintenance,
+			DepreciationCost: sums.Depreciation,
+		})
 
 		_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
 			"net_amount":        netBase,
-			"fund_filament":     netFilament,
-			"fund_emergency":    totalEmergency,
-			"fund_component":    sums.Component,
-			"fund_packaging":    sums.Packaging,
-			"fund_electricity":  sums.Electricity,
-			"fund_maintenance":  sums.Maintenance,
-			"fund_depreciation": sums.Depreciation,
-			"cogs_amount":       sums.TotalCOGS,
-			"net_profit":        rawProfit,
-			"fund_net_profit":   finalNetProfit,
+			"fund_filament":     alloc.FundFilament,
+			"fund_emergency":    alloc.FundEmergency,
+			"fund_component":    alloc.FundComponent,
+			"fund_packaging":    alloc.FundPackaging,
+			"fund_electricity":  alloc.FundElectricity,
+			"fund_maintenance":  alloc.FundMaintenance,
+			"fund_depreciation": alloc.FundDepreciation,
+			"cogs_amount":       alloc.COGSAmount,
+			"net_profit":        alloc.NetProfit,
+			"fund_net_profit":   alloc.FundNetProfit,
 			"updated_at":        time.Now(),
 		}).Error
 	}
@@ -866,30 +862,38 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			})
 		}
 
-		cogsAmount := totCOGS
-		netProfit := netAmount - cogsAmount
-
-		var profitCut float64
-		if netProfit > 0 {
-			profitCut = costing.RoundTwo(netProfit * 0.05)
-		}
-		totalEmergency := costing.RoundTwo(totEmergency + profitCut)
-		fNetProfit := costing.RoundTwo(netProfit - profitCut)
-
+		var alloc finance.FundAllocationResult
 		if isRefunded {
 			totFil = 0
-			totalEmergency = 0
+			totEmergency = 0
 			totComp = 0
 			totPack = 0
 			totElec = 0
 			totMaint = 0
 			totDep = 0
-			netProfit = -cogsAmount
-			fNetProfit = -cogsAmount
+			alloc = finance.FundAllocationResult{
+				GrossAmount:      0,
+				ChannelFee:       0,
+				NetAmount:        0,
+				COGSAmount:       totCOGS,
+				NetProfit:        -totCOGS,
+				FundNetProfit:    -totCOGS,
+			}
 
 			// Batalkan / hapus catatan penerimaan kas escrow sebelumnya jika pernah ada
 			_ = tx.Where("reference_type = ? AND reference_id = ?", "SHOPEE_ESCROW", o.OrderSN()).
 				Delete(&financeTransactionGORM{}).Error
+		} else {
+			alloc = finance.AllocateOrderFunds(finance.FundAllocationInput{
+				GrossAmount:      grossAmount,
+				ChannelFee:       channelFee,
+				FilamentCost:     totFil,
+				ComponentCost:    totComp,
+				PackagingCost:    totPack,
+				ElectricityCost:  totElec,
+				MaintenanceCost:  totMaint,
+				DepreciationCost: totDep,
+			})
 		}
 
 		paidAt := o.PaidAt()
@@ -908,17 +912,17 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			PaymentStatus:    paymentStatus,
 			GrossAmount:      grossAmount,
 			ChannelFee:       channelFee,
-			NetAmount:        netAmount,
-			COGSAmount:       cogsAmount,
-			NetProfit:        netProfit,
-			FundFilament:     costing.RoundTwo(totFil), // pure filament cost
-			FundEmergency:    totalEmergency,
-			FundComponent:    totComp,
-			FundPackaging:    totPack,
-			FundElectricity:  totElec,
-			FundMaintenance:  totMaint,
-			FundDepreciation: totDep,
-			FundNetProfit:    fNetProfit,
+			NetAmount:        alloc.NetAmount,
+			COGSAmount:       alloc.COGSAmount,
+			NetProfit:        alloc.NetProfit,
+			FundFilament:     alloc.FundFilament,
+			FundEmergency:    alloc.FundEmergency,
+			FundComponent:    alloc.FundComponent,
+			FundPackaging:    alloc.FundPackaging,
+			FundElectricity:  alloc.FundElectricity,
+			FundMaintenance:  alloc.FundMaintenance,
+			FundDepreciation: alloc.FundDepreciation,
+			FundNetProfit:    alloc.FundNetProfit,
 			PaidAt:           paidAt,
 			CreatedAt:        orderCreatedAt,
 			UpdatedAt:        orderUpdatedAt,
@@ -982,10 +986,19 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 
 		return nil
 	})
-	if err == nil {
-		_ = SyncCashAccountLedger(ctx, r.db)
-	}
 	return err
+}
+
+func (r *ShopeeRepository) FindHistoricalProductID(ctx context.Context, channelItemID, channelModelID uint64) (*uuid.UUID, error) {
+	var prevItem shopeeUnifiedItemGORM
+	prevQ := r.db.WithContext(ctx).Where("channel_item_id = ? AND product_id IS NOT NULL", channelItemID)
+	if channelModelID > 0 {
+		prevQ = prevQ.Where("channel_model_id = ?", channelModelID)
+	}
+	if err := prevQ.Order("updated_at DESC").First(&prevItem).Error; err != nil {
+		return nil, err
+	}
+	return prevItem.ProductID, nil
 }
 
 func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, productID uuid.UUID) error {
@@ -1057,9 +1070,6 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 
 		return nil
 	})
-	if err == nil {
-		_ = SyncCashAccountLedger(ctx, r.db)
-	}
 	return err
 }
 
@@ -1200,45 +1210,17 @@ func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error)
 	`)
 
 	// 2. Perbarui alokasi pos kas orders dari order_items yang sudah dikalkulasi ulang
-	res := r.db.WithContext(ctx).Exec(`
-		UPDATE orders o
-		SET 
-			fund_depreciation = sub.tot_dep,
-			fund_electricity = sub.tot_elec,
-			fund_maintenance = sub.tot_maint,
-			fund_component = sub.tot_comp,
-			fund_packaging = sub.tot_pack,
-			fund_filament = sub.tot_fil,
-			cogs_amount = sub.calculated_cogs,
-			net_profit = (CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs,
-			fund_emergency = ROUND((sub.tot_fil * 0.10)::numeric, 2) + 
-				CASE WHEN ((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) > 0
-				     THEN ROUND((((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) * 0.05)::numeric, 2)
-				     ELSE 0 END,
-			fund_net_profit = ((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) -
-				CASE WHEN ((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) > 0
-				     THEN ROUND((((CASE WHEN o.net_amount > 0 THEN o.net_amount ELSE o.gross_amount END) - sub.calculated_cogs) * 0.05)::numeric, 2)
-				     ELSE 0 END,
-			updated_at = NOW()
-		FROM (
-			SELECT 
-				order_id,
-				COALESCE(SUM(depreciation_cost), 0) AS tot_dep,
-				COALESCE(SUM(energy_cost), 0) AS tot_elec,
-				COALESCE(SUM(maintenance_cost), 0) AS tot_maint,
-				COALESCE(SUM(component_cost), 0) AS tot_comp,
-				COALESCE(SUM(packaging_cost), 0) AS tot_pack,
-				COALESCE(SUM(filament_cost), 0) AS tot_fil,
-				COALESCE(SUM(filament_cost * 1.10 + component_cost + packaging_cost + energy_cost + maintenance_cost + depreciation_cost), 0) AS calculated_cogs
-			FROM order_items
-			GROUP BY order_id
-		) sub
-		WHERE o.id = sub.order_id
-		  AND o.status NOT IN ('CANCELLED', 'UNPAID')
-	`)
-	if res.Error != nil {
-		return 0, res.Error
+	var activeOrders []uuid.UUID
+	err := r.db.WithContext(ctx).Model(&shopeeUnifiedOrderGORM{}).
+		Where("channel = ? AND status NOT IN ('CANCELLED', 'UNPAID')", "SHOPEE").
+		Pluck("id", &activeOrders).Error
+	if err != nil {
+		return 0, err
 	}
-	_ = SyncCashAccountLedger(ctx, r.db)
-	return int(res.RowsAffected), nil
+
+	for _, oID := range activeOrders {
+		recalculateOrderFunds(r.db.WithContext(ctx), oID)
+	}
+
+	return len(activeOrders), nil
 }

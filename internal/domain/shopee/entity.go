@@ -150,6 +150,24 @@ func (i *ShopeeOrderItem) DepreciationCost() float64{ return i.depreciationCost 
 func (i *ShopeeOrderItem) CreatedAt() time.Time     { return i.createdAt }
 func (i *ShopeeOrderItem) UpdatedAt() time.Time     { return i.updatedAt }
 
+func (i *ShopeeOrderItem) SetCalculatedCosts(
+	prodID *uuid.UUID,
+	matchedSKU, mappingStatus string,
+	filCost, hwCost, pkgCost, elecCost, maintCost, depCost, hpp float64,
+) {
+	i.productID = prodID
+	i.matchedSKU = matchedSKU
+	i.mappingStatus = mappingStatus
+	i.filamentCost = filCost
+	i.hardwareCost = hwCost
+	i.packagingCost = pkgCost
+	i.electricityCost = elecCost
+	i.maintenanceCost = maintCost
+	i.depreciationCost = depCost
+	i.baseHPP = hpp
+	i.updatedAt = time.Now()
+}
+
 type ShopeeOrderEscrow struct {
 	orderSN                  string
 	escrowAmount             float64
@@ -166,6 +184,7 @@ type ShopeeOrderEscrow struct {
 	totalMarketplaceFee      float64
 	totalHPP                 float64
 	kasFilamen               float64
+	kasCadanganRisiko        float64
 	kasKomponen              float64
 	kasPacking               float64
 	kasListrik               float64
@@ -200,6 +219,7 @@ func ReconstructOrderEscrow(
 		totalMarketplaceFee:      totalMarketplaceFee,
 		totalHPP:                 totalHPP,
 		kasFilamen:               kasFil,
+		kasCadanganRisiko:        0,
 		kasKomponen:              kasKomp,
 		kasPacking:               kasPack,
 		kasListrik:               kasElec,
@@ -227,6 +247,7 @@ func (e *ShopeeOrderEscrow) SellerVoucherDiscount() float64    { return e.seller
 func (e *ShopeeOrderEscrow) TotalMarketplaceFee() float64      { return e.totalMarketplaceFee }
 func (e *ShopeeOrderEscrow) TotalHPP() float64                 { return e.totalHPP }
 func (e *ShopeeOrderEscrow) KasFilamen() float64               { return e.kasFilamen }
+func (e *ShopeeOrderEscrow) KasCadanganRisiko() float64        { return e.kasCadanganRisiko }
 func (e *ShopeeOrderEscrow) KasKomponen() float64              { return e.kasKomponen }
 func (e *ShopeeOrderEscrow) KasPacking() float64               { return e.kasPacking }
 func (e *ShopeeOrderEscrow) KasListrik() float64               { return e.kasListrik }
@@ -236,6 +257,21 @@ func (e *ShopeeOrderEscrow) KasLabaBersih() float64            { return e.kasLab
 func (e *ShopeeOrderEscrow) FinancialStatus() string          { return e.financialStatus }
 func (e *ShopeeOrderEscrow) CreatedAt() time.Time              { return e.createdAt }
 func (e *ShopeeOrderEscrow) UpdatedAt() time.Time              { return e.updatedAt }
+
+func (e *ShopeeOrderEscrow) SetCalculatedFunds(
+	hpp, fil, emer, komp, pack, elec, maint, dep, laba float64,
+) {
+	e.totalHPP = hpp
+	e.kasFilamen = fil
+	e.kasCadanganRisiko = emer
+	e.kasKomponen = komp
+	e.kasPacking = pack
+	e.kasListrik = elec
+	e.kasMaintenance = maint
+	e.kasDepresiasi = dep
+	e.kasLabaBersih = laba
+	e.updatedAt = time.Now()
+}
 
 type ShopeeOrder struct {
 	orderSN           string
@@ -317,6 +353,16 @@ func (o *ShopeeOrder) Escrow() *ShopeeOrderEscrow  { return o.escrow }
 func (o *ShopeeOrder) CreatedAt() time.Time        { return o.createdAt }
 func (o *ShopeeOrder) UpdatedAt() time.Time        { return o.updatedAt }
 
+func (o *ShopeeOrder) SetItems(items []ShopeeOrderItem) {
+	o.items = items
+	o.updatedAt = time.Now()
+}
+
+func (o *ShopeeOrder) SetEscrow(escrow *ShopeeOrderEscrow) {
+	o.escrow = escrow
+	o.updatedAt = time.Now()
+}
+
 type CashflowSummary struct {
 	TotalCompletedOrders int64
 	TotalOrders          int64
@@ -325,6 +371,7 @@ type CashflowSummary struct {
 	TotalEscrowNetIn     float64
 	TotalHPP             float64
 	KasFilamen           float64
+	KasCadanganRisiko    float64
 	KasKomponen          float64
 	KasPacking           float64
 	KasListrik           float64

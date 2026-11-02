@@ -16,6 +16,7 @@ type Repository interface {
 	FindOrders(ctx context.Context, status, carrier, search string) ([]*ShopeeOrder, error)
 	SaveOrder(ctx context.Context, order *ShopeeOrder) error
 	LinkSKU(ctx context.Context, itemID, modelID uint64, productID uuid.UUID) error
+	FindHistoricalProductID(ctx context.Context, channelItemID, channelModelID uint64) (*uuid.UUID, error)
 
 	GetCashflowSummary(ctx context.Context) (*CashflowSummary, error)
 	RecalculateFinances(ctx context.Context) (int, error)

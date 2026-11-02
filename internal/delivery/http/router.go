@@ -23,6 +23,7 @@ type RouterConfig struct {
 	PackagingHandler *handler.PackagingHandler
 	ShopeeHandler    *handler.ShopeeHandler
 	ShopConfigHandler *handler.ShopConfigHandler
+	MarketplaceCredHandler *handler.MarketplaceCredHandler
 	FinanceHandler    *handler.FinanceHandler
 	DashboardHandler  *handler.DashboardHandler
 }
@@ -31,7 +32,7 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 	// Global Middlewares
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Use(appMiddleware.SetupCORS())
+	e.Use(appMiddleware.SetupCORS(cfg.AppConfig))
 
 	// Health check
 	e.GET("/health", func(c echo.Context) error {
@@ -86,7 +87,6 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 
 		// Public Shopee OAuth & Push Webhook routes
 		if cfg.ShopeeHandler != nil {
-			api.GET("/shopee/auth-url", cfg.ShopeeHandler.GetAuthURL)
 			api.GET("/shopee/callback", cfg.ShopeeHandler.HandleCallback)
 			api.GET("/shopee/webhook", cfg.ShopeeHandler.HandlePushWebhook)
 			api.POST("/shopee/webhook", cfg.ShopeeHandler.HandlePushWebhook)
@@ -206,6 +206,7 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 	// Shopee Integration & 7 Pos Kas Finance
 	if cfg.ShopeeHandler != nil {
 		shopeeGroup := protected.Group("/shopee")
+		shopeeGroup.GET("/auth-url", cfg.ShopeeHandler.GetAuthURL)
 		shopeeGroup.GET("/shops", cfg.ShopeeHandler.ListShops)
 		shopeeGroup.POST("/shops/:shop_id/refresh", cfg.ShopeeHandler.RefreshToken)
 		shopeeGroup.POST("/sync-shopee", cfg.ShopeeHandler.SyncShopee)
@@ -230,6 +231,14 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		configGroup.POST("/marketplaces", cfg.ShopConfigHandler.CreateMarketplace)
 		configGroup.PUT("/marketplaces/:id", cfg.ShopConfigHandler.UpdateMarketplace)
 		configGroup.DELETE("/marketplaces/:id", cfg.ShopConfigHandler.DeleteMarketplace)
+	}
+
+	// Marketplace Credentials Config (Partner Keys)
+	if cfg.MarketplaceCredHandler != nil {
+		credGroup := protected.Group("/config/marketplace-credentials")
+		credGroup.GET("", cfg.MarketplaceCredHandler.ListCredentials)
+		credGroup.POST("", cfg.MarketplaceCredHandler.SaveCredential)
+		credGroup.DELETE("/:id", cfg.MarketplaceCredHandler.DeleteCredential)
 	}
 
 

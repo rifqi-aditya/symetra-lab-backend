@@ -14,21 +14,9 @@ import (
 	deliveryHTTP "symetra-lab-backend-v2/internal/delivery/http"
 	"symetra-lab-backend-v2/internal/delivery/http/handler"
 	postgresRepo "symetra-lab-backend-v2/internal/repository/postgres"
-	categoryUC "symetra-lab-backend-v2/internal/usecase/category"
-	componentUC "symetra-lab-backend-v2/internal/usecase/component"
-	dashboardUC "symetra-lab-backend-v2/internal/usecase/dashboard"
-	filamentUC "symetra-lab-backend-v2/internal/usecase/filament"
-	financeUC "symetra-lab-backend-v2/internal/usecase/finance"
-	machineUC "symetra-lab-backend-v2/internal/usecase/machine"
-	orderUC "symetra-lab-backend-v2/internal/usecase/order"
-	packagingUC "symetra-lab-backend-v2/internal/usecase/packaging"
-	productUC "symetra-lab-backend-v2/internal/usecase/product"
-	shopeeUC "symetra-lab-backend-v2/internal/usecase/shopee"
-	shopUC "symetra-lab-backend-v2/internal/usecase/shopconfig"
-	pkgShopee "symetra-lab-backend-v2/pkg/shopee"
 )
 
-// InitEchoApp menginisialisasi Echo engine dan semua dependency injection
+// InitEchoApp initializes the Echo engine and wires all modular dependencies.
 func InitEchoApp() (*echo.Echo, *config.Config, error) {
 	cfg := config.Load()
 
@@ -49,217 +37,20 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		sqlDB.SetConnMaxIdleTime(15 * time.Minute)
 	}
 
-	productRepo := postgresRepo.NewProductRepository(db)
-	categoryRepo := postgresRepo.NewCategoryRepository(db)
-	shopConfigRepo := postgresRepo.NewShopConfigRepository(db)
+	// 1. Wire Core Domain & Application Modules
 	orderRepo := postgresRepo.NewOrderRepository(db)
-	filamentRepo := postgresRepo.NewFilamentRepository(db)
-	machineRepo := postgresRepo.NewMachineRepository(db)
-	componentRepo := postgresRepo.NewComponentRepository(db)
-	packagingRepo := postgresRepo.NewPackagingRepository(db)
-	shopeeRepo := postgresRepo.NewShopeeRepository(db)
-	financeRepo := postgresRepo.NewFinanceRepository(db)
-	dashboardRepo := postgresRepo.NewDashboardRepository(db)
 
-	shopeeClient := pkgShopee.NewClient(
-		cfg.ShopeePartnerID,
-		cfg.ShopeePartnerKey,
-		cfg.ShopeeIsProduction,
-		cfg.ShopeeRedirectURL,
-	)
-	shopeeUseCases := shopeeUC.NewShopeeUseCases(cfg, shopeeRepo, shopeeClient, financeRepo)
-
-	listTransactionsUC := financeUC.NewListTransactionsUseCase(financeRepo)
-	createTransactionUC := financeUC.NewCreateTransactionUseCase(financeRepo)
-	deleteTransactionUC := financeUC.NewDeleteTransactionUseCase(financeRepo)
-	getSummaryUC := financeUC.NewGetSummaryUseCase(financeRepo)
-	createPurchaseOrderUC := financeUC.NewCreatePurchaseOrderUseCase(financeRepo)
-	listPurchaseOrdersUC := financeUC.NewListPurchaseOrdersUseCase(financeRepo)
-	getPurchaseOrderUC := financeUC.NewGetPurchaseOrderUseCase(financeRepo)
-	deletePurchaseOrderUC := financeUC.NewDeletePurchaseOrderUseCase(financeRepo)
-	createCapitalRecordUC := financeUC.NewCreateCapitalRecordUseCase(financeRepo)
-	listCapitalRecordsUC := financeUC.NewListCapitalRecordsUseCase(financeRepo)
-	getCapitalRecordUC := financeUC.NewGetCapitalRecordByIDUseCase(financeRepo)
-	updateCapitalRecordUC := financeUC.NewUpdateCapitalRecordUseCase(financeRepo)
-	deleteCapitalRecordUC := financeUC.NewDeleteCapitalRecordUseCase(financeRepo)
-	getTotalCapitalUC := financeUC.NewGetTotalCapitalUseCase(financeRepo)
-	getCapitalSummaryUC := financeUC.NewGetCapitalSummaryUseCase(financeRepo)
-	getOrderAllocUC := financeUC.NewGetOrderAllocationUseCase(orderRepo)
-	listCashAccountsUC := financeUC.NewListCashAccountsUseCase(financeRepo)
-
-	listProductsUC := productUC.NewListProductsUseCase(productRepo)
-	getProductUC := productUC.NewGetProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo)
-	createProductUC := productUC.NewCreateProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo)
-	updateProductUC := productUC.NewUpdateProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo)
-	deleteProductUC := productUC.NewDeleteProductUseCase(productRepo)
-	autoGenSKUUC := productUC.NewAutoGenerateSKUsUseCase(productRepo)
-
-	listCategoriesUC := categoryUC.NewListCategoriesUseCase(categoryRepo)
-	createCategoryUC := categoryUC.NewCreateCategoryUseCase(categoryRepo)
-	updateCategoryUC := categoryUC.NewUpdateCategoryUseCase(categoryRepo)
-	deleteCategoryUC := categoryUC.NewDeleteCategoryUseCase(categoryRepo)
-
-	listOrdersUC := orderUC.NewListOrdersUseCase(orderRepo)
-	getOrderUC := orderUC.NewGetOrderUseCase(orderRepo)
-	createOrderUC := orderUC.NewCreateOrderUseCase(orderRepo, productRepo)
-	updateOrderStatusUC := orderUC.NewUpdateOrderStatusUseCase(orderRepo)
-	updatePaymentStatusUC := orderUC.NewUpdatePaymentStatusUseCase(orderRepo)
-	deleteOrderUC := orderUC.NewDeleteOrderUseCase(orderRepo)
-
-	listFilamentsUC := filamentUC.NewListFilamentsUseCase(filamentRepo)
-	getFilamentUC := filamentUC.NewGetFilamentUseCase(filamentRepo)
-	createFilamentUC := filamentUC.NewCreateFilamentUseCase(filamentRepo)
-	updateFilamentUC := filamentUC.NewUpdateFilamentUseCase(filamentRepo)
-	deleteFilamentUC := filamentUC.NewDeleteFilamentUseCase(filamentRepo)
-	syncStockUC := filamentUC.NewSyncStockUseCase(filamentRepo)
-	listProfilesUC := filamentUC.NewListFilamentProfilesUseCase(filamentRepo)
-	listRatesUC := filamentUC.NewListMaterialRatesUseCase(filamentRepo)
-	createRateUC := filamentUC.NewCreateMaterialRateUseCase(filamentRepo)
-	updateRateUC := filamentUC.NewUpdateMaterialRateUseCase(filamentRepo)
-	deleteRateUC := filamentUC.NewDeleteMaterialRateUseCase(filamentRepo)
-
-	listMachinesUC := machineUC.NewListMachinesUseCase(machineRepo)
-	getMachineUC := machineUC.NewGetMachineUseCase(machineRepo)
-	createMachineUC := machineUC.NewCreateMachineUseCase(machineRepo)
-	updateMachineUC := machineUC.NewUpdateMachineUseCase(machineRepo)
-	updateMachineStateUC := machineUC.NewUpdateMachineStateUseCase(machineRepo)
-	deleteMachineUC := machineUC.NewDeleteMachineUseCase(machineRepo)
-	listPartsUC := machineUC.NewListPartsUseCase(machineRepo)
-	createPartUC := machineUC.NewCreatePartUseCase(machineRepo)
-	updatePartUC := machineUC.NewUpdatePartUseCase(machineRepo)
-	replacePartUC := machineUC.NewReplacePartUseCase(machineRepo)
-	deletePartUC := machineUC.NewDeletePartUseCase(machineRepo)
-
-	listComponentsUC := componentUC.NewListComponentsUseCase(componentRepo)
-	getComponentUC := componentUC.NewGetComponentUseCase(componentRepo)
-	createComponentUC := componentUC.NewCreateComponentUseCase(componentRepo)
-	updateComponentUC := componentUC.NewUpdateComponentUseCase(componentRepo)
-	deleteComponentUC := componentUC.NewDeleteComponentUseCase(componentRepo)
-
-	listPackagingUC := packagingUC.NewListPackagingUseCase(packagingRepo)
-	getPackagingUC := packagingUC.NewGetPackagingUseCase(packagingRepo)
-	createPackagingUC := packagingUC.NewCreatePackagingItemUseCase(packagingRepo)
-	updatePackagingUC := packagingUC.NewUpdatePackagingItemUseCase(packagingRepo)
-	deletePackagingUC := packagingUC.NewDeletePackagingItemUseCase(packagingRepo)
-
-	listPresetsUC := packagingUC.NewListPackagingPresetsUseCase(packagingRepo)
-	createPresetUC := packagingUC.NewCreatePresetUseCase(packagingRepo)
-	updatePresetUC := packagingUC.NewUpdatePresetUseCase(packagingRepo)
-	deletePresetUC := packagingUC.NewDeletePresetUseCase(packagingRepo)
-
-	getShopConfigUC := shopUC.NewGetShopConfigUseCase(shopConfigRepo)
-	updateShopConfigUC := shopUC.NewUpdateShopConfigUseCase(shopConfigRepo)
-	listMarketplacesUC := shopUC.NewListMarketplacesUseCase(shopConfigRepo)
-	createMarketplaceUC := shopUC.NewCreateMarketplaceUseCase(shopConfigRepo)
-	updateMarketplaceUC := shopUC.NewUpdateMarketplaceUseCase(shopConfigRepo)
-	deleteMarketplaceUC := shopUC.NewDeleteMarketplaceUseCase(shopConfigRepo)
+	productMod := wireProductModule(db, cfg)
+	financeMod := wireFinanceModule(db, orderRepo)
+	orderMod := wireOrderModule(orderRepo, productMod.ProductRepo, financeMod.FinanceRepo)
+	marketplaceMod := wireMarketplaceModule(db, cfg, productMod, financeMod.FinanceRepo)
 
 	authHandler := handler.NewAuthHandler(cfg)
-	productHandler := handler.NewProductHandler(
-		listProductsUC,
-		getProductUC,
-		createProductUC,
-		updateProductUC,
-		deleteProductUC,
-		autoGenSKUUC,
-	)
-	categoryHandler := handler.NewCategoryHandler(
-		listCategoriesUC,
-		createCategoryUC,
-		updateCategoryUC,
-		deleteCategoryUC,
-	)
-	orderHandler := handler.NewOrderHandler(
-		listOrdersUC,
-		getOrderUC,
-		createOrderUC,
-		updateOrderStatusUC,
-		updatePaymentStatusUC,
-		deleteOrderUC,
-	)
-	filamentHandler := handler.NewFilamentHandler(
-		listFilamentsUC,
-		getFilamentUC,
-		createFilamentUC,
-		updateFilamentUC,
-		deleteFilamentUC,
-		syncStockUC,
-		listProfilesUC,
-		listRatesUC,
-		createRateUC,
-		updateRateUC,
-		deleteRateUC,
-	)
-	machineHandler := handler.NewMachineHandler(
-		listMachinesUC,
-		getMachineUC,
-		createMachineUC,
-		updateMachineUC,
-		updateMachineStateUC,
-		deleteMachineUC,
-		listPartsUC,
-		createPartUC,
-		updatePartUC,
-		replacePartUC,
-		deletePartUC,
-	)
-	componentHandler := handler.NewComponentHandler(
-		listComponentsUC,
-		getComponentUC,
-		createComponentUC,
-		updateComponentUC,
-		deleteComponentUC,
-	)
-	shopeeHandler := handler.NewShopeeHandler(cfg, shopeeUseCases)
-
-	shopConfigHandler := handler.NewShopConfigHandler(
-		getShopConfigUC,
-		updateShopConfigUC,
-		listMarketplacesUC,
-		createMarketplaceUC,
-		updateMarketplaceUC,
-		deleteMarketplaceUC,
-	)
-
-	packagingHandler := handler.NewPackagingHandler(
-		listPackagingUC,
-		getPackagingUC,
-		createPackagingUC,
-		updatePackagingUC,
-		deletePackagingUC,
-		listPresetsUC,
-		createPresetUC,
-		updatePresetUC,
-		deletePresetUC,
-	)
-
-	financeHandler := handler.NewFinanceHandler(
-		listTransactionsUC,
-		createTransactionUC,
-		deleteTransactionUC,
-		getSummaryUC,
-		createPurchaseOrderUC,
-		listPurchaseOrdersUC,
-		getPurchaseOrderUC,
-		deletePurchaseOrderUC,
-		createCapitalRecordUC,
-		listCapitalRecordsUC,
-		getCapitalRecordUC,
-		updateCapitalRecordUC,
-		deleteCapitalRecordUC,
-		getTotalCapitalUC,
-		getCapitalSummaryUC,
-		getOrderAllocUC,
-		listCashAccountsUC,
-	)
-
-	getDashboardOverviewUC := dashboardUC.NewGetDashboardOverviewUseCase(dashboardRepo)
-	dashboardHandler := handler.NewDashboardHandler(getDashboardOverviewUC)
 
 	e := echo.New()
 	e.HideBanner = true
 
-	// Pre-middleware untuk menangani rewrite path dari proxy/Vercel (query param path atau header)
+	// Pre-middleware for Vercel/proxy path rewriting
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			req := c.Request()
@@ -289,23 +80,25 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 		}
 	})
 
+	// 2. Register HTTP Routes
 	deliveryHTTP.SetupRouter(e, deliveryHTTP.RouterConfig{
 		AppConfig:         cfg,
 		AuthHandler:       authHandler,
-		ProductHandler:    productHandler,
-		CategoryHandler:   categoryHandler,
-		OrderHandler:      orderHandler,
-		FilamentHandler:   filamentHandler,
-		MachineHandler:    machineHandler,
-		ComponentHandler:  componentHandler,
-		PackagingHandler:  packagingHandler,
-		ShopeeHandler:     shopeeHandler,
-		ShopConfigHandler: shopConfigHandler,
-		FinanceHandler:    financeHandler,
-		DashboardHandler:  dashboardHandler,
+		ProductHandler:    productMod.ProductHandler,
+		CategoryHandler:   productMod.CategoryHandler,
+		OrderHandler:      orderMod.OrderHandler,
+		FilamentHandler:   productMod.FilamentHandler,
+		MachineHandler:    productMod.MachineHandler,
+		ComponentHandler:  productMod.ComponentHandler,
+		PackagingHandler:  productMod.PackagingHandler,
+		ShopeeHandler:          marketplaceMod.ShopeeHandler,
+		MarketplaceCredHandler: marketplaceMod.MarketplaceCredHandler,
+		ShopConfigHandler:      productMod.ShopConfigHandler,
+		FinanceHandler:    financeMod.FinanceHandler,
+		DashboardHandler:  financeMod.DashboardHandler,
 	})
 
-	// Pastikan buku kas & transaksi order manual sinkron saat aplikasi dimulai
+	// 3. Initial Ledger Verification
 	if err := postgresRepo.SyncCashAccountLedger(context.Background(), db); err != nil {
 		log.Printf("[Symetra Lab v2] Warning: Initial SyncCashAccountLedger failed: %v", err)
 	}

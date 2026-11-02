@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"symetra-lab-backend-v2/internal/domain/finance"
 )
 
 type Repository interface {
@@ -17,7 +15,6 @@ type Repository interface {
 	UpdateStatus(ctx context.Context, userID, id uuid.UUID, status string) error
 	UpdatePaymentStatus(ctx context.Context, userID, id uuid.UUID, paymentStatus string) error
 	Delete(ctx context.Context, userID, id uuid.UUID) error
-	GetOrderAllocationSummary(ctx context.Context, userID uuid.UUID, channel string, dateFrom, dateTo *time.Time) (*finance.OrderAllocationSummary, error)
+	GetOrderAllocationSummary(ctx context.Context, userID uuid.UUID, channel string, dateFrom, dateTo *time.Time) (*OrderAllocationSummary, error)
 	GetNextManualOrderNumber(ctx context.Context, userID uuid.UUID, t time.Time) (string, error)
 }
-

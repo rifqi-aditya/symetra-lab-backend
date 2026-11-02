@@ -174,7 +174,7 @@ func (r *ProductRepository) FindByID(ctx context.Context, userID, id uuid.UUID) 
 
 func (r *ProductRepository) FindBySKU(ctx context.Context, userID uuid.UUID, sku string) (*product.Product, error) {
 	var g productGORM
-	err := r.db.WithContext(ctx).Preload("Components").Preload("PackagingItems").Where("sku = ?", sku).First(&g).Error
+	err := r.db.WithContext(ctx).Preload("Components").Preload("PackagingItems").Where("UPPER(TRIM(sku)) = UPPER(TRIM(?))", sku).First(&g).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, product.ErrNotFound

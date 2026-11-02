@@ -1,6 +1,6 @@
 # Symetra Lab Backend API Documentation
 
-Welcome to the **Symetra Lab Backend** API documentation. This backend powers the 3D printing workshop management platform, handling everything from technical inventory (filaments, 3D printers, maintenance spare parts, hardware components, packaging), BOM cost calculations using the **7 Pos Kas Workshop Formula**, Direct/Manual orders, Shopee Open Platform v2 integration, and an automated Priority Print Queue with inventory auto-deductions.
+Welcome to the **Symetra Lab Backend** API documentation. This backend powers the 3D printing workshop management platform, handling everything from technical inventory (filaments, 3D printers, maintenance spare parts, hardware components, packaging), BOM cost calculations using the **8 Pos Kas Workshop Formula**, Direct/Manual orders, Multi-Marketplace integration (Shopee Open Platform v2 & Shop Tokopedia / TikTok Shop Partner API), and an automated Priority Print Queue with inventory auto-deductions.
 
 ---
 
@@ -408,7 +408,7 @@ Arranges pickup or dropoff shipment on Shopee logistics.
 Streams shipping airway bill PDF directly for thermal printing.
 
 #### `GET /api/v1/shopee/financial/cashflow-summary`
-Aggregates workshop cash balances grouped by **7 Pos Kas**:
+Aggregates workshop cash balances grouped by **8 Pos Kas**:
 ```json
 {
   "success": true,
@@ -419,13 +419,14 @@ Aggregates workshop cash balances grouped by **7 Pos Kas**:
     "total_marketplace_fees": 1542000,
     "total_escrow_net_in": 13878000,
     "total_hpp": 5200000,
-    "kas_filamen": 2800000,
+    "kas_filamen": 2520000,
+    "kas_cadangan_risiko": 713900,
     "kas_komponen": 850000,
     "kas_packing": 600000,
     "kas_listrik": 350000,
     "kas_maintenance": 300000,
     "kas_depresiasi": 300000,
-    "kas_laba_bersih": 8678000,
+    "kas_laba_bersih": 8244100,
     "unmapped_items_count": 0
   }
 }
@@ -551,7 +552,7 @@ The Finance module tracks cashflow, procurement expenses, capital investments, a
 
 ```bash
 # 1. Navigate to backend directory
-cd symetra-lab-backend-v2
+cd symetra-lab-backend
 
 # 2. Run with Go
 go run cmd/server/main.go

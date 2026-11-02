@@ -6,38 +6,71 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
 	"symetra-lab-backend-v2/config"
 	"symetra-lab-backend-v2/internal/delivery/http/dto"
+	credUC "symetra-lab-backend-v2/internal/usecase/marketplacecred"
 	shopeeUC "symetra-lab-backend-v2/internal/usecase/shopee"
+	pkgOAuthState "symetra-lab-backend-v2/pkg/oauthstate"
 	pkgShopee "symetra-lab-backend-v2/pkg/shopee"
 )
 
 type ShopeeHandler struct {
-	cfg *config.Config
-	uc  *shopeeUC.ShopeeUseCases
+	cfg          *config.Config
+	uc           *shopeeUC.ShopeeUseCases
+	stateManager *pkgOAuthState.Manager
+	credUC       *credUC.UseCase
+}
+
+func (h *ShopeeHandler) WithCredUseCase(c *credUC.UseCase) *ShopeeHandler {
+	h.credUC = c
+	return h
 }
 
 func NewShopeeHandler(cfg *config.Config, uc *shopeeUC.ShopeeUseCases) *ShopeeHandler {
-	return &ShopeeHandler{cfg: cfg, uc: uc}
+	return &ShopeeHandler{
+		cfg:          cfg,
+		uc:           uc,
+		stateManager: pkgOAuthState.NewManager(15 * time.Minute),
+	}
 }
 
 func (h *ShopeeHandler) GetAuthURL(c echo.Context) error {
-	url, err := h.uc.GetAuthURL()
+	baseURL, err := h.uc.GetAuthURL(c.Request().Context())
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, dto.Fail("Failed to build Shopee auth URL", err.Error()))
 	}
 
+	// Buat anti-CSRF state token
+	state := ""
+	if h.stateManager != nil {
+		if st, err := h.stateManager.GenerateState(); err == nil {
+			state = st
+		}
+	}
+
+	finalURL := baseURL
+	if state != "" {
+		if strings.Contains(finalURL, "?") {
+			finalURL = fmt.Sprintf("%s&state=%s", finalURL, url.QueryEscape(state))
+		} else {
+			finalURL = fmt.Sprintf("%s?state=%s", finalURL, url.QueryEscape(state))
+		}
+	}
+
 	if c.QueryParam("redirect") == "true" || strings.Contains(c.Request().Header.Get("Accept"), "text/html") {
-		return c.Redirect(http.StatusTemporaryRedirect, url)
+		return c.Redirect(http.StatusTemporaryRedirect, finalURL)
 	}
 
 	return c.JSON(http.StatusOK, dto.Success(map[string]string{
-		"auth_url": url,
+		"auth_url": finalURL,
+		"state":    state,
 		"message":  "Open this URL to authorize Shopee store",
 	}))
 }
@@ -45,22 +78,70 @@ func (h *ShopeeHandler) GetAuthURL(c echo.Context) error {
 func (h *ShopeeHandler) HandleCallback(c echo.Context) error {
 	code := c.QueryParam("code")
 	shopIDStr := c.QueryParam("shop_id")
+	state := c.QueryParam("state")
+	errParam := c.QueryParam("error")
+	errMsg := c.QueryParam("msg")
+	format := c.QueryParam("format") // jika "json", return JSON response bukan redirect (untuk automated testing)
 
+	// Tentukan target redirect Frontend
+	feURL := "http://localhost:5173"
+	if h.cfg != nil && h.cfg.FrontendURL != "" {
+		feURL = strings.TrimRight(h.cfg.FrontendURL, "/")
+	}
+	targetBase := fmt.Sprintf("%s/marketplace", feURL)
+
+	// 1. Cek jika Shopee mengembalikan error
+	if errParam != "" || errMsg != "" {
+		msg := errMsg
+		if msg == "" {
+			msg = errParam
+		}
+		if format == "json" {
+			return c.JSON(http.StatusBadRequest, dto.Fail("Shopee authorization error", msg))
+		}
+		return c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?status=error&message=%s", targetBase, url.QueryEscape(msg)))
+	}
+
+	// 2. Validasi Anti-CSRF OAuth State jika disediakan
+	if state != "" && h.stateManager != nil {
+		if !h.stateManager.ValidateAndConsume(state) {
+			if format == "json" {
+				return c.JSON(http.StatusBadRequest, dto.Fail("Invalid or expired OAuth state", "CSRF verification failed"))
+			}
+			return c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?status=error&message=%s", targetBase, url.QueryEscape("Sesi otorisasi kedaluwarsa atau tidak valid (CSRF check)")))
+		}
+	}
+
+	// 3. Validasi parameter code dan shop_id
 	if code == "" || shopIDStr == "" {
-		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid callback parameters", "code and shop_id required"))
+		if format == "json" {
+			return c.JSON(http.StatusBadRequest, dto.Fail("Invalid callback parameters", "code and shop_id required"))
+		}
+		return c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?status=error&message=%s", targetBase, url.QueryEscape("Kode otorisasi atau ID toko tidak ditemukan")))
 	}
 
 	shopID, err := strconv.ParseUint(shopIDStr, 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid shop_id", err.Error()))
+		if format == "json" {
+			return c.JSON(http.StatusBadRequest, dto.Fail("Invalid shop_id", err.Error()))
+		}
+		return c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?status=error&message=%s", targetBase, url.QueryEscape("ID toko tidak valid")))
 	}
 
+	// 4. Lakukan pertukaran token dengan Shopee Open Platform
 	shop, err := h.uc.HandleCallback(c.Request().Context(), code, shopID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, dto.Fail("Failed to exchange token", err.Error()))
+		if format == "json" {
+			return c.JSON(http.StatusBadRequest, dto.Fail("Failed to exchange token", err.Error()))
+		}
+		return c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?status=error&message=%s", targetBase, url.QueryEscape(err.Error())))
 	}
 
-	return c.JSON(http.StatusOK, dto.Success(dto.ToShopResponse(shop)))
+	// 5. Berhasil terhubung! Redirect ke halaman Marketplace Frontend
+	if format == "json" {
+		return c.JSON(http.StatusOK, dto.Success(dto.ToShopResponse(shop)))
+	}
+	return c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?status=success&shop_id=%d", targetBase, shop.ShopID()))
 }
 
 func (h *ShopeeHandler) ListShops(c echo.Context) error {
@@ -237,24 +318,47 @@ func (h *ShopeeHandler) HandlePushWebhook(c echo.Context) error {
 	if req.TLS != nil || req.Header.Get("X-Forwarded-Proto") == "https" {
 		scheme = "https"
 	}
-	fullURL := fmt.Sprintf("%s://%s%s", scheme, req.Host, req.RequestURI)
+	var fullURL string
+	if strings.HasPrefix(req.RequestURI, "http://") || strings.HasPrefix(req.RequestURI, "https://") {
+		fullURL = req.RequestURI
+	} else {
+		fullURL = fmt.Sprintf("%s://%s%s", scheme, req.Host, req.RequestURI)
+	}
 
-	if h.cfg != nil && authHeader != "" {
-		pushKey := h.cfg.ShopeePushPartnerKey
+	pushKey := ""
+	if h.credUC != nil {
+		pushKey = h.credUC.GetShopeePushKey(req.Context())
+	}
+	if pushKey == "" && h.cfg != nil {
+		pushKey = h.cfg.ShopeePushPartnerKey
 		if pushKey == "" {
 			pushKey = h.cfg.ShopeePartnerKey
 		}
+	}
+
+	if pushKey != "" {
 
 		if pushKey != "" {
+			if authHeader == "" {
+				log.Printf("[Shopee Webhook] REJECTED: Missing signature header (URL: %s)", fullURL)
+				return c.JSON(http.StatusUnauthorized, map[string]string{
+					"status":  "unauthorized",
+					"message": "Missing webhook signature header",
+				})
+			}
+
 			isValid := pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, pushKey)
 			if !isValid && h.cfg.ShopeePartnerKey != "" && h.cfg.ShopeePartnerKey != pushKey {
 				isValid = pkgShopee.VerifyWebhookSignature(fullURL, rawBody, authHeader, h.cfg.ShopeePartnerKey)
 			}
 			if !isValid {
-				log.Printf("[Shopee Webhook] Warning: Signature check! URL: %s, Auth: %s", fullURL, authHeader)
-			} else {
-				log.Printf("[Shopee Webhook] Signature verified successfully")
+				log.Printf("[Shopee Webhook] REJECTED: Invalid signature! URL: %s, Auth: %s", fullURL, authHeader)
+				return c.JSON(http.StatusUnauthorized, map[string]string{
+					"status":  "unauthorized",
+					"message": "Invalid webhook signature",
+				})
 			}
+			log.Printf("[Shopee Webhook] Signature verified successfully")
 		}
 	}
 

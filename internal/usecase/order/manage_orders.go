@@ -10,6 +10,11 @@ import (
 	"symetra-lab-backend-v2/internal/domain/product"
 )
 
+// LedgerSynchronizer defines the interface needed to keep the 8-bucket cash accounts in sync.
+type LedgerSynchronizer interface {
+	SyncRunningBalances(ctx context.Context) error
+}
+
 type ListOrdersUseCase struct {
 	repo order.Repository
 }
@@ -38,7 +43,6 @@ func (uc *GetOrderUseCase) ExecuteByOrderNumber(ctx context.Context, userID uuid
 	return uc.repo.FindByOrderNumber(ctx, userID, orderNumber)
 }
 
-
 type CreateOrderItemInput struct {
 	ProductID      *uuid.UUID
 	ProductName    string
@@ -62,12 +66,14 @@ type CreateOrderInput struct {
 type CreateOrderUseCase struct {
 	orderRepo   order.Repository
 	productRepo product.Repository
+	syncLedger  LedgerSynchronizer
 }
 
-func NewCreateOrderUseCase(orderRepo order.Repository, productRepo product.Repository) *CreateOrderUseCase {
+func NewCreateOrderUseCase(orderRepo order.Repository, productRepo product.Repository, syncLedger LedgerSynchronizer) *CreateOrderUseCase {
 	return &CreateOrderUseCase{
 		orderRepo:   orderRepo,
 		productRepo: productRepo,
+		syncLedger:  syncLedger,
 	}
 }
 
@@ -144,41 +150,66 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, userID uuid.UUID, inp
 		return nil, err
 	}
 
+	if uc.syncLedger != nil && ord.PaymentStatus() == "PAID" {
+		_ = uc.syncLedger.SyncRunningBalances(ctx)
+	}
+
 	return uc.orderRepo.FindByID(ctx, userID, ord.ID())
 }
 
 type UpdateOrderStatusUseCase struct {
-	repo order.Repository
+	repo       order.Repository
+	syncLedger LedgerSynchronizer
 }
 
-func NewUpdateOrderStatusUseCase(repo order.Repository) *UpdateOrderStatusUseCase {
-	return &UpdateOrderStatusUseCase{repo: repo}
+func NewUpdateOrderStatusUseCase(repo order.Repository, syncLedger LedgerSynchronizer) *UpdateOrderStatusUseCase {
+	return &UpdateOrderStatusUseCase{repo: repo, syncLedger: syncLedger}
 }
 
 func (uc *UpdateOrderStatusUseCase) Execute(ctx context.Context, userID, id uuid.UUID, status string) error {
-	return uc.repo.UpdateStatus(ctx, userID, id, status)
+	if err := uc.repo.UpdateStatus(ctx, userID, id, status); err != nil {
+		return err
+	}
+	if uc.syncLedger != nil {
+		_ = uc.syncLedger.SyncRunningBalances(ctx)
+	}
+	return nil
 }
 
 type UpdatePaymentStatusUseCase struct {
-	repo order.Repository
+	repo       order.Repository
+	syncLedger LedgerSynchronizer
 }
 
-func NewUpdatePaymentStatusUseCase(repo order.Repository) *UpdatePaymentStatusUseCase {
-	return &UpdatePaymentStatusUseCase{repo: repo}
+func NewUpdatePaymentStatusUseCase(repo order.Repository, syncLedger LedgerSynchronizer) *UpdatePaymentStatusUseCase {
+	return &UpdatePaymentStatusUseCase{repo: repo, syncLedger: syncLedger}
 }
 
 func (uc *UpdatePaymentStatusUseCase) Execute(ctx context.Context, userID, id uuid.UUID, paymentStatus string) error {
-	return uc.repo.UpdatePaymentStatus(ctx, userID, id, paymentStatus)
+	if err := uc.repo.UpdatePaymentStatus(ctx, userID, id, paymentStatus); err != nil {
+		return err
+	}
+	if uc.syncLedger != nil {
+		_ = uc.syncLedger.SyncRunningBalances(ctx)
+	}
+	return nil
 }
 
 type DeleteOrderUseCase struct {
-	repo order.Repository
+	repo       order.Repository
+	syncLedger LedgerSynchronizer
 }
 
-func NewDeleteOrderUseCase(repo order.Repository) *DeleteOrderUseCase {
-	return &DeleteOrderUseCase{repo: repo}
+func NewDeleteOrderUseCase(repo order.Repository, syncLedger LedgerSynchronizer) *DeleteOrderUseCase {
+	return &DeleteOrderUseCase{repo: repo, syncLedger: syncLedger}
 }
 
 func (uc *DeleteOrderUseCase) Execute(ctx context.Context, userID, id uuid.UUID) error {
-	return uc.repo.Delete(ctx, userID, id)
+	if err := uc.repo.Delete(ctx, userID, id); err != nil {
+		return err
+	}
+	if uc.syncLedger != nil {
+		_ = uc.syncLedger.SyncRunningBalances(ctx)
+	}
+	return nil
 }

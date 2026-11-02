@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"encoding/json"
@@ -52,11 +52,14 @@ func AuthMiddleware(cfg *config.Config) echo.MiddlewareFunc {
 				}
 			}
 
-			// Fallback: X-User-ID header (developer testing or internal service call)
-			if xUserID := c.Request().Header.Get("X-User-ID"); xUserID != "" {
-				if parsedID, err := uuid.Parse(xUserID); err == nil {
-					c.Set("user_id", parsedID)
-					return next(c)
+			// Fallback: X-User-ID header (ONLY allowed in development / testing mode, blocked in production)
+			isProd := cfg != nil && (strings.EqualFold(cfg.AppEnv, "production") || strings.EqualFold(cfg.AppEnv, "prod"))
+			if !isProd {
+				if xUserID := c.Request().Header.Get("X-User-ID"); xUserID != "" {
+					if parsedID, err := uuid.Parse(xUserID); err == nil {
+						c.Set("user_id", parsedID)
+						return next(c)
+					}
 				}
 			}
 

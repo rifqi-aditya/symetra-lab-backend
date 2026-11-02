@@ -402,7 +402,7 @@ func NewGetOrderAllocationUseCase(orderRepo order.Repository) *GetOrderAllocatio
 	return &GetOrderAllocationUseCase{orderRepo: orderRepo}
 }
 
-func (uc *GetOrderAllocationUseCase) Execute(ctx context.Context, userID uuid.UUID, channel string, dateFrom, dateTo *time.Time) (*finance.OrderAllocationSummary, error) {
+func (uc *GetOrderAllocationUseCase) Execute(ctx context.Context, userID uuid.UUID, channel string, dateFrom, dateTo *time.Time) (*order.OrderAllocationSummary, error) {
 	return uc.orderRepo.GetOrderAllocationSummary(ctx, userID, channel, dateFrom, dateTo)
 }
 
