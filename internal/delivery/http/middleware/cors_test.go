@@ -79,5 +79,35 @@ func TestSetupCORS(t *testing.T) {
 			t.Fatalf("expected localhost allowed in dev, got: %s", rec.Header().Get("Access-Control-Allow-Origin"))
 		}
 	})
+
+	t.Run("should allow symetra-lab-workspace.vercel.app in production", func(t *testing.T) {
+		cfg := &config.Config{
+			AppEnv: "production",
+		}
+
+		e := echo.New()
+		e.Use(middleware.SetupCORS(cfg))
+		e.GET("/test", func(c echo.Context) error {
+			return c.String(http.StatusOK, "ok")
+		})
+
+		origins := []string{
+			"https://symetra-lab-workspace.vercel.app",
+			"https://symetra-lab-workspace-git-main.vercel.app",
+			"https://symetralab.vercel.app",
+		}
+
+		for _, orig := range origins {
+			req := httptest.NewRequest(http.MethodOptions, "/test", nil)
+			req.Header.Set("Origin", orig)
+			req.Header.Set("Access-Control-Request-Method", "POST")
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			if rec.Header().Get("Access-Control-Allow-Origin") != orig {
+				t.Fatalf("expected %s allowed in production, got: %s", orig, rec.Header().Get("Access-Control-Allow-Origin"))
+			}
+		}
+	})
 }
 

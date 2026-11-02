@@ -46,9 +46,11 @@ func SetupCORS(cfg *config.Config) echo.MiddlewareFunc {
 				if hostname == "localhost" || hostname == "127.0.0.1" || strings.HasSuffix(hostname, ".ngrok-free.app") {
 					return true, nil
 				}
-			} else {
-				// In production, whitelist trusted domain patterns
-				if strings.HasSuffix(hostname, "symetralab.vercel.app") || strings.HasSuffix(hostname, "symetra-lab.vercel.app") {
+			}
+
+			// 5. Whitelist trusted Vercel frontend domains for symetra-lab
+			if strings.HasSuffix(hostname, ".vercel.app") {
+				if strings.HasPrefix(hostname, "symetra-lab") || strings.HasPrefix(hostname, "symetralab") {
 					return true, nil
 				}
 			}
