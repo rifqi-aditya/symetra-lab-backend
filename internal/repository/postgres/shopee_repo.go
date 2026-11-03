@@ -1275,7 +1275,7 @@ func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error)
 	// 2. Perbarui alokasi pos kas orders dari order_items yang sudah dikalkulasi ulang
 	var activeOrders []uuid.UUID
 	err := r.db.WithContext(ctx).Model(&shopeeUnifiedOrderGORM{}).
-		Where("channel = ? AND status NOT IN ('CANCELLED', 'UNPAID')", "SHOPEE").
+		Where("status NOT IN ('CANCELLED', 'UNPAID')").
 		Pluck("id", &activeOrders).Error
 	if err != nil {
 		return 0, err
