@@ -29,6 +29,7 @@ type ShopConfigInput struct {
 	PrinterPrice            float64
 	PrinterLifespanHours    float64
 	FailureBufferPercent    float64
+	MaintenanceRatePerHour  float64
 }
 
 type MarketplacePlatformInput struct {
@@ -51,10 +52,11 @@ type PackagingCostInput struct {
 }
 
 type MachineCostInput struct {
-	TotalPurchaseCost float64
-	SalvageValue      float64
-	LifespanHours     float64
-	AvgPowerWatts     int
+	TotalPurchaseCost      float64
+	SalvageValue           float64
+	LifespanHours          float64
+	AvgPowerWatts          int
+	MaintenanceRatePerHour float64
 }
 
 type CalculationInput struct {

@@ -16,12 +16,13 @@ type ShopConfig struct {
 	printerPrice            float64
 	printerLifespanHours    float64
 	failureBufferPercent    float64
+	maintenanceRatePerHour  float64
 	updatedAt               time.Time
 }
 
 func NewShopConfig(
 	userID uuid.UUID,
-	filamentPricePerRoll, filamentWeightGrams, elecTariff, powerWatts, printerPrice, lifespanHours, failureBuffer float64,
+	filamentPricePerRoll, filamentWeightGrams, elecTariff, powerWatts, printerPrice, lifespanHours, failureBuffer, maintenanceRate float64,
 ) *ShopConfig {
 	return &ShopConfig{
 		id:                      uuid.New(),
@@ -33,13 +34,14 @@ func NewShopConfig(
 		printerPrice:            printerPrice,
 		printerLifespanHours:    lifespanHours,
 		failureBufferPercent:    failureBuffer,
+		maintenanceRatePerHour:  maintenanceRate,
 		updatedAt:               time.Now(),
 	}
 }
 
 func ReconstructShopConfig(
 	id, userID uuid.UUID,
-	filamentPricePerRoll, filamentWeightGrams, elecTariff, powerWatts, printerPrice, lifespanHours, failureBuffer float64,
+	filamentPricePerRoll, filamentWeightGrams, elecTariff, powerWatts, printerPrice, lifespanHours, failureBuffer, maintenanceRate float64,
 	updatedAt time.Time,
 ) *ShopConfig {
 	return &ShopConfig{
@@ -52,6 +54,7 @@ func ReconstructShopConfig(
 		printerPrice:            printerPrice,
 		printerLifespanHours:    lifespanHours,
 		failureBufferPercent:    failureBuffer,
+		maintenanceRatePerHour:  maintenanceRate,
 		updatedAt:               updatedAt,
 	}
 }
@@ -65,10 +68,11 @@ func (s *ShopConfig) PrinterPowerWatts() float64       { return s.printerPowerWa
 func (s *ShopConfig) PrinterPrice() float64            { return s.printerPrice }
 func (s *ShopConfig) PrinterLifespanHours() float64    { return s.printerLifespanHours }
 func (s *ShopConfig) FailureBufferPercent() float64    { return s.failureBufferPercent }
+func (s *ShopConfig) MaintenanceRatePerHour() float64  { return s.maintenanceRatePerHour }
 func (s *ShopConfig) UpdatedAt() time.Time             { return s.updatedAt }
 
 func (s *ShopConfig) Update(
-	filamentPricePerRoll, filamentWeightGrams, elecTariff, powerWatts, printerPrice, lifespanHours, failureBuffer float64,
+	filamentPricePerRoll, filamentWeightGrams, elecTariff, powerWatts, printerPrice, lifespanHours, failureBuffer, maintenanceRate float64,
 ) {
 	if filamentPricePerRoll > 0 {
 		s.filamentPricePerRoll = filamentPricePerRoll
@@ -90,6 +94,9 @@ func (s *ShopConfig) Update(
 	}
 	if failureBuffer >= 0 {
 		s.failureBufferPercent = failureBuffer
+	}
+	if maintenanceRate > 0 {
+		s.maintenanceRatePerHour = maintenanceRate
 	}
 	s.updatedAt = time.Now()
 }
@@ -114,7 +121,7 @@ func NewMarketplacePlatform(
 ) *MarketplacePlatform {
 	return &MarketplacePlatform{
 		id:                  uuid.New(),
-		userID:              userID,
+		userID:                  userID,
 		name:                name,
 		commissionPercent:   commission,
 		promoFeePercent:     promo,

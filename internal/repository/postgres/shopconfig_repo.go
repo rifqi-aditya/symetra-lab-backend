@@ -21,6 +21,7 @@ type shopConfigGORM struct {
 	PrinterPrice            float64   `gorm:"column:printer_price"`
 	PrinterLifespanHours    float64   `gorm:"column:printer_lifespan_hours"`
 	FailureBufferPercent    float64   `gorm:"column:failure_buffer_percent"`
+	MaintenanceRatePerHour  float64   `gorm:"column:maintenance_rate_per_hour;default:500"`
 	UpdatedAt               time.Time `gorm:"column:updated_at"`
 }
 
@@ -57,17 +58,18 @@ func (r *ShopConfigRepository) GetByUserID(ctx context.Context, userID uuid.UUID
 	err := r.db.WithContext(ctx).First(&g).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Initialize default workshop configuration (matching v1 behavior)
+			// Initialize default workshop configuration (matching workshop defaults)
 			g = shopConfigGORM{
 				ID:                      uuid.New(),
 				UserID:                  userID,
-				FilamentPricePerRoll:    200000,
+				FilamentPricePerRoll:    175000,
 				FilamentWeightGrams:     1000,
 				ElectricityTariffPerKwh: 1700,
-				PrinterPowerWatts:       200,
-				PrinterPrice:            5000000,
-				PrinterLifespanHours:    3000,
+				PrinterPowerWatts:       175,
+				PrinterPrice:            6800000,
+				PrinterLifespanHours:    4000,
 				FailureBufferPercent:    10,
+				MaintenanceRatePerHour:  500,
 				UpdatedAt:               time.Now(),
 			}
 			_ = r.db.WithContext(ctx).Create(&g)
@@ -85,6 +87,7 @@ func (r *ShopConfigRepository) GetByUserID(ctx context.Context, userID uuid.UUID
 		g.PrinterPrice,
 		g.PrinterLifespanHours,
 		g.FailureBufferPercent,
+		g.MaintenanceRatePerHour,
 		g.UpdatedAt,
 	), nil
 }
@@ -100,6 +103,7 @@ func (r *ShopConfigRepository) Save(ctx context.Context, cfg *shopconfig.ShopCon
 		PrinterPrice:            cfg.PrinterPrice(),
 		PrinterLifespanHours:    cfg.PrinterLifespanHours(),
 		FailureBufferPercent:    cfg.FailureBufferPercent(),
+		MaintenanceRatePerHour:  cfg.MaintenanceRatePerHour(),
 		UpdatedAt:               cfg.UpdatedAt(),
 	}
 	return r.db.WithContext(ctx).Save(&g).Error

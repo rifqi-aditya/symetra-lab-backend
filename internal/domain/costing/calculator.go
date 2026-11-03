@@ -13,10 +13,11 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 			FilamentPricePerRoll:    175000,
 			FilamentWeightGrams:     1000,
 			ElectricityTariffPerKwh: 1700,
-			PrinterPowerWatts:       200,
-			PrinterPrice:            5000000,
-			PrinterLifespanHours:    3000,
+			PrinterPowerWatts:       175,
+			PrinterPrice:            6800000,
+			PrinterLifespanHours:    4000,
 			FailureBufferPercent:    10,
+			MaintenanceRatePerHour:  500,
 		}
 	}
 
@@ -51,8 +52,6 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 		filamentCost = input.DefaultWeightGrams * costPerGram
 		// Emergency fund = isolated failure buffer amount.
 		emergencyFundCost = filamentCost * (cfg.FailureBufferPercent / 100.0)
-		// NOTE: filamentCost intentionally stays as the BASE value (without buffer).
-		// emergencyFundCost + filamentCost = old buffered filamentCost ✓
 	}
 
 	// 2. Hardware / Components Cost
@@ -106,10 +105,20 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 		}
 	}
 	depreciationCost := depreciationPerHour * hours
-	maintenanceCost := RoundTwo(depreciationCost * 0.5)
+
+	// Maintenance Cost: dynamic based on fleet/machine rate per hour
+	maintRate := cfg.MaintenanceRatePerHour
+	if input.Machine != nil && input.Machine.MaintenanceRatePerHour > 0 {
+		maintRate = input.Machine.MaintenanceRatePerHour
+	}
+	var maintenanceCost float64
+	if maintRate > 0 {
+		maintenanceCost = RoundTwo(maintRate * hours)
+	} else {
+		maintenanceCost = RoundTwo(depreciationCost * 0.5)
+	}
 
 	// 5. Base HPP
-	// emergencyFundCost + filamentCost = old buffered filamentCost, so BaseHPP is unchanged.
 	baseHPP := filamentCost + emergencyFundCost + hardwareCost + packagingCost + electricityCost + depreciationCost + maintenanceCost
 	if baseHPP == 0 && input.BaseHPP > 0 {
 		baseHPP = input.BaseHPP

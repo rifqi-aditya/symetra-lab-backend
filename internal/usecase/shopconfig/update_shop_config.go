@@ -16,6 +16,7 @@ type UpdateShopConfigInput struct {
 	PrinterPrice            float64
 	PrinterLifespanHours    float64
 	FailureBufferPercent    float64
+	MaintenanceRatePerHour  float64
 }
 
 type UpdateShopConfigUseCase struct {
@@ -38,6 +39,7 @@ func (uc *UpdateShopConfigUseCase) Execute(ctx context.Context, userID uuid.UUID
 			input.PrinterPrice,
 			input.PrinterLifespanHours,
 			input.FailureBufferPercent,
+			input.MaintenanceRatePerHour,
 		)
 	} else {
 		cfg.Update(
@@ -48,6 +50,7 @@ func (uc *UpdateShopConfigUseCase) Execute(ctx context.Context, userID uuid.UUID
 			input.PrinterPrice,
 			input.PrinterLifespanHours,
 			input.FailureBufferPercent,
+			input.MaintenanceRatePerHour,
 		)
 	}
 

@@ -9,16 +9,19 @@ import (
 func TestShopConfig_Update(t *testing.T) {
 	cfg := NewShopConfig(
 		uuid.New(),
-		200000, 1000, 1700, 200, 5000000, 3000, 10,
+		200000, 1000, 1700, 200, 5000000, 3000, 10, 500,
 	)
 
-	cfg.Update(210000, 1000, 1800, 250, 5500000, 3500, 12)
+	cfg.Update(210000, 1000, 1800, 250, 5500000, 3500, 12, 600)
 
 	if cfg.ElectricityTariffPerKwh() != 1800 {
 		t.Errorf("Expected tariff 1800, got %f", cfg.ElectricityTariffPerKwh())
 	}
 	if cfg.PrinterPowerWatts() != 250 {
 		t.Errorf("Expected power 250, got %f", cfg.PrinterPowerWatts())
+	}
+	if cfg.MaintenanceRatePerHour() != 600 {
+		t.Errorf("Expected maintenance rate 600, got %f", cfg.MaintenanceRatePerHour())
 	}
 }
 

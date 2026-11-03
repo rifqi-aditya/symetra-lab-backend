@@ -23,6 +23,10 @@ func TestCalculate_DefaultValues(t *testing.T) {
 	if result.DepreciationCost <= 0 {
 		t.Errorf("Expected depreciation cost > 0, got %f", result.DepreciationCost)
 	}
+	// With 2 hours print time and default 500/hour maintenance rate:
+	if result.MaintenanceCost != 1000.0 {
+		t.Errorf("Expected maintenance cost 1000.0 (500*2), got %f", result.MaintenanceCost)
+	}
 	if result.BaseHPP <= 0 {
 		t.Errorf("Expected base HPP > 0, got %f", result.BaseHPP)
 	}
@@ -54,5 +58,31 @@ func TestCalculate_WithComponentsAndPackaging(t *testing.T) {
 	}
 	if result.PackagingCost != 2500 {
 		t.Errorf("Expected packaging cost 2500, got %f", result.PackagingCost)
+	}
+}
+
+func TestCalculate_CustomMaintenanceRate(t *testing.T) {
+	input := CalculationInput{
+		MaterialType:          "PLA",
+		DefaultWeightGrams:    50,
+		DefaultPrintTimeHours: 3.0,
+		TargetMarginPercent:   30,
+		ShopConfig: &ShopConfigInput{
+			FilamentPricePerRoll:    175000,
+			FilamentWeightGrams:     1000,
+			ElectricityTariffPerKwh: 1700,
+			PrinterPowerWatts:       175,
+			PrinterPrice:            6800000,
+			PrinterLifespanHours:    4000,
+			FailureBufferPercent:    10,
+			MaintenanceRatePerHour:  750,
+		},
+	}
+
+	result := Calculate(input)
+
+	expectedMaint := 750.0 * 3.0 // 2250
+	if result.MaintenanceCost != expectedMaint {
+		t.Errorf("Expected maintenance cost %f, got %f", expectedMaint, result.MaintenanceCost)
 	}
 }

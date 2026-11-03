@@ -16,6 +16,7 @@ type UpdateShopConfigRequest struct {
 	PrinterPrice            float64 `json:"printer_price"`
 	PrinterLifespanHours    float64 `json:"printer_lifespan_hours"`
 	FailureBufferPercent    float64 `json:"failure_buffer_percent"`
+	MaintenanceRatePerHour  float64 `json:"maintenance_rate_per_hour"`
 }
 
 type ShopConfigResponse struct {
@@ -28,6 +29,7 @@ type ShopConfigResponse struct {
 	PrinterPrice            float64   `json:"printer_price"`
 	PrinterLifespanHours    float64   `json:"printer_lifespan_hours"`
 	FailureBufferPercent    float64   `json:"failure_buffer_percent"`
+	MaintenanceRatePerHour  float64   `json:"maintenance_rate_per_hour"`
 	UpdatedAt               time.Time `json:"updated_at"`
 }
 
@@ -42,6 +44,7 @@ func ToShopConfigResponse(c *shopconfig.ShopConfig) ShopConfigResponse {
 		PrinterPrice:            c.PrinterPrice(),
 		PrinterLifespanHours:    c.PrinterLifespanHours(),
 		FailureBufferPercent:    c.FailureBufferPercent(),
+		MaintenanceRatePerHour:  c.MaintenanceRatePerHour(),
 		UpdatedAt:               c.UpdatedAt(),
 	}
 }

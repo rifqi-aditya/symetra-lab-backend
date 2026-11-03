@@ -70,6 +70,7 @@ func (h *ShopConfigHandler) UpdateShopConfig(c echo.Context) error {
 		PrinterPrice:            req.PrinterPrice,
 		PrinterLifespanHours:    req.PrinterLifespanHours,
 		FailureBufferPercent:    req.FailureBufferPercent,
+		MaintenanceRatePerHour:  req.MaintenanceRatePerHour,
 	})
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dto.Fail("Gagal menyimpan konfigurasi: "+err.Error(), err.Error()))

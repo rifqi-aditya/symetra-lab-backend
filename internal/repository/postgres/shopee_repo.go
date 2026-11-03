@@ -495,11 +495,18 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 		if m.SalvageValue != nil {
 			salvage = *m.SalvageValue
 		}
+		mRate := 0.0
+		if m.MaintenanceBufferPerHour != nil && *m.MaintenanceBufferPerHour > 0 {
+			mRate = *m.MaintenanceBufferPerHour
+		} else if cache.shopCfg != nil && cache.shopCfg.MaintenanceRatePerHour > 0 {
+			mRate = cache.shopCfg.MaintenanceRatePerHour
+		}
 		machInput = &costing.MachineCostInput{
-			TotalPurchaseCost: m.TotalPurchaseCost,
-			SalvageValue:      salvage,
-			LifespanHours:     float64(m.LifespanHours),
-			AvgPowerWatts:     m.AvgPowerWatts,
+			TotalPurchaseCost:      m.TotalPurchaseCost,
+			SalvageValue:           salvage,
+			LifespanHours:          float64(m.LifespanHours),
+			AvgPowerWatts:          m.AvgPowerWatts,
+			MaintenanceRatePerHour: mRate,
 		}
 	}
 
@@ -543,6 +550,7 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 			PrinterPrice:            sc.PrinterPrice,
 			PrinterLifespanHours:    sc.PrinterLifespanHours,
 			FailureBufferPercent:    sc.FailureBufferPercent,
+			MaintenanceRatePerHour:  sc.MaintenanceRatePerHour,
 		}
 	}
 

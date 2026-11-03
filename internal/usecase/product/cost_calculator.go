@@ -73,6 +73,7 @@ func (cc *CostCalculator) LoadContext(ctx context.Context, userID uuid.UUID) *Co
 				PrinterPrice:            sc.PrinterPrice(),
 				PrinterLifespanHours:    sc.PrinterLifespanHours(),
 				FailureBufferPercent:    sc.FailureBufferPercent(),
+				MaintenanceRatePerHour:  sc.MaintenanceRatePerHour(),
 			}
 		}
 	}
@@ -84,11 +85,18 @@ func (cc *CostCalculator) LoadContext(ctx context.Context, userID uuid.UUID) *Co
 				if m.SalvageValue() != nil {
 					salvage = *m.SalvageValue()
 				}
+				mRate := 0.0
+				if m.MaintenanceBufferPerHour() != nil && *m.MaintenanceBufferPerHour() > 0 {
+					mRate = *m.MaintenanceBufferPerHour()
+				} else if contextCache.ShopConfig != nil && contextCache.ShopConfig.MaintenanceRatePerHour > 0 {
+					mRate = contextCache.ShopConfig.MaintenanceRatePerHour
+				}
 				minput := &costing.MachineCostInput{
-					TotalPurchaseCost: m.TotalPurchaseCost(),
-					SalvageValue:      salvage,
-					LifespanHours:     float64(m.LifespanHours()),
-					AvgPowerWatts:     m.AvgPowerWatts(),
+					TotalPurchaseCost:      m.TotalPurchaseCost(),
+					SalvageValue:           salvage,
+					LifespanHours:          float64(m.LifespanHours()),
+					AvgPowerWatts:          m.AvgPowerWatts(),
+					MaintenanceRatePerHour: mRate,
 				}
 				contextCache.Machines[m.ID()] = minput
 				if contextCache.DefaultMach == nil {
