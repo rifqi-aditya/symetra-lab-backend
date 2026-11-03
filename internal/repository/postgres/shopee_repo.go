@@ -491,22 +491,10 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 		m = cache.defaultMach
 	}
 	if m != nil {
-		salvage := 0.0
-		if m.SalvageValue != nil {
-			salvage = *m.SalvageValue
-		}
-		mRate := 0.0
-		if m.MaintenanceBufferPerHour != nil && *m.MaintenanceBufferPerHour > 0 {
-			mRate = *m.MaintenanceBufferPerHour
-		} else if cache.shopCfg != nil && cache.shopCfg.MaintenanceRatePerHour > 0 {
-			mRate = cache.shopCfg.MaintenanceRatePerHour
-		}
 		machInput = &costing.MachineCostInput{
-			TotalPurchaseCost:      m.TotalPurchaseCost,
-			SalvageValue:           salvage,
-			LifespanHours:          float64(m.LifespanHours),
-			AvgPowerWatts:          m.AvgPowerWatts,
-			MaintenanceRatePerHour: mRate,
+			TotalPurchaseCost: m.TotalPurchaseCost,
+			LifespanHours:     float64(m.LifespanHours),
+			AvgPowerWatts:     m.AvgPowerWatts,
 		}
 	}
 

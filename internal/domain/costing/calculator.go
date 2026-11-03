@@ -87,7 +87,6 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 
 	machinePrice := cfg.PrinterPrice
 	lifespanHours := cfg.PrinterLifespanHours
-	salvageValue := 0.0
 	if input.Machine != nil {
 		if input.Machine.TotalPurchaseCost > 0 {
 			machinePrice = input.Machine.TotalPurchaseCost
@@ -95,22 +94,18 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 		if input.Machine.LifespanHours > 0 {
 			lifespanHours = input.Machine.LifespanHours
 		}
-		salvageValue = input.Machine.SalvageValue
 	}
 	depreciationPerHour := 0.0
 	if lifespanHours > 0 {
-		depreciationPerHour = (machinePrice - salvageValue) / lifespanHours
+		depreciationPerHour = machinePrice / lifespanHours
 		if depreciationPerHour < 0 {
 			depreciationPerHour = 0
 		}
 	}
 	depreciationCost := depreciationPerHour * hours
 
-	// Maintenance Cost: dynamic based on fleet/machine rate per hour
+	// Maintenance Cost: dynamic based on fleet rate per hour
 	maintRate := cfg.MaintenanceRatePerHour
-	if input.Machine != nil && input.Machine.MaintenanceRatePerHour > 0 {
-		maintRate = input.Machine.MaintenanceRatePerHour
-	}
 	var maintenanceCost float64
 	if maintRate > 0 {
 		maintenanceCost = RoundTwo(maintRate * hours)

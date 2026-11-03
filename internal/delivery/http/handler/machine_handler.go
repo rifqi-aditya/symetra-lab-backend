@@ -158,10 +158,6 @@ func (h *MachineHandler) Update(c echo.Context) error {
 	if req.TotalPurchaseCost != nil && *req.TotalPurchaseCost >= 0 {
 		cost = *req.TotalPurchaseCost
 	}
-	salvage := existing.SalvageValue()
-	if req.SalvageValue != nil {
-		salvage = req.SalvageValue
-	}
 	lifespan := existing.LifespanHours()
 	if req.LifespanHours != nil && *req.LifespanHours > 0 {
 		lifespan = *req.LifespanHours
@@ -178,14 +174,6 @@ func (h *MachineHandler) Update(c echo.Context) error {
 	if req.AvgPowerWatts != nil && *req.AvgPowerWatts >= 0 {
 		power = *req.AvgPowerWatts
 	}
-	buffer := existing.MaintenanceBufferPerHour()
-	if req.MaintenanceBufferPerHour != nil {
-		buffer = req.MaintenanceBufferPerHour
-	}
-	failure := existing.FailureRatePercent()
-	if req.FailureRatePercent != nil {
-		failure = req.FailureRatePercent
-	}
 	bvx := existing.BuildVolumeX()
 	if req.BuildVolumeX != nil {
 		bvx = req.BuildVolumeX
@@ -198,37 +186,24 @@ func (h *MachineHandler) Update(c echo.Context) error {
 	if req.BuildVolumeZ != nil {
 		bvz = req.BuildVolumeZ
 	}
-	speed := existing.SpeedMultiplier()
-	if req.SpeedMultiplier != nil {
-		speed = req.SpeedMultiplier
-	}
 	state := existing.CurrentState()
 	if req.CurrentState != nil && *req.CurrentState != "" {
 		state = *req.CurrentState
 	}
-	elecCost := existing.ElectricityCostPerHour()
-	if req.ElectricityCostPerHour != nil {
-		elecCost = req.ElectricityCostPerHour
-	}
 
 	m, err := h.updateUC.Execute(c.Request().Context(), userID, machineUC.UpdateMachineInput{
-		ID:                       id,
-		Name:                     name,
-		Brand:                    brand,
-		TotalPurchaseCost:        cost,
-		SalvageValue:             salvage,
-		LifespanHours:            lifespan,
-		PurchaseDate:             purchaseDate,
-		TotalHoursUsed:           hoursUsed,
-		AvgPowerWatts:            power,
-		MaintenanceBufferPerHour: buffer,
-		FailureRatePercent:       failure,
-		BuildVolumeX:             bvx,
-		BuildVolumeY:             bvy,
-		BuildVolumeZ:             bvz,
-		SpeedMultiplier:          speed,
-		CurrentState:             state,
-		ElectricityCostPerHour:   elecCost,
+		ID:                id,
+		Name:              name,
+		Brand:             brand,
+		TotalPurchaseCost: cost,
+		LifespanHours:     lifespan,
+		PurchaseDate:      purchaseDate,
+		TotalHoursUsed:    hoursUsed,
+		AvgPowerWatts:     power,
+		BuildVolumeX:      bvx,
+		BuildVolumeY:      bvy,
+		BuildVolumeZ:      bvz,
+		CurrentState:      state,
 	})
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, dto.Fail("Failed to update machine", err.Error()))

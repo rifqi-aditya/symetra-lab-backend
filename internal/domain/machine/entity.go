@@ -1,4 +1,4 @@
-﻿package machine
+package machine
 
 import (
 	"strings"
@@ -113,27 +113,22 @@ func (p *MachineMaintenancePart) Replace(cost float64) {
 
 // Machine represents a 3D printer unit in the workshop.
 type Machine struct {
-	id                       uuid.UUID
-	userID                   uuid.UUID
-	name                     string
-	brand                    *string
-	totalPurchaseCost        float64
-	salvageValue             *float64
-	lifespanHours            int
-	purchaseDate             *string
-	totalHoursUsed           float64
-	avgPowerWatts            int
-	maintenanceBufferPerHour *float64
-	failureRatePercent       *float64
-	buildVolumeX             *float64
-	buildVolumeY             *float64
-	buildVolumeZ             *float64
-	speedMultiplier          *float64
-	currentState             string
-	electricityCostPerHour   *float64
-	maintenanceParts         []*MachineMaintenancePart
-	createdAt                time.Time
-	updatedAt                time.Time
+	id                uuid.UUID
+	userID            uuid.UUID
+	name              string
+	brand             *string
+	totalPurchaseCost float64
+	lifespanHours     int
+	purchaseDate      *string
+	totalHoursUsed    float64
+	avgPowerWatts     int
+	buildVolumeX      *float64
+	buildVolumeY      *float64
+	buildVolumeZ      *float64
+	currentState      string
+	maintenanceParts  []*MachineMaintenancePart
+	createdAt         time.Time
+	updatedAt         time.Time
 }
 
 func NewMachine(
@@ -159,7 +154,6 @@ func NewMachine(
 	}
 	now := time.Now()
 	defaultState := "IDLE"
-	defaultSpeed := 1.0
 	return &Machine{
 		id:                uuid.New(),
 		userID:            userID,
@@ -168,7 +162,6 @@ func NewMachine(
 		totalPurchaseCost: totalPurchaseCost,
 		lifespanHours:     lifespanHours,
 		avgPowerWatts:     avgPowerWatts,
-		speedMultiplier:   &defaultSpeed,
 		currentState:      defaultState,
 		createdAt:         now,
 		updatedAt:         now,
@@ -180,64 +173,51 @@ func ReconstructMachine(
 	name string,
 	brand *string,
 	totalPurchaseCost float64,
-	salvageValue *float64,
 	lifespanHours int,
 	purchaseDate *string,
 	totalHoursUsed float64,
 	avgPowerWatts int,
-	maintenanceBufferPerHour, failureRatePercent *float64,
-	buildVolumeX, buildVolumeY, buildVolumeZ, speedMultiplier *float64,
+	buildVolumeX, buildVolumeY, buildVolumeZ *float64,
 	currentState string,
-	electricityCostPerHour *float64,
 	maintenanceParts []*MachineMaintenancePart,
 	createdAt, updatedAt time.Time,
 ) *Machine {
 	return &Machine{
-		id:                       id,
-		userID:                   userID,
-		name:                     name,
-		brand:                    brand,
-		totalPurchaseCost:        totalPurchaseCost,
-		salvageValue:             salvageValue,
-		lifespanHours:            lifespanHours,
-		purchaseDate:             purchaseDate,
-		totalHoursUsed:           totalHoursUsed,
-		avgPowerWatts:            avgPowerWatts,
-		maintenanceBufferPerHour: maintenanceBufferPerHour,
-		failureRatePercent:       failureRatePercent,
-		buildVolumeX:             buildVolumeX,
-		buildVolumeY:             buildVolumeY,
-		buildVolumeZ:             buildVolumeZ,
-		speedMultiplier:          speedMultiplier,
-		currentState:             currentState,
-		electricityCostPerHour:   electricityCostPerHour,
-		maintenanceParts:         maintenanceParts,
-		createdAt:                createdAt,
-		updatedAt:                updatedAt,
+		id:                id,
+		userID:            userID,
+		name:              name,
+		brand:             brand,
+		totalPurchaseCost: totalPurchaseCost,
+		lifespanHours:     lifespanHours,
+		purchaseDate:      purchaseDate,
+		totalHoursUsed:    totalHoursUsed,
+		avgPowerWatts:     avgPowerWatts,
+		buildVolumeX:      buildVolumeX,
+		buildVolumeY:      buildVolumeY,
+		buildVolumeZ:      buildVolumeZ,
+		currentState:      currentState,
+		maintenanceParts:  maintenanceParts,
+		createdAt:         createdAt,
+		updatedAt:         updatedAt,
 	}
 }
 
-func (m *Machine) ID() uuid.UUID                                     { return m.id }
-func (m *Machine) UserID() uuid.UUID                                 { return m.userID }
-func (m *Machine) Name() string                                      { return m.name }
-func (m *Machine) Brand() *string                                    { return m.brand }
-func (m *Machine) TotalPurchaseCost() float64                        { return m.totalPurchaseCost }
-func (m *Machine) SalvageValue() *float64                            { return m.salvageValue }
-func (m *Machine) LifespanHours() int                                { return m.lifespanHours }
-func (m *Machine) PurchaseDate() *string                             { return m.purchaseDate }
-func (m *Machine) TotalHoursUsed() float64                           { return m.totalHoursUsed }
-func (m *Machine) AvgPowerWatts() int                                { return m.avgPowerWatts }
-func (m *Machine) MaintenanceBufferPerHour() *float64                { return m.maintenanceBufferPerHour }
-func (m *Machine) FailureRatePercent() *float64                      { return m.failureRatePercent }
-func (m *Machine) BuildVolumeX() *float64                            { return m.buildVolumeX }
-func (m *Machine) BuildVolumeY() *float64                            { return m.buildVolumeY }
-func (m *Machine) BuildVolumeZ() *float64                            { return m.buildVolumeZ }
-func (m *Machine) SpeedMultiplier() *float64                         { return m.speedMultiplier }
-func (m *Machine) CurrentState() string                              { return m.currentState }
-func (m *Machine) ElectricityCostPerHour() *float64                  { return m.electricityCostPerHour }
-func (m *Machine) MaintenanceParts() []*MachineMaintenancePart       { return m.maintenanceParts }
-func (m *Machine) CreatedAt() time.Time                              { return m.createdAt }
-func (m *Machine) UpdatedAt() time.Time                              { return m.updatedAt }
+func (m *Machine) ID() uuid.UUID                               { return m.id }
+func (m *Machine) UserID() uuid.UUID                           { return m.userID }
+func (m *Machine) Name() string                                { return m.name }
+func (m *Machine) Brand() *string                              { return m.brand }
+func (m *Machine) TotalPurchaseCost() float64                  { return m.totalPurchaseCost }
+func (m *Machine) LifespanHours() int                          { return m.lifespanHours }
+func (m *Machine) PurchaseDate() *string                       { return m.purchaseDate }
+func (m *Machine) TotalHoursUsed() float64                     { return m.totalHoursUsed }
+func (m *Machine) AvgPowerWatts() int                          { return m.avgPowerWatts }
+func (m *Machine) BuildVolumeX() *float64                      { return m.buildVolumeX }
+func (m *Machine) BuildVolumeY() *float64                      { return m.buildVolumeY }
+func (m *Machine) BuildVolumeZ() *float64                      { return m.buildVolumeZ }
+func (m *Machine) CurrentState() string                        { return m.currentState }
+func (m *Machine) MaintenanceParts() []*MachineMaintenancePart { return m.maintenanceParts }
+func (m *Machine) CreatedAt() time.Time                        { return m.createdAt }
+func (m *Machine) UpdatedAt() time.Time                        { return m.updatedAt }
 
 func (m *Machine) UpdateState(state string) {
 	st := strings.ToUpper(strings.TrimSpace(state))

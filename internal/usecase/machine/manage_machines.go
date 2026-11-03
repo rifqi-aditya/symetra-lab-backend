@@ -1,4 +1,4 @@
-﻿package machine
+package machine
 
 import (
 	"context"
@@ -43,23 +43,18 @@ func (uc *CreateMachineUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 }
 
 type UpdateMachineInput struct {
-	ID                       uuid.UUID
-	Name                     string
-	Brand                    *string
-	TotalPurchaseCost        float64
-	SalvageValue             *float64
-	LifespanHours            int
-	PurchaseDate             *string
-	TotalHoursUsed           float64
-	AvgPowerWatts            int
-	MaintenanceBufferPerHour *float64
-	FailureRatePercent       *float64
-	BuildVolumeX             *float64
-	BuildVolumeY             *float64
-	BuildVolumeZ             *float64
-	SpeedMultiplier          *float64
-	CurrentState             string
-	ElectricityCostPerHour   *float64
+	ID                uuid.UUID
+	Name              string
+	Brand             *string
+	TotalPurchaseCost float64
+	LifespanHours     int
+	PurchaseDate      *string
+	TotalHoursUsed    float64
+	AvgPowerWatts     int
+	BuildVolumeX      *float64
+	BuildVolumeY      *float64
+	BuildVolumeZ      *float64
+	CurrentState      string
 }
 
 type UpdateMachineUseCase struct {
@@ -82,19 +77,14 @@ func (uc *UpdateMachineUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		input.Name,
 		input.Brand,
 		input.TotalPurchaseCost,
-		input.SalvageValue,
 		input.LifespanHours,
 		input.PurchaseDate,
 		input.TotalHoursUsed,
 		input.AvgPowerWatts,
-		input.MaintenanceBufferPerHour,
-		input.FailureRatePercent,
 		input.BuildVolumeX,
 		input.BuildVolumeY,
 		input.BuildVolumeZ,
-		input.SpeedMultiplier,
 		input.CurrentState,
-		input.ElectricityCostPerHour,
 		existing.MaintenanceParts(),
 		existing.CreatedAt(),
 		existing.UpdatedAt(),

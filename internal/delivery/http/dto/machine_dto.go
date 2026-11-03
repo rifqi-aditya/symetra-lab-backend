@@ -1,4 +1,4 @@
-﻿package dto
+package dto
 
 import (
 	"time"
@@ -17,22 +17,17 @@ type CreateMachineRequest struct {
 }
 
 type UpdateMachineRequest struct {
-	Name                     *string  `json:"name"`
-	Brand                    *string  `json:"brand"`
-	TotalPurchaseCost        *float64 `json:"total_purchase_cost"`
-	SalvageValue             *float64 `json:"salvage_value"`
-	LifespanHours            *int     `json:"lifespan_hours"`
-	PurchaseDate             *string  `json:"purchase_date"`
-	TotalHoursUsed           *float64 `json:"total_hours_used"`
-	AvgPowerWatts            *int     `json:"avg_power_watts"`
-	MaintenanceBufferPerHour *float64 `json:"maintenance_buffer_per_hour"`
-	FailureRatePercent       *float64 `json:"failure_rate_percent"`
-	BuildVolumeX             *float64 `json:"build_volume_x"`
-	BuildVolumeY             *float64 `json:"build_volume_y"`
-	BuildVolumeZ             *float64 `json:"build_volume_z"`
-	SpeedMultiplier          *float64 `json:"speed_multiplier"`
-	CurrentState             *string  `json:"current_state"`
-	ElectricityCostPerHour   *float64 `json:"electricity_cost_per_hour"`
+	Name              *string  `json:"name"`
+	Brand             *string  `json:"brand"`
+	TotalPurchaseCost *float64 `json:"total_purchase_cost"`
+	LifespanHours     *int     `json:"lifespan_hours"`
+	PurchaseDate      *string  `json:"purchase_date"`
+	TotalHoursUsed    *float64 `json:"total_hours_used"`
+	AvgPowerWatts     *int     `json:"avg_power_watts"`
+	BuildVolumeX      *float64 `json:"build_volume_x"`
+	BuildVolumeY      *float64 `json:"build_volume_y"`
+	BuildVolumeZ      *float64 `json:"build_volume_z"`
+	CurrentState      *string  `json:"current_state"`
 }
 
 type UpdateMachineStateRequest struct {
@@ -86,27 +81,22 @@ func ToPartResponse(p *machine.MachineMaintenancePart) MachineMaintenancePartRes
 }
 
 type MachineResponse struct {
-	ID                       uuid.UUID                        `json:"id"`
-	UserID                   uuid.UUID                        `json:"user_id"`
-	Name                     string                           `json:"name"`
-	Brand                    *string                          `json:"brand"`
-	TotalPurchaseCost        float64                          `json:"total_purchase_cost"`
-	SalvageValue             *float64                         `json:"salvage_value"`
-	LifespanHours            int                              `json:"lifespan_hours"`
-	PurchaseDate             *string                          `json:"purchase_date"`
-	TotalHoursUsed           float64                          `json:"total_hours_used"`
-	AvgPowerWatts            int                              `json:"avg_power_watts"`
-	MaintenanceBufferPerHour *float64                         `json:"maintenance_buffer_per_hour"`
-	FailureRatePercent       *float64                         `json:"failure_rate_percent"`
-	BuildVolumeX             *float64                         `json:"build_volume_x"`
-	BuildVolumeY             *float64                         `json:"build_volume_y"`
-	BuildVolumeZ             *float64                         `json:"build_volume_z"`
-	SpeedMultiplier          *float64                         `json:"speed_multiplier"`
-	CurrentState             string                           `json:"current_state"`
-	ElectricityCostPerHour   *float64                         `json:"electricity_cost_per_hour"`
-	MaintenanceParts         []MachineMaintenancePartResponse `json:"maintenance_parts,omitempty"`
-	CreatedAt                time.Time                        `json:"created_at"`
-	UpdatedAt                time.Time                        `json:"updated_at"`
+	ID                uuid.UUID                        `json:"id"`
+	UserID            uuid.UUID                        `json:"user_id"`
+	Name              string                           `json:"name"`
+	Brand             *string                          `json:"brand"`
+	TotalPurchaseCost float64                          `json:"total_purchase_cost"`
+	LifespanHours     int                              `json:"lifespan_hours"`
+	PurchaseDate      *string                          `json:"purchase_date"`
+	TotalHoursUsed    float64                          `json:"total_hours_used"`
+	AvgPowerWatts     int                              `json:"avg_power_watts"`
+	BuildVolumeX      *float64                         `json:"build_volume_x"`
+	BuildVolumeY      *float64                         `json:"build_volume_y"`
+	BuildVolumeZ      *float64                         `json:"build_volume_z"`
+	CurrentState      string                           `json:"current_state"`
+	MaintenanceParts  []MachineMaintenancePartResponse `json:"maintenance_parts,omitempty"`
+	CreatedAt         time.Time                        `json:"created_at"`
+	UpdatedAt         time.Time                        `json:"updated_at"`
 }
 
 func ToMachineResponse(m *machine.Machine) MachineResponse {
@@ -116,26 +106,21 @@ func ToMachineResponse(m *machine.Machine) MachineResponse {
 	}
 
 	return MachineResponse{
-		ID:                       m.ID(),
-		UserID:                   m.UserID(),
-		Name:                     m.Name(),
-		Brand:                    m.Brand(),
-		TotalPurchaseCost:        m.TotalPurchaseCost(),
-		SalvageValue:             m.SalvageValue(),
-		LifespanHours:            m.LifespanHours(),
-		PurchaseDate:             m.PurchaseDate(),
-		TotalHoursUsed:           m.TotalHoursUsed(),
-		AvgPowerWatts:            m.AvgPowerWatts(),
-		MaintenanceBufferPerHour: m.MaintenanceBufferPerHour(),
-		FailureRatePercent:       m.FailureRatePercent(),
-		BuildVolumeX:             m.BuildVolumeX(),
-		BuildVolumeY:             m.BuildVolumeY(),
-		BuildVolumeZ:             m.BuildVolumeZ(),
-		SpeedMultiplier:          m.SpeedMultiplier(),
-		CurrentState:             m.CurrentState(),
-		ElectricityCostPerHour:   m.ElectricityCostPerHour(),
-		MaintenanceParts:         parts,
-		CreatedAt:                m.CreatedAt(),
-		UpdatedAt:                m.UpdatedAt(),
+		ID:                m.ID(),
+		UserID:            m.UserID(),
+		Name:              m.Name(),
+		Brand:             m.Brand(),
+		TotalPurchaseCost: m.TotalPurchaseCost(),
+		LifespanHours:     m.LifespanHours(),
+		PurchaseDate:      m.PurchaseDate(),
+		TotalHoursUsed:    m.TotalHoursUsed(),
+		AvgPowerWatts:     m.AvgPowerWatts(),
+		BuildVolumeX:      m.BuildVolumeX(),
+		BuildVolumeY:      m.BuildVolumeY(),
+		BuildVolumeZ:      m.BuildVolumeZ(),
+		CurrentState:      m.CurrentState(),
+		MaintenanceParts:  parts,
+		CreatedAt:         m.CreatedAt(),
+		UpdatedAt:         m.UpdatedAt(),
 	}
 }

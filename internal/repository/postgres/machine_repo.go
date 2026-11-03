@@ -1,4 +1,4 @@
-﻿package postgres
+package postgres
 
 import (
 	"context"
@@ -28,27 +28,22 @@ func (machineMaintenancePartGORM) TableName() string {
 }
 
 type machineGORM struct {
-	ID                       uuid.UUID                    `gorm:"column:id;primaryKey;type:uuid"`
-	UserID                   uuid.UUID                    `gorm:"column:user_id;type:uuid"`
-	Name                     string                       `gorm:"column:name"`
-	Brand                    *string                      `gorm:"column:brand"`
-	TotalPurchaseCost        float64                      `gorm:"column:total_purchase_cost"`
-	SalvageValue             *float64                     `gorm:"column:salvage_value"`
-	LifespanHours            int                          `gorm:"column:lifespan_hours"`
-	PurchaseDate             *string                      `gorm:"column:purchase_date"`
-	TotalHoursUsed           float64                      `gorm:"column:total_hours_used"`
-	AvgPowerWatts            int                          `gorm:"column:avg_power_watts"`
-	MaintenanceBufferPerHour *float64                     `gorm:"column:maintenance_buffer_per_hour"`
-	FailureRatePercent       *float64                     `gorm:"column:failure_rate_percent"`
-	BuildVolumeX             *float64                     `gorm:"column:build_volume_x"`
-	BuildVolumeY             *float64                     `gorm:"column:build_volume_y"`
-	BuildVolumeZ             *float64                     `gorm:"column:build_volume_z"`
-	SpeedMultiplier          *float64                     `gorm:"column:speed_multiplier"`
-	CurrentState             string                       `gorm:"column:current_state"`
-	ElectricityCostPerHour   *float64                     `gorm:"column:electricity_cost_per_hour"`
-	MaintenanceParts         []machineMaintenancePartGORM `gorm:"foreignKey:MachineID"`
-	CreatedAt                time.Time                    `gorm:"column:created_at"`
-	UpdatedAt                time.Time                    `gorm:"column:updated_at"`
+	ID                uuid.UUID                    `gorm:"column:id;primaryKey;type:uuid"`
+	UserID            uuid.UUID                    `gorm:"column:user_id;type:uuid"`
+	Name              string                       `gorm:"column:name"`
+	Brand             *string                      `gorm:"column:brand"`
+	TotalPurchaseCost float64                      `gorm:"column:total_purchase_cost"`
+	LifespanHours     int                          `gorm:"column:lifespan_hours"`
+	PurchaseDate      *string                      `gorm:"column:purchase_date"`
+	TotalHoursUsed    float64                      `gorm:"column:total_hours_used"`
+	AvgPowerWatts     int                          `gorm:"column:avg_power_watts"`
+	BuildVolumeX      *float64                     `gorm:"column:build_volume_x"`
+	BuildVolumeY      *float64                     `gorm:"column:build_volume_y"`
+	BuildVolumeZ      *float64                     `gorm:"column:build_volume_z"`
+	CurrentState      string                       `gorm:"column:current_state"`
+	MaintenanceParts  []machineMaintenancePartGORM `gorm:"foreignKey:MachineID"`
+	CreatedAt         time.Time                    `gorm:"column:created_at"`
+	UpdatedAt         time.Time                    `gorm:"column:updated_at"`
 }
 
 func (machineGORM) TableName() string {
@@ -97,19 +92,14 @@ func mapMachineGORMToDomain(m *machineGORM) *machine.Machine {
 		m.Name,
 		m.Brand,
 		m.TotalPurchaseCost,
-		m.SalvageValue,
 		m.LifespanHours,
 		m.PurchaseDate,
 		m.TotalHoursUsed,
 		m.AvgPowerWatts,
-		m.MaintenanceBufferPerHour,
-		m.FailureRatePercent,
 		m.BuildVolumeX,
 		m.BuildVolumeY,
 		m.BuildVolumeZ,
-		m.SpeedMultiplier,
 		m.CurrentState,
-		m.ElectricityCostPerHour,
 		parts,
 		m.CreatedAt,
 		m.UpdatedAt,
@@ -141,26 +131,21 @@ func (r *MachineRepository) FindByID(ctx context.Context, userID, id uuid.UUID) 
 
 func (r *MachineRepository) Create(ctx context.Context, m *machine.Machine) error {
 	g := machineGORM{
-		ID:                       m.ID(),
-		UserID:                   m.UserID(),
-		Name:                     m.Name(),
-		Brand:                    m.Brand(),
-		TotalPurchaseCost:        m.TotalPurchaseCost(),
-		SalvageValue:             m.SalvageValue(),
-		LifespanHours:            m.LifespanHours(),
-		PurchaseDate:             m.PurchaseDate(),
-		TotalHoursUsed:           m.TotalHoursUsed(),
-		AvgPowerWatts:            m.AvgPowerWatts(),
-		MaintenanceBufferPerHour: m.MaintenanceBufferPerHour(),
-		FailureRatePercent:       m.FailureRatePercent(),
-		BuildVolumeX:             m.BuildVolumeX(),
-		BuildVolumeY:             m.BuildVolumeY(),
-		BuildVolumeZ:             m.BuildVolumeZ(),
-		SpeedMultiplier:          m.SpeedMultiplier(),
-		CurrentState:             m.CurrentState(),
-		ElectricityCostPerHour:   m.ElectricityCostPerHour(),
-		CreatedAt:                m.CreatedAt(),
-		UpdatedAt:                m.UpdatedAt(),
+		ID:                m.ID(),
+		UserID:            m.UserID(),
+		Name:              m.Name(),
+		Brand:             m.Brand(),
+		TotalPurchaseCost: m.TotalPurchaseCost(),
+		LifespanHours:     m.LifespanHours(),
+		PurchaseDate:      m.PurchaseDate(),
+		TotalHoursUsed:    m.TotalHoursUsed(),
+		AvgPowerWatts:     m.AvgPowerWatts(),
+		BuildVolumeX:      m.BuildVolumeX(),
+		BuildVolumeY:      m.BuildVolumeY(),
+		BuildVolumeZ:      m.BuildVolumeZ(),
+		CurrentState:      m.CurrentState(),
+		CreatedAt:         m.CreatedAt(),
+		UpdatedAt:         m.UpdatedAt(),
 	}
 	return r.db.WithContext(ctx).Create(&g).Error
 }
@@ -169,23 +154,18 @@ func (r *MachineRepository) Update(ctx context.Context, m *machine.Machine) erro
 	return r.db.WithContext(ctx).Model(&machineGORM{}).
 		Where("id = ?", m.ID()).
 		Updates(map[string]interface{}{
-			"name":                        m.Name(),
-			"brand":                       m.Brand(),
-			"total_purchase_cost":         m.TotalPurchaseCost(),
-			"salvage_value":               m.SalvageValue(),
-			"lifespan_hours":              m.LifespanHours(),
-			"purchase_date":               m.PurchaseDate(),
-			"total_hours_used":            m.TotalHoursUsed(),
-			"avg_power_watts":             m.AvgPowerWatts(),
-			"maintenance_buffer_per_hour": m.MaintenanceBufferPerHour(),
-			"failure_rate_percent":        m.FailureRatePercent(),
-			"build_volume_x":              m.BuildVolumeX(),
-			"build_volume_y":              m.BuildVolumeY(),
-			"build_volume_z":              m.BuildVolumeZ(),
-			"speed_multiplier":            m.SpeedMultiplier(),
-			"current_state":               m.CurrentState(),
-			"electricity_cost_per_hour":   m.ElectricityCostPerHour(),
-			"updated_at":                  m.UpdatedAt(),
+			"name":                m.Name(),
+			"brand":               m.Brand(),
+			"total_purchase_cost": m.TotalPurchaseCost(),
+			"lifespan_hours":      m.LifespanHours(),
+			"purchase_date":       m.PurchaseDate(),
+			"total_hours_used":    m.TotalHoursUsed(),
+			"avg_power_watts":     m.AvgPowerWatts(),
+			"build_volume_x":      m.BuildVolumeX(),
+			"build_volume_y":      m.BuildVolumeY(),
+			"build_volume_z":      m.BuildVolumeZ(),
+			"current_state":       m.CurrentState(),
+			"updated_at":          m.UpdatedAt(),
 		}).Error
 }
 

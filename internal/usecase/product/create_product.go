@@ -182,13 +182,8 @@ func (uc *CreateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		}
 	}
 	if activeM != nil {
-		salvage := 0.0
-		if activeM.SalvageValue() != nil {
-			salvage = *activeM.SalvageValue()
-		}
 		machInput = &costing.MachineCostInput{
 			TotalPurchaseCost: activeM.TotalPurchaseCost(),
-			SalvageValue:      salvage,
 			LifespanHours:     float64(activeM.LifespanHours()),
 			AvgPowerWatts:     activeM.AvgPowerWatts(),
 		}

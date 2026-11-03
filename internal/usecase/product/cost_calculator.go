@@ -81,22 +81,10 @@ func (cc *CostCalculator) LoadContext(ctx context.Context, userID uuid.UUID) *Co
 	if cc.machineRepo != nil {
 		if ms, err := cc.machineRepo.FindAll(ctx, userID); err == nil {
 			for _, m := range ms {
-				salvage := 0.0
-				if m.SalvageValue() != nil {
-					salvage = *m.SalvageValue()
-				}
-				mRate := 0.0
-				if m.MaintenanceBufferPerHour() != nil && *m.MaintenanceBufferPerHour() > 0 {
-					mRate = *m.MaintenanceBufferPerHour()
-				} else if contextCache.ShopConfig != nil && contextCache.ShopConfig.MaintenanceRatePerHour > 0 {
-					mRate = contextCache.ShopConfig.MaintenanceRatePerHour
-				}
 				minput := &costing.MachineCostInput{
-					TotalPurchaseCost:      m.TotalPurchaseCost(),
-					SalvageValue:           salvage,
-					LifespanHours:          float64(m.LifespanHours()),
-					AvgPowerWatts:          m.AvgPowerWatts(),
-					MaintenanceRatePerHour: mRate,
+					TotalPurchaseCost: m.TotalPurchaseCost(),
+					LifespanHours:     float64(m.LifespanHours()),
+					AvgPowerWatts:     m.AvgPowerWatts(),
 				}
 				contextCache.Machines[m.ID()] = minput
 				if contextCache.DefaultMach == nil {
