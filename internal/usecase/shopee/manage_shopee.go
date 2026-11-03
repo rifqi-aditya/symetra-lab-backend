@@ -1,6 +1,7 @@
 package shopee
 
 import (
+	usecaseProduct "symetra-lab-backend-v2/internal/usecase/product"
 	"context"
 	"errors"
 	"fmt"
@@ -196,15 +197,40 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 	now := time.Now().Unix()
 	timeFrom := now - (14 * 86400) // last 14 days
 
-	cursor := ""
+	seenSNs := make(map[string]bool)
 	var orderSNs []string
+
+	// 1. Ambil berdasarkan update_time agar status terkini (SHIPPED, COMPLETED) tertangkap
+	cursor := ""
 	for {
-		listResp, err := client.GetOrderList(shop.AccessToken(), shop.ShopID(), timeFrom, now, "", cursor)
+		listResp, err := client.GetOrderListWithRangeField(shop.AccessToken(), shop.ShopID(), timeFrom, now, "", cursor, "update_time")
 		if err != nil {
 			return 0, err
 		}
 		for _, o := range listResp.Response.OrderList {
-			orderSNs = append(orderSNs, o.OrderSN)
+			if !seenSNs[o.OrderSN] {
+				seenSNs[o.OrderSN] = true
+				orderSNs = append(orderSNs, o.OrderSN)
+			}
+		}
+		if !listResp.Response.More || listResp.Response.NextCursor == "" {
+			break
+		}
+		cursor = listResp.Response.NextCursor
+	}
+
+	// 2. Ambil juga berdasarkan create_time untuk memastikan order baru tidak ada yang terlewat
+	cursor = ""
+	for {
+		listResp, err := client.GetOrderListWithRangeField(shop.AccessToken(), shop.ShopID(), timeFrom, now, "", cursor, "create_time")
+		if err != nil {
+			break
+		}
+		for _, o := range listResp.Response.OrderList {
+			if !seenSNs[o.OrderSN] {
+				seenSNs[o.OrderSN] = true
+				orderSNs = append(orderSNs, o.OrderSN)
+			}
 		}
 		if !listResp.Response.More || listResp.Response.NextCursor == "" {
 			break
@@ -217,6 +243,11 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 	}
 
 	savedCount := 0
+	var costingCtx *usecaseProduct.CostingContext
+	if uc.processOrderUC != nil && uc.processOrderUC.SKUMatcher() != nil && uc.processOrderUC.SKUMatcher().CostCalculator() != nil {
+		costingCtx = uc.processOrderUC.SKUMatcher().CostCalculator().LoadContext(ctx, uuid.Nil)
+	}
+
 	// Batch detail fetch in chunks of 50 (Shopee API limit per request)
 	chunkSize := 50
 	for i := 0; i < len(orderSNs); i += chunkSize {
@@ -265,8 +296,12 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 			if carrier == "" {
 				carrier = o.CheckoutShippingCarrier
 			}
-			if carrier == "" && len(o.PackageList) > 0 {
-				carrier = o.PackageList[0].ShippingCarrier
+			var trackingNum string
+			if len(o.PackageList) > 0 {
+				if carrier == "" {
+					carrier = o.PackageList[0].ShippingCarrier
+				}
+				trackingNum = o.PackageList[0].PackageNumber
 			}
 
 			var itemsTotal float64
@@ -293,7 +328,7 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 				o.ShipByDate,
 				shipByDateTime,
 				carrier,
-				"",
+				trackingNum,
 				o.TotalAmount,
 				o.BuyerCancelReason,
 				o.CreateTime,
@@ -307,7 +342,7 @@ func (uc *ShopeeUseCases) SyncShopeeOrders(ctx context.Context) (int, error) {
 
 			saveErr := error(nil)
 			if uc.processOrderUC != nil {
-				saveErr = uc.processOrderUC.Execute(ctx, domainOrder, nil)
+				saveErr = uc.processOrderUC.Execute(ctx, domainOrder, costingCtx)
 			} else {
 				saveErr = uc.repo.SaveOrder(ctx, domainOrder)
 			}
@@ -471,8 +506,13 @@ func (uc *ShopeeUseCases) SyncSingleOrder(ctx context.Context, shopID uint64, or
 		time.Unix(o.UpdateTime, 0),
 	)
 
+	var costingCtx *usecaseProduct.CostingContext
+	if uc.processOrderUC != nil && uc.processOrderUC.SKUMatcher() != nil && uc.processOrderUC.SKUMatcher().CostCalculator() != nil {
+		costingCtx = uc.processOrderUC.SKUMatcher().CostCalculator().LoadContext(ctx, uuid.Nil)
+	}
+
 	if uc.processOrderUC != nil {
-		if err := uc.processOrderUC.Execute(ctx, domainOrder, nil); err != nil {
+		if err := uc.processOrderUC.Execute(ctx, domainOrder, costingCtx); err != nil {
 			return nil, fmt.Errorf("failed to process and save order: %w", err)
 		}
 	} else {

@@ -70,6 +70,9 @@ func Calculate(input CalculationInput) ProductCostBreakdown {
 		for _, pi := range input.PackagingItems {
 			packagingCost += pi.UnitCost * pi.QuantityUsed
 		}
+		if packagingCost == 0 && input.PackingFeeIDR > 0 {
+			packagingCost = float64(input.PackingFeeIDR)
+		}
 	} else if input.PackingFeeIDR > 0 {
 		packagingCost = float64(input.PackingFeeIDR)
 	}

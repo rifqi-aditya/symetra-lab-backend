@@ -503,6 +503,35 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 		}
 	}
 
+	hasPreset := false
+	presetTotal := 0.0
+	if prod.PackagingPresetID != nil {
+		type presetItemRow struct {
+			PackagingItemID uuid.UUID `gorm:"column:packaging_item_id"`
+			QuantityUsed    float64   `gorm:"column:quantity_used"`
+		}
+		var pItems []presetItemRow
+		if err := tx.Table("packaging_preset_items").Where("preset_id = ?", *prod.PackagingPresetID).Find(&pItems).Error; err == nil && len(pItems) > 0 {
+			hasPreset = true
+			for _, pi := range pItems {
+				uCost := 0.0
+				if pu, ok := cache.packUnitCosts[pi.PackagingItemID]; ok {
+					uCost = pu
+				} else {
+					var pack packagingItemGORM
+					if err := tx.Where("id = ?", pi.PackagingItemID).First(&pack).Error; err == nil {
+						uCost = pack.UnitCost
+						if uCost <= 0 && pack.PurchaseQuantity > 0 {
+							uCost = pack.PurchasePrice / pack.PurchaseQuantity
+						}
+						cache.packUnitCosts[pi.PackagingItemID] = uCost
+					}
+				}
+				presetTotal += uCost * pi.QuantityUsed
+			}
+		}
+	}
+
 	var shopCfgInput *costing.ShopConfigInput
 	if cache.shopCfg != nil {
 		sc := cache.shopCfg
@@ -527,6 +556,8 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 		BaseSellingPrice:      prod.BaseSellingPrice,
 		Components:            compInputs,
 		PackagingItems:        packInputs,
+		HasPackagingPreset:    hasPreset,
+		PackagingPresetTotal:  presetTotal,
 		Machine:               machInput,
 		ShopConfig:            shopCfgInput,
 	})
@@ -736,7 +767,11 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		// 1. Hitung biaya & siapkan item-item pesanan
 		for _, item := range o.Items() {
 			var existingItem shopeeUnifiedItemGORM
-			_ = tx.Where("order_id = ? AND channel_item_id = ?", orderID, item.ItemID()).First(&existingItem).Error
+			existingQ := tx.Where("order_id = ? AND channel_item_id = ?", orderID, item.ItemID())
+			if item.ModelID() > 0 {
+				existingQ = existingQ.Where("channel_model_id = ?", item.ModelID())
+			}
+			_ = existingQ.First(&existingItem).Error
 			itemID := existingItem.ID
 			if itemID == uuid.Nil {
 				itemID = uuid.New()
@@ -766,6 +801,26 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				maintCost = existingItem.MaintenanceCost
 				depCost = existingItem.DepreciationCost
 				baseHPP = existingItem.HPP
+			}
+
+			// Safeguard: Jika productID sudah ada tapi compCost/packCost 0, hitung ulang dari master produk
+			if productID != nil && (compCost == 0 || packCost == 0) {
+				var p productGORM
+				if err := tx.Preload("Components").Preload("PackagingItems").Where("id = ?", *productID).First(&p).Error; err == nil {
+					if len(p.Components) > 0 || len(p.PackagingItems) > 0 || p.PackingFeeIDR > 0 || p.PackagingPresetID != nil {
+						fCost, eCost, cCost, pCost, elCost, mCost, dCost, bHPP, _ := computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
+						if cCost > 0 || pCost > 0 {
+							filCost = fCost
+							emergencyCost = eCost
+							compCost = cCost
+							packCost = pCost
+							elecCost = elCost
+							maintCost = mCost
+							depCost = dCost
+							baseHPP = bHPP
+						}
+					}
+				}
 			}
 
 			// Cek auto-match exact SKU dari Shopee ke tabel products jika belum mapped

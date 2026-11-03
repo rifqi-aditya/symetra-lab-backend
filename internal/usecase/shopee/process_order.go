@@ -228,3 +228,7 @@ func (uc *ProcessShopeeOrderUseCase) Execute(
 
 	return nil
 }
+
+func (uc *ProcessShopeeOrderUseCase) SKUMatcher() *usecaseProduct.SKUMatcher {
+	return uc.skuMatcher
+}

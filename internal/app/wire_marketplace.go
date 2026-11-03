@@ -16,14 +16,17 @@ import (
 type MarketplaceModule struct {
 	ShopeeHandler          *handler.ShopeeHandler
 	MarketplaceCredHandler *handler.MarketplaceCredHandler
+	ShopeeUseCases         *shopeeUC.ShopeeUseCases
+	MarketplaceCredUseCase *marketplacecredUC.UseCase
 }
 
-func wireMarketplaceModule(
+// WireShopeeUseCases merakit instance ShopeeUseCases lengkap dengan seluruh dependensinya
+func WireShopeeUseCases(
 	db *gorm.DB,
 	cfg *config.Config,
 	productModule *ProductModule,
 	financeRepo finance.Repository,
-) *MarketplaceModule {
+) (*shopeeUC.ShopeeUseCases, *marketplacecredUC.UseCase) {
 	shopeeRepo := postgresRepo.NewShopeeRepository(db)
 
 	shopeeClient := pkgShopee.NewClient(
@@ -56,16 +59,28 @@ func wireMarketplaceModule(
 
 	credRepo := postgresRepo.NewMarketplaceCredentialRepository(db, cfg.EncryptionKey)
 	credUC := marketplacecredUC.NewUseCase(credRepo, cfg)
-	credHandler := handler.NewMarketplaceCredHandler(credUC)
 
 	shopeeUseCases.WithCredUseCase(credUC)
 
+	return shopeeUseCases, credUC
+}
+
+func wireMarketplaceModule(
+	db *gorm.DB,
+	cfg *config.Config,
+	productModule *ProductModule,
+	financeRepo finance.Repository,
+) *MarketplaceModule {
+	shopeeUseCases, credUC := WireShopeeUseCases(db, cfg, productModule, financeRepo)
+
+	credHandler := handler.NewMarketplaceCredHandler(credUC)
 	shopeeHandler := handler.NewShopeeHandler(cfg, shopeeUseCases)
 	shopeeHandler.WithCredUseCase(credUC)
 
 	return &MarketplaceModule{
 		ShopeeHandler:          shopeeHandler,
 		MarketplaceCredHandler: credHandler,
+		ShopeeUseCases:         shopeeUseCases,
+		MarketplaceCredUseCase: credUC,
 	}
 }
-

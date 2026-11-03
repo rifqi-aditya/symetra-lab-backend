@@ -117,10 +117,21 @@ func (m *SKUMatcher) MatchItem(
 		res.PrintTimeHours = p.DefaultPrintTimeHours() * float64(qty)
 
 		if m.costCalculator != nil {
+			if cache == nil {
+				userUUID := input.UserID
+				if userUUID == uuid.Nil && p != nil {
+					userUUID = p.UserID()
+				}
+				cache = m.costCalculator.LoadContext(ctx, userUUID)
+			}
 			res.Costs = m.costCalculator.CalculateProductCosts(p, qty, input.SellingPrice, cache)
 		}
 	}
 
 	return res
+}
+
+func (m *SKUMatcher) CostCalculator() *CostCalculator {
+	return m.costCalculator
 }
 

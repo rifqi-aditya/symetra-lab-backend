@@ -14,6 +14,7 @@ import (
 	deliveryHTTP "symetra-lab-backend-v2/internal/delivery/http"
 	"symetra-lab-backend-v2/internal/delivery/http/handler"
 	postgresRepo "symetra-lab-backend-v2/internal/repository/postgres"
+	shopeeUC "symetra-lab-backend-v2/internal/usecase/shopee"
 )
 
 // InitEchoApp initializes the Echo engine and wires all modular dependencies.
@@ -105,4 +106,13 @@ func InitEchoApp() (*echo.Echo, *config.Config, error) {
 
 	log.Println("[Symetra Lab v2] Echo application initialized successfully.")
 	return e, cfg, nil
+}
+
+// WireShopeeService merakit modul ShopeeUseCases untuk keperluan CLI dan task background
+func WireShopeeService(db *gorm.DB, cfg *config.Config) *shopeeUC.ShopeeUseCases {
+	productMod := wireProductModule(db, cfg)
+	orderRepo := postgresRepo.NewOrderRepository(db)
+	financeMod := wireFinanceModule(db, orderRepo)
+	shopeeUC, _ := WireShopeeUseCases(db, cfg, productMod, financeMod.FinanceRepo)
+	return shopeeUC
 }

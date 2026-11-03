@@ -52,6 +52,7 @@ type CostingContext struct {
 	Machines      map[uuid.UUID]*costing.MachineCostInput
 	CompPrices    map[uuid.UUID]float64
 	PackUnitCosts map[uuid.UUID]float64
+	PresetTotals  map[uuid.UUID]float64
 }
 
 func (cc *CostCalculator) LoadContext(ctx context.Context, userID uuid.UUID) *CostingContext {
@@ -59,6 +60,7 @@ func (cc *CostCalculator) LoadContext(ctx context.Context, userID uuid.UUID) *Co
 		Machines:      make(map[uuid.UUID]*costing.MachineCostInput),
 		CompPrices:    make(map[uuid.UUID]float64),
 		PackUnitCosts: make(map[uuid.UUID]float64),
+		PresetTotals:  make(map[uuid.UUID]float64),
 	}
 
 	if cc.shopConfigRepo != nil {
@@ -114,6 +116,19 @@ func (cc *CostCalculator) LoadContext(ctx context.Context, userID uuid.UUID) *Co
 				contextCache.PackUnitCosts[p.ID()] = uCost
 			}
 		}
+		if presets, err := cc.packagingRepo.FindAllPresets(ctx, userID); err == nil {
+			for _, pr := range presets {
+				tot := 0.0
+				for _, it := range pr.Items() {
+					uCost := contextCache.PackUnitCosts[it.PackagingItemID()]
+					if uCost <= 0 && it.Item() != nil {
+						uCost = it.Item().UnitCost()
+					}
+					tot += uCost * it.QuantityUsed()
+				}
+				contextCache.PresetTotals[pr.ID()] = tot
+			}
+		}
 	}
 
 	return contextCache
@@ -132,6 +147,10 @@ func (cc *CostCalculator) CalculateProductCosts(
 
 	if p == nil {
 		return ItemCostBreakdown{}
+	}
+
+	if cache == nil && cc != nil {
+		cache = cc.LoadContext(context.Background(), p.UserID())
 	}
 
 	var compInputs []costing.ComponentCostInput
@@ -179,6 +198,15 @@ func (cc *CostCalculator) CalculateProductCosts(
 		shopCfgInput = cache.ShopConfig
 	}
 
+	hasPreset := false
+	presetTotal := 0.0
+	if p.PackagingPresetID() != nil && cache != nil {
+		if pt, ok := cache.PresetTotals[*p.PackagingPresetID()]; ok && pt > 0 {
+			hasPreset = true
+			presetTotal = pt
+		}
+	}
+
 	cb := costing.Calculate(costing.CalculationInput{
 		MaterialType:          p.MaterialType(),
 		DefaultWeightGrams:    p.DefaultWeightGrams(),
@@ -189,6 +217,8 @@ func (cc *CostCalculator) CalculateProductCosts(
 		BaseSellingPrice:      p.BaseSellingPrice(),
 		Components:            compInputs,
 		PackagingItems:        packInputs,
+		HasPackagingPreset:    hasPreset,
+		PackagingPresetTotal:  presetTotal,
 		Machine:               machInput,
 		ShopConfig:            shopCfgInput,
 	})

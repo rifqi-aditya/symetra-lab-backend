@@ -9,8 +9,18 @@ import (
 	"time"
 )
 
-// GetOrderList mengambil daftar order_sn dari Shopee Open Platform (/api/v2/order/get_order_list)
+// GetOrderList mengambil daftar order_sn dari Shopee Open Platform (/api/v2/order/get_order_list).
+// Menggunakan rentang update_time agar perubahan status (seperti SHIPPED/COMPLETED) selalu tertangkap.
 func (c *Client) GetOrderList(accessToken string, shopID uint64, timeFrom, timeTo int64, orderStatus string, cursor string) (*ShopeeOrderListResponse, error) {
+	return c.GetOrderListWithRangeField(accessToken, shopID, timeFrom, timeTo, orderStatus, cursor, "update_time")
+}
+
+// GetOrderListWithRangeField mengambil daftar order_sn dari Shopee Open Platform dengan pilihan rentang waktu ("create_time" atau "update_time").
+func (c *Client) GetOrderListWithRangeField(accessToken string, shopID uint64, timeFrom, timeTo int64, orderStatus string, cursor string, timeRangeField string) (*ShopeeOrderListResponse, error) {
+	if timeRangeField == "" {
+		timeRangeField = "update_time"
+	}
+
 	path := "/api/v2/order/get_order_list"
 	timestamp := time.Now().Unix()
 	sign := GenerateShopSign(c.PartnerID, path, timestamp, accessToken, shopID, c.PartnerKey)
@@ -21,7 +31,7 @@ func (c *Client) GetOrderList(accessToken string, shopID uint64, timeFrom, timeT
 	params.Set("access_token", accessToken)
 	params.Set("shop_id", fmt.Sprintf("%d", shopID))
 	params.Set("sign", sign)
-	params.Set("time_range_field", "create_time")
+	params.Set("time_range_field", timeRangeField)
 	params.Set("time_from", fmt.Sprintf("%d", timeFrom))
 	params.Set("time_to", fmt.Sprintf("%d", timeTo))
 	params.Set("page_size", "50")
