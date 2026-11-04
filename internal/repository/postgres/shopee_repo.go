@@ -624,24 +624,33 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 			return
 		}
 
-		netBase := ord.NetAmount
-		if netBase <= 0 {
-			netBase = ord.GrossAmount
+		var mkt shopeeOrderMarketplaceGORM
+		_ = tx.Where("order_id = ?", orderID).First(&mkt).Error
+
+		var goldenNet float64
+		if mkt.EscrowAmount > 0 {
+			goldenNet = mkt.EscrowAmount
+		} else if ord.PaymentStatus == "PAID" && ord.NetAmount > 0 {
+			goldenNet = ord.NetAmount
+		} else {
+			goldenNet = ord.GrossAmount - ord.ChannelFee - mkt.SellerVoucherDiscount
 		}
 
 		alloc := finance.AllocateOrderFunds(finance.FundAllocationInput{
-			GrossAmount:      netBase,
-			ChannelFee:       0,
-			FilamentCost:     sums.Filament,
-			ComponentCost:    sums.Component,
-			PackagingCost:    sums.Packaging,
-			ElectricityCost:  sums.Electricity,
-			MaintenanceCost:  sums.Maintenance,
-			DepreciationCost: sums.Depreciation,
+			GrossAmount:           ord.GrossAmount,
+			ChannelFee:            ord.ChannelFee,
+			SellerVoucherDiscount: mkt.SellerVoucherDiscount,
+			NetAmount:             goldenNet,
+			FilamentCost:          sums.Filament,
+			ComponentCost:         sums.Component,
+			PackagingCost:         sums.Packaging,
+			ElectricityCost:       sums.Electricity,
+			MaintenanceCost:       sums.Maintenance,
+			DepreciationCost:      sums.Depreciation,
 		})
 
 		_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
-			"net_amount":        netBase,
+			"net_amount":        goldenNet,
 			"fund_filament":     alloc.FundFilament,
 			"fund_emergency":    alloc.FundEmergency,
 			"fund_component":    alloc.FundComponent,
@@ -935,15 +944,29 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			_ = tx.Where("reference_type = ? AND reference_id = ?", "SHOPEE_ESCROW", o.OrderSN()).
 				Delete(&financeTransactionGORM{}).Error
 		} else {
+			var goldenNet float64
+			var sellerVoucher float64
+			if o.Escrow() != nil {
+				sellerVoucher = o.Escrow().SellerVoucherDiscount()
+				if o.Escrow().EscrowAmount() > 0 {
+					goldenNet = o.Escrow().EscrowAmount()
+				}
+			}
+			if goldenNet <= 0 && existingOrder.ID != uuid.Nil && existingOrder.PaymentStatus == "PAID" && existingOrder.NetAmount > 0 {
+				goldenNet = existingOrder.NetAmount
+			}
+
 			alloc = finance.AllocateOrderFunds(finance.FundAllocationInput{
-				GrossAmount:      grossAmount,
-				ChannelFee:       channelFee,
-				FilamentCost:     totFil,
-				ComponentCost:    totComp,
-				PackagingCost:    totPack,
-				ElectricityCost:  totElec,
-				MaintenanceCost:  totMaint,
-				DepreciationCost: totDep,
+				GrossAmount:           grossAmount,
+				ChannelFee:            channelFee,
+				SellerVoucherDiscount: sellerVoucher,
+				NetAmount:             goldenNet,
+				FilamentCost:          totFil,
+				ComponentCost:         totComp,
+				PackagingCost:         totPack,
+				ElectricityCost:       totElec,
+				MaintenanceCost:       totMaint,
+				DepreciationCost:      totDep,
 			})
 		}
 

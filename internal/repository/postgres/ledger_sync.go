@@ -75,12 +75,28 @@ func SyncManualOrdersFinanceTransactions(ctx context.Context, db *gorm.DB) error
 
 // SyncCashAccountLedger synchronizes running allocated_amount, spent_amount, and current_balance
 // across all 8 cash accounts in the database from settled orders and recorded expenses.
-// It also ensures manual order transactions are automatically kept in sync in finance_transactions.
+// It also ensures manual order transactions and settled Shopee escrow payouts are automatically kept in sync in finance_transactions.
 func SyncCashAccountLedger(ctx context.Context, db *gorm.DB) error {
 	// 1. Pastikan transaksi pesanan manual selalu sinkron terlebih dahulu
 	_ = SyncManualOrdersFinanceTransactions(ctx, db)
 
-	// 2. Sinkronisasi buku besar 8 pos kas
+	// 2. Sinkronisasi transaksi escrow Shopee yang sudah RELEASED agar nilai nominalnya persis sama dengan escrow_amount akhir
+	shopeeSyncSQL := `
+		UPDATE finance_transactions ft
+		SET amount = m.escrow_amount,
+		    updated_at = NOW()
+		FROM order_marketplace_details m
+		JOIN orders o ON o.id = m.order_id
+		WHERE ft.type = 'INCOME'
+		  AND ft.reference_type = 'SHOPEE_ESCROW'
+		  AND ft.reference_id = o.order_number
+		  AND m.escrow_amount > 0
+		  AND m.financial_status = 'RELEASED'
+		  AND ft.amount != m.escrow_amount;
+	`
+	_ = db.WithContext(ctx).Exec(shopeeSyncSQL).Error
+
+	// 3. Sinkronisasi buku besar 8 pos kas
 	syncSQL := `
 		UPDATE cash_accounts SET 
 			allocated_amount = COALESCE((SELECT SUM(fund_filament) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),

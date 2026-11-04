@@ -189,15 +189,26 @@ func (uc *ProcessShopeeOrderUseCase) Execute(
 			FundNetProfit:    -totCOGS,
 		}
 	} else {
+		var goldenNet float64
+		var sellerVoucher float64
+		if order.Escrow() != nil {
+			sellerVoucher = order.Escrow().SellerVoucherDiscount()
+			if order.Escrow().EscrowAmount() > 0 {
+				goldenNet = order.Escrow().EscrowAmount()
+			}
+		}
+
 		alloc = finance.AllocateOrderFunds(finance.FundAllocationInput{
-			GrossAmount:      grossAmount,
-			ChannelFee:       channelFee,
-			FilamentCost:     totFil,
-			ComponentCost:    totComp,
-			PackagingCost:    totPack,
-			ElectricityCost:  totElec,
-			MaintenanceCost:  totMaint,
-			DepreciationCost: totDep,
+			GrossAmount:           grossAmount,
+			ChannelFee:            channelFee,
+			SellerVoucherDiscount: sellerVoucher,
+			NetAmount:             goldenNet,
+			FilamentCost:          totFil,
+			ComponentCost:         totComp,
+			PackagingCost:         totPack,
+			ElectricityCost:       totElec,
+			MaintenanceCost:       totMaint,
+			DepreciationCost:      totDep,
 		})
 	}
 

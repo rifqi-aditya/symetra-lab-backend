@@ -4,14 +4,16 @@ import "math"
 
 // FundAllocationInput contains the revenue and cost elements needed to compute the 8-bucket cash allocation.
 type FundAllocationInput struct {
-	GrossAmount      float64
-	ChannelFee       float64
-	FilamentCost     float64 // Net base filament cost (without failure buffer)
-	ComponentCost    float64
-	PackagingCost    float64
-	ElectricityCost  float64
-	MaintenanceCost  float64
-	DepreciationCost float64
+	GrossAmount           float64
+	ChannelFee            float64
+	SellerVoucherDiscount float64
+	NetAmount             float64 // Golden source: jika > 0, langsung gunakan nilai ini (misal: EscrowAmount riil dari Shopee)
+	FilamentCost          float64 // Net base filament cost (without failure buffer)
+	ComponentCost         float64
+	PackagingCost         float64
+	ElectricityCost       float64
+	MaintenanceCost       float64
+	DepreciationCost      float64
 }
 
 // FundAllocationResult holds the computed amounts for all 8 cash buckets and high-level order financials.
@@ -38,7 +40,12 @@ type FundAllocationResult struct {
 // 1. Filament failure buffer (10% of pure filament cost) -> allocated to Emergency Fund (Kas Cadangan Risiko)
 // 2. Net profit emergency cut (5% of positive net profit) -> allocated to Emergency Fund
 func AllocateOrderFunds(input FundAllocationInput) FundAllocationResult {
-	netAmount := roundTwo(input.GrossAmount - input.ChannelFee)
+	var netAmount float64
+	if input.NetAmount > 0 {
+		netAmount = roundTwo(input.NetAmount)
+	} else {
+		netAmount = roundTwo(input.GrossAmount - input.ChannelFee - input.SellerVoucherDiscount)
+	}
 
 	// 1. Buffer kegagalan filamen: 10% dari filamen yang digunakan
 	bufferEmergency := roundTwo(input.FilamentCost * FilamentFailureBufferPercent)
