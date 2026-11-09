@@ -121,9 +121,6 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		}
 
 		var machineID *uuid.UUID
-		if it.Product != nil && it.Product.DefaultMachineID != nil {
-			machineID = it.Product.DefaultMachineID
-		}
 
 		itemObj := order.ReconstructOrderItemFull(
 			it.ID,

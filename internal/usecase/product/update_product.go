@@ -28,7 +28,6 @@ type UpdateProductInput struct {
 	DefaultWeightGrams    *float64
 	MaterialType          *string
 	DefaultPrintTimeHours *float64
-	DefaultMachineID      *uuid.UUID
 	PackagingPresetID     *uuid.UUID
 	BatchSize             *int
 	PackingFeeIDR         *int
@@ -116,11 +115,6 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 	printTime := existing.DefaultPrintTimeHours()
 	if input.DefaultPrintTimeHours != nil {
 		printTime = *input.DefaultPrintTimeHours
-	}
-
-	machID := existing.DefaultMachineID()
-	if input.DefaultMachineID != nil {
-		machID = input.DefaultMachineID
 	}
 
 	presetID := existing.PackagingPresetID()
@@ -254,25 +248,8 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		}
 	}
 
+	// Machine: nil means workshop global fleet rate is used
 	var machInput *costing.MachineCostInput
-	var activeM *machine.Machine
-	if machID != nil {
-		if m, err := uc.machineRepo.FindByID(ctx, userID, *machID); err == nil && m != nil {
-			activeM = m
-		}
-	}
-	if activeM == nil {
-		if ms, err := uc.machineRepo.FindAll(ctx, userID); err == nil && len(ms) > 0 {
-			activeM = ms[0]
-		}
-	}
-	if activeM != nil {
-		machInput = &costing.MachineCostInput{
-			TotalPurchaseCost: activeM.TotalPurchaseCost(),
-			LifespanHours:     float64(activeM.LifespanHours()),
-			AvgPowerWatts:     activeM.AvgPowerWatts(),
-		}
-	}
 
 	hasPreset := false
 	presetTotal := 0.0
@@ -314,7 +291,6 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		weight,
 		mat,
 		printTime,
-		machID,
 		presetID,
 		batch,
 		packingFee,

@@ -48,7 +48,6 @@ type productGORM struct {
 	DefaultWeightGrams    float64                    `gorm:"column:default_weight_grams"`
 	MaterialType          string                     `gorm:"column:material_type"`
 	DefaultPrintTimeHours float64                    `gorm:"column:default_print_time_hours"`
-	DefaultMachineID      *uuid.UUID                 `gorm:"column:default_machine_id;type:uuid"`
 	PackagingPresetID     *uuid.UUID                 `gorm:"column:packaging_preset_id;type:uuid"`
 	BatchSize             int                        `gorm:"column:batch_size"`
 	PackingFeeIDR         int                        `gorm:"column:packing_fee_idr"`
@@ -94,7 +93,6 @@ func toProductEntity(g *productGORM) *product.Product {
 		g.DefaultWeightGrams,
 		g.MaterialType,
 		g.DefaultPrintTimeHours,
-		g.DefaultMachineID,
 		g.PackagingPresetID,
 		g.BatchSize,
 		g.PackingFeeIDR,
@@ -211,7 +209,6 @@ func (r *ProductRepository) Create(ctx context.Context, p *product.Product) erro
 			DefaultWeightGrams:    p.DefaultWeightGrams(),
 			MaterialType:          p.MaterialType(),
 			DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
-			DefaultMachineID:      p.DefaultMachineID(),
 			PackagingPresetID:     p.PackagingPresetID(),
 			BatchSize:             p.BatchSize(),
 			PackingFeeIDR:         p.PackingFeeIDR(),
@@ -270,7 +267,6 @@ func (r *ProductRepository) Update(ctx context.Context, p *product.Product) erro
 			"default_weight_grams":    p.DefaultWeightGrams(),
 			"material_type":           p.MaterialType(),
 			"default_print_time_hours": p.DefaultPrintTimeHours(),
-			"default_machine_id":      p.DefaultMachineID(),
 			"packaging_preset_id":     p.PackagingPresetID(),
 			"batch_size":              p.BatchSize(),
 			"packing_fee_idr":         p.PackingFeeIDR(),

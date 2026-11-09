@@ -481,22 +481,6 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 	}
 
 	var machInput *costing.MachineCostInput
-	var m *machineGORM
-	if prod.DefaultMachineID != nil {
-		if mach, ok := cache.machines[*prod.DefaultMachineID]; ok {
-			m = &mach
-		}
-	}
-	if m == nil {
-		m = cache.defaultMach
-	}
-	if m != nil {
-		machInput = &costing.MachineCostInput{
-			TotalPurchaseCost: m.TotalPurchaseCost,
-			LifespanHours:     float64(m.LifespanHours),
-			AvgPowerWatts:     m.AvgPowerWatts,
-		}
-	}
 
 	hasPreset := false
 	presetTotal := 0.0
@@ -1212,58 +1196,75 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 	}, nil
 }
 
+// RecalculateFinances menyinkronkan saldo buku besar 8 pos kas dari pesanan yang sudah ada.
+// AMAN: Tidak lagi menimpa HPP transaksi historis secara bulk untuk menjaga integritas historical cost!
 func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error) {
-	// 0. Cache all context (components, packaging, machines, shop_config)
+	if err := SyncCashAccountLedger(ctx, r.db); err != nil {
+		return 0, err
+	}
+	return 0, nil
+}
+
+// RecalculateSingleOrder menghitung ulang HPP dan 8 pos alokasi dana khusus untuk satu pesanan tunggal.
+func (r *ShopeeRepository) RecalculateSingleOrder(ctx context.Context, orderID uuid.UUID) error {
 	costingCache := loadCostingContextCache(r.db)
 
-	var prods []productGORM
-	if err := r.db.WithContext(ctx).Preload("Components").Preload("PackagingItems").Find(&prods).Error; err == nil {
-		prodMap := make(map[uuid.UUID]productGORM)
-		for _, p := range prods {
-			prodMap[p.ID] = p
-
-			// Recompute product base_hpp with updated machine depreciation
-			_, _, _, _, _, _, _, totalCOGS, _ := computeItemCostsFromProductWithCache(r.db, &p, 1, p.BaseSellingPrice, costingCache)
-			if totalCOGS > 0 {
-				_ = r.db.WithContext(ctx).Table("products").Where("id = ?", p.ID).Update("base_hpp", totalCOGS).Error
-			}
-		}
-
-		type itemInfo struct {
-			ID           uuid.UUID `gorm:"column:id"`
-			ProductID    uuid.UUID `gorm:"column:product_id"`
-			Quantity     int       `gorm:"column:quantity"`
-			SellingPrice float64   `gorm:"column:selling_price"`
-		}
-		var items []itemInfo
-		r.db.WithContext(ctx).Table("order_items").
-			Select("id, product_id, quantity, selling_price").
-			Where("product_id IS NOT NULL").
-			Scan(&items)
-
-		// Recalculate each item's cost based on real machine depreciation in a transaction
-		_ = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			for _, it := range items {
-				p, ok := prodMap[it.ProductID]
-				if !ok {
-					continue
-				}
-				filCost, _, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, _ := computeItemCostsFromProductWithCache(tx, &p, it.Quantity, it.SellingPrice, costingCache)
-				_ = tx.Table("order_items").Where("id = ?", it.ID).Updates(map[string]interface{}{
-					"filament_cost":     filCost,
-					"component_cost":    compCost,
-					"packaging_cost":    packCost,
-					"energy_cost":       elecCost,
-					"maintenance_cost":  maintCost,
-					"depreciation_cost": depCost,
-					"hpp":               totalCOGS,
-				}).Error
-			}
-			return nil
-		})
+	type itemInfo struct {
+		ID           uuid.UUID  `gorm:"column:id"`
+		ProductID    *uuid.UUID `gorm:"column:product_id"`
+		Quantity     int        `gorm:"column:quantity"`
+		SellingPrice float64    `gorm:"column:selling_price"`
+	}
+	var items []itemInfo
+	if err := r.db.WithContext(ctx).Table("order_items").
+		Select("id, product_id, quantity, selling_price").
+		Where("order_id = ? AND product_id IS NOT NULL", orderID).
+		Scan(&items).Error; err != nil {
+		return err
 	}
 
-	// 1. Sinkronkan nilai gross_amount pesanan yang keliru agar sesuai dengan subtotal item produk toko
+	if len(items) > 0 {
+		var pIDs []uuid.UUID
+		for _, it := range items {
+			if it.ProductID != nil {
+				pIDs = append(pIDs, *it.ProductID)
+			}
+		}
+
+		var prods []productGORM
+		if err := r.db.WithContext(ctx).Preload("Components").Preload("PackagingItems").
+			Where("id IN ?", pIDs).Find(&prods).Error; err == nil {
+			prodMap := make(map[uuid.UUID]productGORM)
+			for _, p := range prods {
+				prodMap[p.ID] = p
+			}
+
+			_ = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+				for _, it := range items {
+					if it.ProductID == nil {
+						continue
+					}
+					p, ok := prodMap[*it.ProductID]
+					if !ok {
+						continue
+					}
+					filCost, _, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, _ := computeItemCostsFromProductWithCache(tx, &p, it.Quantity, it.SellingPrice, costingCache)
+					_ = tx.Table("order_items").Where("id = ?", it.ID).Updates(map[string]interface{}{
+						"filament_cost":     filCost,
+						"component_cost":    compCost,
+						"packaging_cost":    packCost,
+						"energy_cost":       elecCost,
+						"maintenance_cost":  maintCost,
+						"depreciation_cost": depCost,
+						"hpp":               totalCOGS,
+					}).Error
+				}
+				return nil
+			})
+		}
+	}
+
+	// Sinkronkan nilai gross_amount pesanan ini jika ada item dengan harga
 	_ = r.db.WithContext(ctx).Exec(`
 		UPDATE orders o
 		SET gross_amount = sub.items_total,
@@ -1276,25 +1277,19 @@ func (r *ShopeeRepository) RecalculateFinances(ctx context.Context) (int, error)
 		FROM (
 		    SELECT order_id, COALESCE(SUM(selling_price * quantity), 0) AS items_total
 		    FROM order_items
+		    WHERE order_id = ?
 		    GROUP BY order_id
 		    HAVING SUM(selling_price * quantity) > 0
 		) sub
-		WHERE o.id = sub.order_id
+		WHERE o.id = ?
 		  AND (o.gross_amount != sub.items_total OR o.gross_amount <= 0)
-	`)
+	`, orderID, orderID)
 
-	// 2. Perbarui alokasi pos kas orders dari order_items yang sudah dikalkulasi ulang
-	var activeOrders []uuid.UUID
-	err := r.db.WithContext(ctx).Model(&shopeeUnifiedOrderGORM{}).
-		Where("status NOT IN ('CANCELLED', 'UNPAID')").
-		Pluck("id", &activeOrders).Error
-	if err != nil {
-		return 0, err
-	}
+	// Hitung ulang alokasi 8 pos kas pesanan ini
+	recalculateOrderFunds(r.db.WithContext(ctx), orderID)
 
-	for _, oID := range activeOrders {
-		recalculateOrderFunds(r.db.WithContext(ctx), oID)
-	}
+	// Sinkronkan buku besar kas
+	_ = SyncCashAccountLedger(ctx, r.db)
 
-	return len(activeOrders), nil
+	return nil
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"symetra-lab-backend-v2/config"
@@ -276,8 +277,25 @@ func (h *ShopeeHandler) RecalculateFinances(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, dto.Success(map[string]interface{}{
-		"message":             fmt.Sprintf("Recalculated %d orders", count),
+		"message":             "Buku kas berhasil disinkronkan",
 		"recalculated_orders": count,
+	}))
+}
+
+func (h *ShopeeHandler) RecalculateSingleOrder(c echo.Context) error {
+	idParam := c.Param("id")
+	orderID, err := uuid.Parse(idParam)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dto.Fail("Invalid order ID", err.Error()))
+	}
+
+	if err := h.uc.RecalculateSingleOrder(c.Request().Context(), orderID); err != nil {
+		return c.JSON(http.StatusInternalServerError, dto.Fail("Failed to recalculate order", err.Error()))
+	}
+
+	return c.JSON(http.StatusOK, dto.Success(map[string]interface{}{
+		"message":  "Alokasi & HPP pesanan berhasil dihitung ulang",
+		"order_id": orderID,
 	}))
 }
 

@@ -72,7 +72,6 @@ func TestShopTokopediaUseCases_ProcessStandardOrder(t *testing.T) {
 		"PETG",
 		0.5,
 		nil,
-		nil,
 		1,
 		500,
 		5000,

@@ -88,26 +88,8 @@ func (uc *GetProductUseCase) buildDetailOutput(ctx context.Context, userID uuid.
 		}
 	}
 
-	// Machine
+	// Machine: nil means workshop global fleet rate is used
 	var machInput *costing.MachineCostInput
-	var activeM *machine.Machine
-	if p.DefaultMachineID() != nil {
-		if m, err := uc.machineRepo.FindByID(ctx, userID, *p.DefaultMachineID()); err == nil && m != nil {
-			activeM = m
-		}
-	}
-	if activeM == nil {
-		if ms, err := uc.machineRepo.FindAll(ctx, userID); err == nil && len(ms) > 0 {
-			activeM = ms[0]
-		}
-	}
-	if activeM != nil {
-		machInput = &costing.MachineCostInput{
-			TotalPurchaseCost: activeM.TotalPurchaseCost(),
-			LifespanHours:     float64(activeM.LifespanHours()),
-			AvgPowerWatts:     activeM.AvgPowerWatts(),
-		}
-	}
 
 	// Components
 	var compInputs []costing.ComponentCostInput

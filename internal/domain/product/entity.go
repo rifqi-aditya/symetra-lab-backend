@@ -1,4 +1,4 @@
-﻿package product
+package product
 
 import (
 	"strings"
@@ -83,7 +83,6 @@ type Product struct {
 	defaultWeightGrams     float64
 	materialType           string
 	defaultPrintTimeHours  float64
-	defaultMachineID       *uuid.UUID
 	packagingPresetID      *uuid.UUID
 	batchSize              int
 	packingFeeIDR          int
@@ -147,7 +146,7 @@ func ReconstructProduct(
 	defaultWeightGrams float64,
 	materialType string,
 	defaultPrintTimeHours float64,
-	defaultMachineID, packagingPresetID *uuid.UUID,
+	packagingPresetID *uuid.UUID,
 	batchSize, packingFeeIDR int,
 	baseHPP, baseSellingPrice float64,
 	targetMarginPercent, timesOrdered int,
@@ -168,7 +167,6 @@ func ReconstructProduct(
 		defaultWeightGrams:    defaultWeightGrams,
 		materialType:          materialType,
 		defaultPrintTimeHours: defaultPrintTimeHours,
-		defaultMachineID:      defaultMachineID,
 		packagingPresetID:     packagingPresetID,
 		batchSize:             batchSize,
 		packingFeeIDR:         packingFeeIDR,
@@ -196,7 +194,6 @@ func (p *Product) DesignLink() *string                       { return p.designLi
 func (p *Product) DefaultWeightGrams() float64               { return p.defaultWeightGrams }
 func (p *Product) MaterialType() string                      { return p.materialType }
 func (p *Product) DefaultPrintTimeHours() float64            { return p.defaultPrintTimeHours }
-func (p *Product) DefaultMachineID() *uuid.UUID              { return p.defaultMachineID }
 func (p *Product) PackagingPresetID() *uuid.UUID             { return p.packagingPresetID }
 func (p *Product) BatchSize() int                            { return p.batchSize }
 func (p *Product) PackingFeeIDR() int                        { return p.packingFeeIDR }
@@ -240,7 +237,7 @@ func (p *Product) UpdateSpecs(
 	category string,
 	weightGrams, printTimeHours float64,
 	materialType string,
-	machineID, presetID *uuid.UUID,
+	presetID *uuid.UUID,
 	batchSize, packingFeeIDR, marginPercent int,
 ) error {
 	cleanName := strings.TrimSpace(name)
@@ -257,7 +254,6 @@ func (p *Product) UpdateSpecs(
 	if strings.TrimSpace(materialType) != "" {
 		p.materialType = strings.TrimSpace(materialType)
 	}
-	p.defaultMachineID = machineID
 	p.packagingPresetID = presetID
 	if batchSize > 0 {
 		p.batchSize = batchSize

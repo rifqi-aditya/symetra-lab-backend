@@ -138,6 +138,7 @@ func SetupRouter(e *echo.Echo, cfg RouterConfig) {
 		orders.POST("", cfg.OrderHandler.Create)
 		orders.PATCH("/:id/status", cfg.OrderHandler.UpdateStatus)
 		orders.PATCH("/:id/payment", cfg.OrderHandler.UpdatePaymentStatus)
+		orders.POST("/:id/recalculate", cfg.ShopeeHandler.RecalculateSingleOrder)
 		orders.DELETE("/:id", cfg.OrderHandler.Delete)
 	}
 

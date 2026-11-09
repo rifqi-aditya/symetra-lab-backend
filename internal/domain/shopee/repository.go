@@ -20,4 +20,5 @@ type Repository interface {
 
 	GetCashflowSummary(ctx context.Context) (*CashflowSummary, error)
 	RecalculateFinances(ctx context.Context) (int, error)
+	RecalculateSingleOrder(ctx context.Context, orderID uuid.UUID) error
 }

@@ -66,6 +66,9 @@ func (m *mockShopeeRepo) GetCashflowSummary(ctx context.Context) (*shopee.Cashfl
 func (m *mockShopeeRepo) RecalculateFinances(ctx context.Context) (int, error) {
 	return 0, nil
 }
+func (m *mockShopeeRepo) RecalculateSingleOrder(ctx context.Context, orderID uuid.UUID) error {
+	return nil
+}
 
 type mockProductRepo struct {
 	bySKU map[string]*product.Product
@@ -125,7 +128,6 @@ func TestProcessShopeeOrderUseCase_Execute(t *testing.T) {
 		50,
 		"TPU",
 		1.0,
-		nil,
 		nil,
 		1,
 		500,

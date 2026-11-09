@@ -31,7 +31,6 @@ type CreateProductRequest struct {
 	DefaultWeightGrams    float64                 `json:"default_weight_grams"`
 	MaterialType          string                  `json:"material_type"`
 	DefaultPrintTimeHours float64                 `json:"default_print_time_hours"`
-	DefaultMachineID      *string                 `json:"default_machine_id"`
 	PackagingPresetID     *string                 `json:"packaging_preset_id"`
 	BatchSize             int                     `json:"batch_size"`
 	PackingFeeIDR         int                     `json:"packing_fee_idr"`
@@ -51,7 +50,6 @@ type UpdateProductRequest struct {
 	DefaultWeightGrams    *float64                 `json:"default_weight_grams"`
 	MaterialType          *string                  `json:"material_type"`
 	DefaultPrintTimeHours *float64                 `json:"default_print_time_hours"`
-	DefaultMachineID      *string                  `json:"default_machine_id"`
 	PackagingPresetID     *string                  `json:"packaging_preset_id"`
 	BatchSize             *int                     `json:"batch_size"`
 	PackingFeeIDR         *int                     `json:"packing_fee_idr"`
@@ -90,7 +88,6 @@ type ProductResponse struct {
 	DefaultWeightGrams    float64                        `json:"default_weight_grams"`
 	MaterialType          string                         `json:"material_type"`
 	DefaultPrintTimeHours float64                        `json:"default_print_time_hours"`
-	DefaultMachineID      *uuid.UUID                     `json:"default_machine_id"`
 	PackagingPresetID     *uuid.UUID                     `json:"packaging_preset_id"`
 	BatchSize             int                            `json:"batch_size"`
 	PackingFeeIDR         int                            `json:"packing_fee_idr"`
@@ -143,7 +140,6 @@ func ToProductResponse(p *product.Product, totalSold int, cb costing.ProductCost
 		DefaultWeightGrams:    p.DefaultWeightGrams(),
 		MaterialType:          p.MaterialType(),
 		DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
-		DefaultMachineID:      p.DefaultMachineID(),
 		PackagingPresetID:     p.PackagingPresetID(),
 		BatchSize:             p.BatchSize(),
 		PackingFeeIDR:         p.PackingFeeIDR(),
@@ -170,7 +166,6 @@ type ProductListItemResponse struct {
 	MaterialType          string     `json:"material_type"`
 	DefaultWeightGrams    float64    `json:"default_weight_grams"`
 	DefaultPrintTimeHours float64    `json:"default_print_time_hours"`
-	DefaultMachineID      *uuid.UUID `json:"default_machine_id"`
 	PackagingPresetID     *uuid.UUID `json:"packaging_preset_id"`
 	BatchSize             int        `json:"batch_size"`
 	PackingFeeIDR         int        `json:"packing_fee_idr"`
@@ -192,7 +187,6 @@ func ToProductListItemResponse(p *product.Product, totalSold int) ProductListIte
 		MaterialType:          p.MaterialType(),
 		DefaultWeightGrams:    p.DefaultWeightGrams(),
 		DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
-		DefaultMachineID:      p.DefaultMachineID(),
 		PackagingPresetID:     p.PackagingPresetID(),
 		BatchSize:             p.BatchSize(),
 		PackingFeeIDR:         p.PackingFeeIDR(),

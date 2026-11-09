@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"errors"
@@ -199,7 +199,6 @@ func (h *ProductHandler) Create(c echo.Context) error {
 		DefaultWeightGrams:    req.DefaultWeightGrams,
 		MaterialType:          req.MaterialType,
 		DefaultPrintTimeHours: req.DefaultPrintTimeHours,
-		DefaultMachineID:      parseUUIDPtr(req.DefaultMachineID),
 		PackagingPresetID:     parseUUIDPtr(req.PackagingPresetID),
 		BatchSize:             req.BatchSize,
 		PackingFeeIDR:         req.PackingFeeIDR,
@@ -271,7 +270,6 @@ func (h *ProductHandler) Update(c echo.Context) error {
 		DefaultWeightGrams:    req.DefaultWeightGrams,
 		MaterialType:          req.MaterialType,
 		DefaultPrintTimeHours: req.DefaultPrintTimeHours,
-		DefaultMachineID:      parseUUIDPtr(req.DefaultMachineID),
 		PackagingPresetID:     parseUUIDPtr(req.PackagingPresetID),
 		BatchSize:             req.BatchSize,
 		PackingFeeIDR:         req.PackingFeeIDR,

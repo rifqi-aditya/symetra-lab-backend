@@ -107,9 +107,6 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, userID uuid.UUID, inp
 				if printTime <= 0 {
 					printTime = p.DefaultPrintTimeHours()
 				}
-				if machineID == nil {
-					machineID = p.DefaultMachineID()
-				}
 			}
 		}
 

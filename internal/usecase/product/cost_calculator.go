@@ -180,14 +180,6 @@ func (cc *CostCalculator) CalculateProductCosts(
 	}
 
 	var machInput *costing.MachineCostInput
-	if cache != nil {
-		if p.DefaultMachineID() != nil {
-			machInput = cache.Machines[*p.DefaultMachineID()]
-		}
-		if machInput == nil {
-			machInput = cache.DefaultMach
-		}
-	}
 
 	var shopCfgInput *costing.ShopConfigInput
 	if cache != nil {

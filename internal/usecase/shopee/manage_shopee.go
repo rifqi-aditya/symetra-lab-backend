@@ -653,6 +653,10 @@ func (uc *ShopeeUseCases) RecalculateFinances(ctx context.Context) (int, error) 
 	return uc.repo.RecalculateFinances(ctx)
 }
 
+func (uc *ShopeeUseCases) RecalculateSingleOrder(ctx context.Context, orderID uuid.UUID) error {
+	return uc.repo.RecalculateSingleOrder(ctx, orderID)
+}
+
 func (uc *ShopeeUseCases) buildEscrowForOrder(shop *shopee.ShopeeShop, orderSN string, orderStatus string, itemsTotal float64) *shopee.ShopeeOrderEscrow {
 	client, err := uc.getClient(context.Background())
 	if err != nil || client == nil || shop == nil {
