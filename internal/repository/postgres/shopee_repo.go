@@ -1139,6 +1139,7 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 		TotalEscrowNetIn     float64 `gorm:"column:total_escrow_net_in"`
 		TotalHPP             float64 `gorm:"column:total_hpp"`
 		FundFilament         float64 `gorm:"column:fund_filament"`
+		FundEmergency        float64 `gorm:"column:fund_emergency"`
 		FundComponent        float64 `gorm:"column:fund_component"`
 		FundPackaging        float64 `gorm:"column:fund_packaging"`
 		FundElectricity      float64 `gorm:"column:fund_electricity"`
@@ -1157,6 +1158,7 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 			COALESCE(SUM(net_amount), 0) AS total_escrow_net_in,
 			COALESCE(SUM(cogs_amount), 0) AS total_hpp,
 			COALESCE(SUM(fund_filament), 0) AS fund_filament,
+			COALESCE(SUM(fund_emergency), 0) AS fund_emergency,
 			COALESCE(SUM(fund_component), 0) AS fund_component,
 			COALESCE(SUM(fund_packaging), 0) AS fund_packaging,
 			COALESCE(SUM(fund_electricity), 0) AS fund_electricity,
@@ -1185,6 +1187,7 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 		TotalEscrowNetIn:     agg.TotalEscrowNetIn,
 		TotalHPP:             agg.TotalHPP,
 		KasFilamen:           agg.FundFilament,
+		KasCadanganRisiko:    agg.FundEmergency,
 		KasKomponen:          agg.FundComponent,
 		KasPacking:           agg.FundPackaging,
 		KasListrik:           agg.FundElectricity,

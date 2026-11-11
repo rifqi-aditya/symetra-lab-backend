@@ -401,7 +401,9 @@ func (r *FinanceRepository) GetSummary(ctx context.Context, from, to time.Time) 
 			summary.TotalCapitalIn += rw.Total
 		}
 	}
-	summary.NetCashFlow = summary.TotalIncome - summary.TotalExpense
+	// NetCashFlow = semua pemasukan kas nyata (penjualan + modal masuk) dikurangi semua pengeluaran kas
+	// Modal usaha (CAPITAL_IN) harus ikut dihitung karena secara fisik uang tersebut ada di kas
+	summary.NetCashFlow = summary.TotalIncome + summary.TotalCapitalIn - summary.TotalExpense
 	return summary, nil
 }
 

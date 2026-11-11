@@ -427,6 +427,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		TotalCOGS           float64 `gorm:"column:total_cogs"`
 		TotalNetProfit      float64 `gorm:"column:total_net_profit"`
 		FundFilament        float64 `gorm:"column:fund_filament"`
+		FundEmergency       float64 `gorm:"column:fund_emergency"`
 		FundComponent       float64 `gorm:"column:fund_component"`
 		FundPackaging       float64 `gorm:"column:fund_packaging"`
 		FundElectricity     float64 `gorm:"column:fund_electricity"`
@@ -449,6 +450,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 			COALESCE(SUM(cogs_amount), 0) AS total_cogs,
 			COALESCE(SUM(net_profit), 0) AS total_net_profit,
 			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_filament ELSE 0 END), 0) AS fund_filament,
+			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_emergency ELSE 0 END), 0) AS fund_emergency,
 			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_component ELSE 0 END), 0) AS fund_component,
 			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_packaging ELSE 0 END), 0) AS fund_packaging,
 			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_electricity ELSE 0 END), 0) AS fund_electricity,
@@ -587,6 +589,8 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 			switch e.Category {
 			case "FILAMENT":
 				spentFilament += e.TotalSpent
+			case "EMERGENCY_FUND":
+				spentEmergency += e.TotalSpent
 			case "HARDWARE":
 				spentComponent += e.TotalSpent
 			case "PACKAGING":
@@ -606,6 +610,7 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		}
 
 		allocFilament = agg.FundFilament
+		allocEmergency = agg.FundEmergency
 		allocComponent = agg.FundComponent
 		allocPackaging = agg.FundPackaging
 		allocElectricity = agg.FundElectricity

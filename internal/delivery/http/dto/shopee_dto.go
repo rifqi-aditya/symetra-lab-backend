@@ -205,17 +205,19 @@ type CashflowSummaryResponse struct {
 	TotalEscrowNetIn     float64 `json:"total_escrow_net_in"`
 	TotalHPP             float64 `json:"total_hpp"`
 	
-	// 7 Pos Kas Keuangan Real-time
-	KasFilamen     float64 `json:"kas_filamen"`
-	KasKomponen    float64 `json:"kas_komponen"`
-	KasPacking     float64 `json:"kas_packing"`
-	KasListrik     float64 `json:"kas_listrik"`
-	KasMaintenance float64 `json:"kas_maintenance"`
-	KasDepresiasi  float64 `json:"kas_depresiasi"`
-	KasLabaBersih  float64 `json:"kas_laba_bersih"`
+	// 8 Pos Kas Keuangan Real-time
+	KasFilamen        float64 `json:"kas_filamen"`
+	KasCadanganRisiko float64 `json:"kas_cadangan_risiko"`
+	KasKomponen       float64 `json:"kas_komponen"`
+	KasPacking        float64 `json:"kas_packing"`
+	KasListrik        float64 `json:"kas_listrik"`
+	KasMaintenance    float64 `json:"kas_maintenance"`
+	KasDepresiasi     float64 `json:"kas_depresiasi"`
+	KasLabaBersih     float64 `json:"kas_laba_bersih"`
 
 	// Frontend aliases
 	FundFilament     float64 `json:"fund_filament"`
+	FundEmergency    float64 `json:"fund_emergency"`
 	FundHardware     float64 `json:"fund_hardware"`
 	FundPackaging    float64 `json:"fund_packaging"`
 	FundElectricity  float64 `json:"fund_electricity"`
@@ -236,6 +238,7 @@ func ToCashflowSummaryResponse(s *shopee.CashflowSummary) CashflowSummaryRespons
 		TotalEscrowNetIn:     s.TotalEscrowNetIn,
 		TotalHPP:             s.TotalHPP,
 		KasFilamen:           s.KasFilamen,
+		KasCadanganRisiko:    s.KasCadanganRisiko,
 		KasKomponen:          s.KasKomponen,
 		KasPacking:           s.KasPacking,
 		KasListrik:           s.KasListrik,
@@ -243,6 +246,7 @@ func ToCashflowSummaryResponse(s *shopee.CashflowSummary) CashflowSummaryRespons
 		KasDepresiasi:        s.KasDepresiasi,
 		KasLabaBersih:        s.KasLabaBersih,
 		FundFilament:         s.KasFilamen,
+		FundEmergency:        s.KasCadanganRisiko,
 		FundHardware:         s.KasKomponen,
 		FundPackaging:        s.KasPacking,
 		FundElectricity:      s.KasListrik,
