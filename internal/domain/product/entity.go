@@ -225,6 +225,11 @@ func (p *Product) SetSKU(sku *string) {
 	p.updatedAt = time.Now()
 }
 
+func (p *Product) SetParentSKU(parentSKU *string) {
+	p.parentSKU = parentSKU
+	p.updatedAt = time.Now()
+}
+
 func (p *Product) SetPricing(hpp, sellingPrice float64) {
 	p.baseHPP = hpp
 	p.baseSellingPrice = sellingPrice

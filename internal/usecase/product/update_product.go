@@ -77,6 +77,16 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		cleanSKU = &val
 	}
 
+	parentSKU := existing.ParentSKU()
+	if input.ParentSKU != nil {
+		if strings.TrimSpace(*input.ParentSKU) == "" {
+			parentSKU = nil
+		} else {
+			cleanParent := strings.TrimSpace(strings.ToUpper(*input.ParentSKU))
+			parentSKU = &cleanParent
+		}
+	}
+
 	name := existing.Name()
 	if input.Name != nil {
 		name = strings.TrimSpace(*input.Name)
@@ -282,7 +292,7 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		existing.ID(),
 		existing.UserID(),
 		name,
-		existing.ParentSKU(),
+		parentSKU,
 		cleanSKU,
 		desc,
 		cat,

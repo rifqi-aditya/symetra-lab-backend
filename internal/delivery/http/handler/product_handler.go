@@ -81,8 +81,9 @@ func (h *ProductHandler) List(c echo.Context) error {
 	}
 
 	filter := product.Filter{
-		Search:   c.QueryParam("search"),
-		Category: c.QueryParam("category"),
+		Search:    c.QueryParam("search"),
+		Category:  c.QueryParam("category"),
+		ParentSKU: c.QueryParam("parent_sku"),
 	}
 	if isPaginated {
 		filter.Limit = limit

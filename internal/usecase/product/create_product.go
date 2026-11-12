@@ -91,6 +91,12 @@ func (uc *CreateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		}
 	}
 
+	var cleanParentSKU *string
+	if input.ParentSKU != nil && strings.TrimSpace(*input.ParentSKU) != "" {
+		val := strings.TrimSpace(strings.ToUpper(*input.ParentSKU))
+		cleanParentSKU = &val
+	}
+
 	prodID := uuid.New()
 	now := time.Now()
 
@@ -209,7 +215,7 @@ func (uc *CreateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		prodID,
 		userID,
 		cleanName,
-		input.ParentSKU,
+		cleanParentSKU,
 		cleanSKU,
 		input.Description,
 		input.Category,
