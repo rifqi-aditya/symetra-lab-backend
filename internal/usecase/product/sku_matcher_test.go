@@ -192,3 +192,135 @@ func TestSKUMatcher_HistoricalFallback(t *testing.T) {
 		t.Errorf("expected 3DBenchy, got %s", res.ProductName)
 	}
 }
+
+func TestSKUMatcher_MultiStackVariants(t *testing.T) {
+	parentSKU := "RDM"
+	sku2S := "RDM-2S"
+	sku3S := "RDM-3S"
+
+	id2S := uuid.New()
+	p2S := product.ReconstructProduct(
+		id2S,
+		uuid.New(),
+		"Rak Display Modular - 2 Stack",
+		&parentSKU,
+		&sku2S,
+		nil,
+		"Display",
+		nil,
+		nil,
+		55,
+		"PLA",
+		2.25,
+		nil,
+		1,
+		2000,
+		16500,
+		45000,
+		30,
+		0,
+		nil,
+		nil,
+		time.Now(),
+		time.Now(),
+	)
+
+	id3S := uuid.New()
+	p3S := product.ReconstructProduct(
+		id3S,
+		uuid.New(),
+		"Rak Display Modular - 3 Stack",
+		&parentSKU,
+		&sku3S,
+		nil,
+		"Display",
+		nil,
+		nil,
+		80,
+		"PLA",
+		3.5,
+		nil,
+		1,
+		2000,
+		24200,
+		65000,
+		30,
+		0,
+		nil,
+		nil,
+		time.Now(),
+		time.Now(),
+	)
+
+	repo := &mockProductRepo{
+		products: map[string]*product.Product{
+			sku2S: p2S,
+			sku3S: p3S,
+		},
+		byID: map[uuid.UUID]*product.Product{
+			id2S: p2S,
+			id3S: p3S,
+		},
+	}
+
+	calc := usecaseProduct.NewCostCalculator(nil, nil, nil, nil)
+	matcher := usecaseProduct.NewSKUMatcher(repo, calc, nil)
+	ctx := context.Background()
+
+	// 1. Customer buys "Side View - 2 Stack", Shopee sends ModelSKU = RDM-2S
+	resSide2 := matcher.MatchItem(ctx, usecaseProduct.MatchItemInput{
+		UserID:        uuid.New(),
+		ModelSKU:      "RDM-2S",
+		ItemSKU:       "RDM",
+		ChannelItemID: 55501,
+		ItemName:      "Rak Display Hot Wheels (Side View - 2 Stack)",
+		Quantity:      1,
+		SellingPrice:  45000,
+	}, nil)
+
+	if resSide2.MappingStatus != "MATCHED" {
+		t.Fatalf("expected MATCHED for Side View 2 Stack, got %s", resSide2.MappingStatus)
+	}
+	if *resSide2.ProductID != id2S {
+		t.Errorf("expected product ID %v, got %v", id2S, *resSide2.ProductID)
+	}
+	if resSide2.WeightGrams != 55.0 {
+		t.Errorf("expected 55g for 2 Stack, got %f", resSide2.WeightGrams)
+	}
+
+	// 2. Customer buys "Front View - 2 Stack", Shopee sends ModelSKU = RDM-2S
+	resFront2 := matcher.MatchItem(ctx, usecaseProduct.MatchItemInput{
+		UserID:        uuid.New(),
+		ModelSKU:      "RDM-2S",
+		ItemSKU:       "RDM",
+		ChannelItemID: 55501,
+		ItemName:      "Rak Display Hot Wheels (Front View - 2 Stack)",
+		Quantity:      1,
+		SellingPrice:  45000,
+	}, nil)
+
+	if resFront2.MappingStatus != "MATCHED" || *resFront2.ProductID != id2S {
+		t.Errorf("expected Front View 2 Stack to match id2S, got %v", resFront2.ProductID)
+	}
+
+	// 3. Customer buys "Front View - 3 Stack", Shopee sends ModelSKU = RDM-3S
+	resFront3 := matcher.MatchItem(ctx, usecaseProduct.MatchItemInput{
+		UserID:        uuid.New(),
+		ModelSKU:      "RDM-3S",
+		ItemSKU:       "RDM",
+		ChannelItemID: 55501,
+		ItemName:      "Rak Display Hot Wheels (Front View - 3 Stack)",
+		Quantity:      2,
+		SellingPrice:  65000,
+	}, nil)
+
+	if resFront3.MappingStatus != "MATCHED" {
+		t.Fatalf("expected MATCHED for Front View 3 Stack, got %s", resFront3.MappingStatus)
+	}
+	if *resFront3.ProductID != id3S {
+		t.Errorf("expected product ID %v, got %v", id3S, *resFront3.ProductID)
+	}
+	if resFront3.WeightGrams != 160.0 { // 80g * 2 qty
+		t.Errorf("expected 160g for 2 units of 3 Stack, got %f", resFront3.WeightGrams)
+	}
+}
