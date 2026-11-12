@@ -1132,31 +1132,47 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 }
 
 func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.CashflowSummary, error) {
-	type AggResult struct {
+	type ShopeeAgg struct {
 		TotalOrders          int64   `gorm:"column:total_orders"`
 		TotalGrossSales      float64 `gorm:"column:total_gross_sales"`
 		TotalMarketplaceFees float64 `gorm:"column:total_marketplace_fees"`
 		TotalEscrowNetIn     float64 `gorm:"column:total_escrow_net_in"`
 		TotalHPP             float64 `gorm:"column:total_hpp"`
-		FundFilament         float64 `gorm:"column:fund_filament"`
-		FundEmergency        float64 `gorm:"column:fund_emergency"`
-		FundComponent        float64 `gorm:"column:fund_component"`
-		FundPackaging        float64 `gorm:"column:fund_packaging"`
-		FundElectricity      float64 `gorm:"column:fund_electricity"`
-		FundMaintenance      float64 `gorm:"column:fund_maintenance"`
-		FundDepreciation     float64 `gorm:"column:fund_depreciation"`
-		FundNetProfit        float64 `gorm:"column:fund_net_profit"`
 		UnmappedCount        int64   `gorm:"column:unmapped_count"`
 	}
+	type FundAgg struct {
+		FundFilament     float64 `gorm:"column:fund_filament"`
+		FundEmergency    float64 `gorm:"column:fund_emergency"`
+		FundComponent    float64 `gorm:"column:fund_component"`
+		FundPackaging    float64 `gorm:"column:fund_packaging"`
+		FundElectricity  float64 `gorm:"column:fund_electricity"`
+		FundMaintenance  float64 `gorm:"column:fund_maintenance"`
+		FundDepreciation float64 `gorm:"column:fund_depreciation"`
+		FundNetProfit    float64 `gorm:"column:fund_net_profit"`
+	}
 
-	var agg AggResult
-	sql := `
+	// Query 1: Statistik Shopee saja (gross sales, fee, escrow, HPP)
+	var shopeeAgg ShopeeAgg
+	shopeeSQL := `
 		SELECT 
 			COALESCE(COUNT(id), 0) AS total_orders,
 			COALESCE(SUM(gross_amount), 0) AS total_gross_sales,
 			COALESCE(SUM(channel_fee), 0) AS total_marketplace_fees,
 			COALESCE(SUM(net_amount), 0) AS total_escrow_net_in,
 			COALESCE(SUM(cogs_amount), 0) AS total_hpp,
+			(SELECT COUNT(*) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.channel = 'SHOPEE' AND oi.mapping_status = 'UNMAPPED') AS unmapped_count
+		FROM orders
+		WHERE channel = 'SHOPEE' AND status = 'COMPLETED'
+	`
+	if err := r.db.WithContext(ctx).Raw(shopeeSQL).Scan(&shopeeAgg).Error; err != nil {
+		return nil, err
+	}
+
+	// Query 2: Alokasi dana kas dari SEMUA pesanan yang lunas (konsisten dengan SyncCashAccountLedger)
+	// Ini memastikan Total Pos di dashboard selalu sinkron dengan Total Saldo Kas
+	var fundAgg FundAgg
+	fundSQL := `
+		SELECT
 			COALESCE(SUM(fund_filament), 0) AS fund_filament,
 			COALESCE(SUM(fund_emergency), 0) AS fund_emergency,
 			COALESCE(SUM(fund_component), 0) AS fund_component,
@@ -1164,38 +1180,36 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 			COALESCE(SUM(fund_electricity), 0) AS fund_electricity,
 			COALESCE(SUM(fund_maintenance), 0) AS fund_maintenance,
 			COALESCE(SUM(fund_depreciation), 0) AS fund_depreciation,
-			COALESCE(SUM(fund_net_profit), 0) AS fund_net_profit,
-			(SELECT COUNT(*) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.channel = 'SHOPEE' AND oi.mapping_status = 'UNMAPPED') AS unmapped_count
+			COALESCE(SUM(fund_net_profit), 0) AS fund_net_profit
 		FROM orders
-		WHERE channel = 'SHOPEE' AND status = 'COMPLETED'
+		WHERE payment_status = 'PAID' AND status != 'CANCELLED'
 	`
-
-	if err := r.db.WithContext(ctx).Raw(sql).Scan(&agg).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(fundSQL).Scan(&fundAgg).Error; err != nil {
 		return nil, err
 	}
 
 	avgMargin := 0.0
-	if agg.TotalGrossSales > 0 {
-		avgMargin = (agg.FundNetProfit / agg.TotalGrossSales) * 100.0
+	if shopeeAgg.TotalGrossSales > 0 {
+		avgMargin = (fundAgg.FundNetProfit / shopeeAgg.TotalGrossSales) * 100.0
 	}
 
 	return &shopee.CashflowSummary{
-		TotalCompletedOrders: agg.TotalOrders,
-		TotalOrders:          agg.TotalOrders,
-		TotalGrossSales:      agg.TotalGrossSales,
-		TotalMarketplaceFees: agg.TotalMarketplaceFees,
-		TotalEscrowNetIn:     agg.TotalEscrowNetIn,
-		TotalHPP:             agg.TotalHPP,
-		KasFilamen:           agg.FundFilament,
-		KasCadanganRisiko:    agg.FundEmergency,
-		KasKomponen:          agg.FundComponent,
-		KasPacking:           agg.FundPackaging,
-		KasListrik:           agg.FundElectricity,
-		KasMaintenance:       agg.FundMaintenance,
-		KasDepresiasi:        agg.FundDepreciation,
-		KasLabaBersih:        agg.FundNetProfit,
+		TotalCompletedOrders: shopeeAgg.TotalOrders,
+		TotalOrders:          shopeeAgg.TotalOrders,
+		TotalGrossSales:      shopeeAgg.TotalGrossSales,
+		TotalMarketplaceFees: shopeeAgg.TotalMarketplaceFees,
+		TotalEscrowNetIn:     shopeeAgg.TotalEscrowNetIn,
+		TotalHPP:             shopeeAgg.TotalHPP,
+		KasFilamen:           fundAgg.FundFilament,
+		KasCadanganRisiko:    fundAgg.FundEmergency,
+		KasKomponen:          fundAgg.FundComponent,
+		KasPacking:           fundAgg.FundPackaging,
+		KasListrik:           fundAgg.FundElectricity,
+		KasMaintenance:       fundAgg.FundMaintenance,
+		KasDepresiasi:        fundAgg.FundDepreciation,
+		KasLabaBersih:        fundAgg.FundNetProfit,
 		AverageProfitMargin:  avgMargin,
-		UnmappedItemsCount:   agg.UnmappedCount,
+		UnmappedItemsCount:   shopeeAgg.UnmappedCount,
 	}, nil
 }
 
