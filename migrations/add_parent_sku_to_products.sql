@@ -12,3 +12,4 @@ BEGIN
         CREATE INDEX IF NOT EXISTS idx_products_parent_sku ON public.products(parent_sku);
     END IF;
 END $$;
+
