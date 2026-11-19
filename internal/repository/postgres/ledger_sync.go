@@ -96,61 +96,61 @@ func SyncCashAccountLedger(ctx context.Context, db *gorm.DB) error {
 	`
 	_ = db.WithContext(ctx).Exec(shopeeSyncSQL).Error
 
-	// 3. Sinkronisasi buku besar 8 pos kas
+	// 3. Sinkronisasi buku besar 8 pos kas (menggunakan tabel relasional order_allocations)
 	syncSQL := `
 		UPDATE cash_accounts SET 
-			allocated_amount = COALESCE((SELECT SUM(fund_filament) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),
+			allocated_amount = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'FILAMENT' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0),
 			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'FILAMENT'), 0),
-			current_balance = COALESCE((SELECT SUM(fund_filament) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'FILAMENT'), 0),
+			current_balance = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'FILAMENT' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'FILAMENT'), 0),
 			updated_at = NOW()
 		WHERE code = 'FILAMENT';
 
 		UPDATE cash_accounts SET 
-			allocated_amount = COALESCE((SELECT SUM(fund_emergency) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),
+			allocated_amount = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'EMERGENCY' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0),
 			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'EMERGENCY_FUND'), 0),
-			current_balance = COALESCE((SELECT SUM(fund_emergency) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'EMERGENCY_FUND'), 0),
+			current_balance = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'EMERGENCY' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'EMERGENCY_FUND'), 0),
 			updated_at = NOW()
 		WHERE code = 'EMERGENCY';
 
 		UPDATE cash_accounts SET 
-			allocated_amount = COALESCE((SELECT SUM(fund_component) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),
+			allocated_amount = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'COMPONENT' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0),
 			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'HARDWARE'), 0),
-			current_balance = COALESCE((SELECT SUM(fund_component) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'HARDWARE'), 0),
+			current_balance = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'COMPONENT' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'HARDWARE'), 0),
 			updated_at = NOW()
 		WHERE code = 'COMPONENT';
 
 		UPDATE cash_accounts SET 
-			allocated_amount = COALESCE((SELECT SUM(fund_packaging) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),
+			allocated_amount = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'PACKAGING' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0),
 			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'PACKAGING'), 0),
-			current_balance = COALESCE((SELECT SUM(fund_packaging) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'PACKAGING'), 0),
+			current_balance = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'PACKAGING' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'PACKAGING'), 0),
 			updated_at = NOW()
 		WHERE code = 'PACKAGING';
 
 		UPDATE cash_accounts SET 
-			allocated_amount = COALESCE((SELECT SUM(fund_electricity) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),
+			allocated_amount = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'ELECTRICITY' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0),
 			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'ELECTRICITY'), 0),
-			current_balance = COALESCE((SELECT SUM(fund_electricity) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'ELECTRICITY'), 0),
+			current_balance = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'ELECTRICITY' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'ELECTRICITY'), 0),
 			updated_at = NOW()
 		WHERE code = 'ELECTRICITY';
 
 		UPDATE cash_accounts SET 
-			allocated_amount = COALESCE((SELECT SUM(fund_maintenance) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),
+			allocated_amount = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'MAINTENANCE' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0),
 			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'MACHINE_MAINTENANCE'), 0),
-			current_balance = COALESCE((SELECT SUM(fund_maintenance) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'MACHINE_MAINTENANCE'), 0),
+			current_balance = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'MAINTENANCE' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'MACHINE_MAINTENANCE'), 0),
 			updated_at = NOW()
 		WHERE code = 'MAINTENANCE';
 
 		UPDATE cash_accounts SET 
-			allocated_amount = COALESCE((SELECT SUM(fund_depreciation) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),
+			allocated_amount = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'DEPRECIATION' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0),
 			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'MACHINE_PURCHASE'), 0),
-			current_balance = COALESCE((SELECT SUM(fund_depreciation) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'MACHINE_PURCHASE'), 0),
+			current_balance = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'DEPRECIATION' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category = 'MACHINE_PURCHASE'), 0),
 			updated_at = NOW()
 		WHERE code = 'DEPRECIATION';
 
 		UPDATE cash_accounts SET 
-			allocated_amount = COALESCE((SELECT SUM(fund_net_profit) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0),
+			allocated_amount = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'NET_PROFIT' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0),
 			spent_amount = COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','EMERGENCY_FUND','REIMBURSEMENT')), 0),
-			current_balance = COALESCE((SELECT SUM(fund_net_profit) FROM orders WHERE payment_status = 'PAID' AND status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','EMERGENCY_FUND','REIMBURSEMENT')), 0),
+			current_balance = COALESCE((SELECT SUM(oa.amount) FROM order_allocations oa JOIN orders o ON o.id = oa.order_id WHERE oa.account_code = 'NET_PROFIT' AND o.payment_status = 'PAID' AND o.status != 'CANCELLED'), 0) - COALESCE((SELECT SUM(amount) FROM finance_transactions WHERE type = 'EXPENSE' AND category NOT IN ('FILAMENT','HARDWARE','PACKAGING','ELECTRICITY','MACHINE_MAINTENANCE','MACHINE_PURCHASE','EMERGENCY_FUND','REIMBURSEMENT')), 0),
 			updated_at = NOW()
 		WHERE code = 'NET_PROFIT';
 	`

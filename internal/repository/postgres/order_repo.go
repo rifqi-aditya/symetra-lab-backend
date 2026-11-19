@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"symetra-lab-backend-v2/internal/domain/order"
 )
@@ -43,10 +44,24 @@ type orderGORM struct {
 	UpdatedAt          time.Time                   `gorm:"column:updated_at"`
 	Items              []orderItemGORM             `gorm:"foreignKey:OrderID;references:ID;constraint:OnDelete:CASCADE"`
 	MarketplaceDetails *orderMarketplaceDetailGORM `gorm:"foreignKey:OrderID;references:ID"`
+	Allocations        []orderAllocationGORM       `gorm:"foreignKey:OrderID;references:ID;constraint:OnDelete:CASCADE"`
 }
 
 func (orderGORM) TableName() string {
 	return "orders"
+}
+
+type orderAllocationGORM struct {
+	ID            uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
+	OrderID       uuid.UUID `gorm:"column:order_id;type:uuid"`
+	CashAccountID uuid.UUID `gorm:"column:cash_account_id;type:uuid"`
+	AccountCode   string    `gorm:"column:account_code"`
+	Amount        float64   `gorm:"column:amount"`
+	CreatedAt     time.Time `gorm:"column:created_at"`
+}
+
+func (orderAllocationGORM) TableName() string {
+	return "order_allocations"
 }
 
 type orderMarketplaceDetailGORM struct {
@@ -72,6 +87,7 @@ type orderItemGORM struct {
 	ProductID        *uuid.UUID   `gorm:"column:product_id;type:uuid"`
 	Product          *productGORM `gorm:"foreignKey:ProductID;references:ID"`
 	ProductName      string       `gorm:"column:product_name"`
+	SKU              string       `gorm:"column:sku"`
 	ItemSKU          string     `gorm:"column:item_sku"`
 	Quantity         int        `gorm:"column:quantity"`
 	SellingPrice     float64    `gorm:"column:selling_price"`
@@ -122,12 +138,17 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 
 		var machineID *uuid.UUID
 
+		itemSKU := it.SKU
+		if itemSKU == "" {
+			itemSKU = it.ItemSKU
+		}
+
 		itemObj := order.ReconstructOrderItemFull(
 			it.ID,
 			it.OrderID,
 			it.ProductID,
 			prodName,
-			it.ItemSKU,
+			itemSKU,
 			it.Quantity,
 			it.SellingPrice,
 			it.HPP,
@@ -172,6 +193,38 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 	totHpp := cogs
 	totProf := profit
 
+	fundFilament := g.FundFilament
+	fundEmergency := g.FundEmergency
+	fundComponent := g.FundComponent
+	fundPackaging := g.FundPackaging
+	fundElectricity := g.FundElectricity
+	fundMaintenance := g.FundMaintenance
+	fundDepreciation := g.FundDepreciation
+	fundNetProfit := g.FundNetProfit
+
+	if len(g.Allocations) > 0 {
+		for _, a := range g.Allocations {
+			switch a.AccountCode {
+			case "FILAMENT":
+				fundFilament = a.Amount
+			case "EMERGENCY":
+				fundEmergency = a.Amount
+			case "COMPONENT":
+				fundComponent = a.Amount
+			case "PACKAGING":
+				fundPackaging = a.Amount
+			case "ELECTRICITY":
+				fundElectricity = a.Amount
+			case "MAINTENANCE":
+				fundMaintenance = a.Amount
+			case "DEPRECIATION":
+				fundDepreciation = a.Amount
+			case "NET_PROFIT":
+				fundNetProfit = a.Amount
+			}
+		}
+	}
+
 	domainOrder := order.ReconstructOrder(
 		g.ID,
 		g.UserID,
@@ -184,14 +237,14 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		net,
 		cogs,
 		profit,
-		g.FundFilament,
-		g.FundEmergency,
-		g.FundComponent,
-		g.FundPackaging,
-		g.FundElectricity,
-		g.FundMaintenance,
-		g.FundDepreciation,
-		g.FundNetProfit,
+		fundFilament,
+		fundEmergency,
+		fundComponent,
+		fundPackaging,
+		fundElectricity,
+		fundMaintenance,
+		fundDepreciation,
+		fundNetProfit,
 		totRev,
 		totHpp,
 		totProf,
@@ -232,6 +285,7 @@ func (r *OrderRepository) FindAll(ctx context.Context, userID uuid.UUID) ([]*ord
 	err := r.db.WithContext(ctx).
 		Preload("Items.Product").
 		Preload("MarketplaceDetails").
+		Preload("Allocations").
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Find(&gormOrders).Error
@@ -251,6 +305,7 @@ func (r *OrderRepository) FindByID(ctx context.Context, userID, id uuid.UUID) (*
 	err := r.db.WithContext(ctx).
 		Preload("Items.Product").
 		Preload("MarketplaceDetails").
+		Preload("Allocations").
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&g).Error
 	if err != nil {
@@ -267,6 +322,7 @@ func (r *OrderRepository) FindByOrderNumber(ctx context.Context, userID uuid.UUI
 	err := r.db.WithContext(ctx).
 		Preload("Items.Product").
 		Preload("MarketplaceDetails").
+		Preload("Allocations").
 		Where("(order_number = ? OR id IN (SELECT order_id FROM order_marketplace_details WHERE order_sn = ?)) AND user_id = ?", orderNumber, orderNumber, userID).
 		First(&g).Error
 	if err != nil {
@@ -276,6 +332,40 @@ func (r *OrderRepository) FindByOrderNumber(ctx context.Context, userID uuid.UUI
 		return nil, err
 	}
 	return mapOrderGORMToDomain(&g), nil
+}
+
+func upsertOrderAllocations(tx *gorm.DB, orderID uuid.UUID, createdAt time.Time, allocs map[string]float64) error {
+	var accounts []cashAccountGORM
+	if err := tx.Select("id, code").Find(&accounts).Error; err != nil {
+		return err
+	}
+	accMap := make(map[string]uuid.UUID)
+	for _, a := range accounts {
+		accMap[a.Code] = a.ID
+	}
+
+	for code, amt := range allocs {
+		accID, ok := accMap[code]
+		if !ok {
+			continue
+		}
+		record := orderAllocationGORM{
+			ID:            uuid.New(),
+			OrderID:       orderID,
+			CashAccountID: accID,
+			AccountCode:   code,
+			Amount:        amt,
+			CreatedAt:     createdAt,
+		}
+		err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "order_id"}, {Name: "cash_account_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"amount"}),
+		}).Create(&record).Error
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
@@ -314,12 +404,14 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 		}
 
 		for _, it := range o.Items() {
+			itemSKU := it.ItemSKU()
 			itemGORM := orderItemGORM{
 				ID:               it.ID(),
 				OrderID:          o.ID(),
 				ProductID:        it.ProductID(),
 				ProductName:      it.ProductName(),
-				ItemSKU:          it.ItemSKU(),
+				SKU:              itemSKU,
+				ItemSKU:          itemSKU,
 				Quantity:         it.Quantity(),
 				SellingPrice:     it.SellingPrice(),
 				HPP:              it.HPP(),
@@ -340,6 +432,20 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 			if err := tx.Create(&itemGORM).Error; err != nil {
 				return err
 			}
+		}
+
+		allocMap := map[string]float64{
+			"FILAMENT":     o.FundFilament(),
+			"EMERGENCY":    o.FundEmergency(),
+			"COMPONENT":    o.FundComponent(),
+			"PACKAGING":    o.FundPackaging(),
+			"ELECTRICITY":  o.FundElectricity(),
+			"MAINTENANCE":  o.FundMaintenance(),
+			"DEPRECIATION": o.FundDepreciation(),
+			"NET_PROFIT":   o.FundNetProfit(),
+		}
+		if err := upsertOrderAllocations(tx, o.ID(), o.CreatedAt(), allocMap); err != nil {
+			return err
 		}
 
 		return nil

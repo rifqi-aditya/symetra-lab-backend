@@ -66,6 +66,7 @@ type shopeeUnifiedItemGORM struct {
 	ChannelItemID    uint64     `gorm:"column:channel_item_id"`
 	ChannelModelID   uint64     `gorm:"column:channel_model_id"`
 	ProductName      string     `gorm:"column:product_name"`
+	SKU              string     `gorm:"column:sku"`
 	ItemSKU          string     `gorm:"column:item_sku"`
 	MatchedSKU       string     `gorm:"column:matched_sku"`
 	MappingStatus    string     `gorm:"column:mapping_status"`
@@ -880,12 +881,18 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				}
 			}
 
+			skuToUse := matchedSKU
+			if skuToUse == "" {
+				skuToUse = itemSKU
+			}
+
 			itemsToInsert = append(itemsToInsert, shopeeUnifiedItemGORM{
 				ID:               itemID,
 				OrderID:          orderID,
 				ChannelItemID:    item.ItemID(),
 				ChannelModelID:   item.ModelID(),
 				ProductName:      prodTitle,
+				SKU:              skuToUse,
 				ItemSKU:          itemSKU,
 				MatchedSKU:       matchedSKU,
 				MappingStatus:    mappingStatus,
@@ -1036,10 +1043,25 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		for _, itemG := range itemsToInsert {
 			if err := tx.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "id"}},
-				DoUpdates: clause.AssignmentColumns([]string{"product_id", "matched_sku", "mapping_status", "selling_price", "hpp", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "updated_at"}),
+				DoUpdates: clause.AssignmentColumns([]string{"product_id", "sku", "matched_sku", "mapping_status", "selling_price", "hpp", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "updated_at"}),
 			}).Create(&itemG).Error; err != nil {
 				return err
 			}
+		}
+
+		// 5. Simpan alokasi 8 pos kas ke order_allocations
+		allocMap := map[string]float64{
+			"FILAMENT":     alloc.FundFilament,
+			"EMERGENCY":    alloc.FundEmergency,
+			"COMPONENT":    alloc.FundComponent,
+			"PACKAGING":    alloc.FundPackaging,
+			"ELECTRICITY":  alloc.FundElectricity,
+			"MAINTENANCE":  alloc.FundMaintenance,
+			"DEPRECIATION": alloc.FundDepreciation,
+			"NET_PROFIT":   alloc.FundNetProfit,
+		}
+		if err := upsertOrderAllocations(tx, orderID, orderCreatedAt, allocMap); err != nil {
+			return err
 		}
 
 		return nil
