@@ -13,12 +13,11 @@ import (
 )
 
 type productComponentGORM struct {
-	ID            uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
-	ProductID     uuid.UUID  `gorm:"column:product_id;type:uuid"`
-	ComponentID   *uuid.UUID `gorm:"column:component_id;type:uuid"`
-	Quantity      float64    `gorm:"column:quantity"`
-	MarkupPercent float64    `gorm:"column:markup_percent"`
-	CreatedAt     time.Time  `gorm:"column:created_at"`
+	ID          uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
+	ProductID   uuid.UUID  `gorm:"column:product_id;type:uuid"`
+	ComponentID *uuid.UUID `gorm:"column:component_id;type:uuid"`
+	Quantity    float64    `gorm:"column:quantity"`
+	CreatedAt   time.Time  `gorm:"column:created_at"`
 }
 
 func (productComponentGORM) TableName() string {
@@ -117,7 +116,7 @@ func toProductEntity(g *productGORM) *product.Product {
 
 	comps := make([]*product.ProductComponent, len(g.Components))
 	for i, c := range g.Components {
-		comps[i] = product.ReconstructProductComponent(c.ID, c.ProductID, c.ComponentID, c.Quantity, c.MarkupPercent, c.CreatedAt)
+		comps[i] = product.ReconstructProductComponent(c.ID, c.ProductID, c.ComponentID, c.Quantity, c.CreatedAt)
 	}
 
 	packs := make([]*product.ProductPackagingItem, len(g.PackagingItems))
@@ -288,12 +287,11 @@ func (r *ProductRepository) Create(ctx context.Context, p *product.Product) erro
 
 		for _, comp := range p.Components() {
 			cModel := productComponentGORM{
-				ID:            comp.ID(),
-				ProductID:     p.ID(),
-				ComponentID:   comp.ComponentID(),
-				Quantity:      comp.Quantity(),
-				MarkupPercent: comp.MarkupPercent(),
-				CreatedAt:     comp.CreatedAt(),
+				ID:          comp.ID(),
+				ProductID:   p.ID(),
+				ComponentID: comp.ComponentID(),
+				Quantity:    comp.Quantity(),
+				CreatedAt:   comp.CreatedAt(),
 			}
 			if err := tx.Create(&cModel).Error; err != nil {
 				return err
@@ -342,12 +340,11 @@ func (r *ProductRepository) Update(ctx context.Context, p *product.Product) erro
 		}
 		for _, comp := range p.Components() {
 			cModel := productComponentGORM{
-				ID:            comp.ID(),
-				ProductID:     p.ID(),
-				ComponentID:   comp.ComponentID(),
-				Quantity:      comp.Quantity(),
-				MarkupPercent: comp.MarkupPercent(),
-				CreatedAt:     comp.CreatedAt(),
+				ID:          comp.ID(),
+				ProductID:   p.ID(),
+				ComponentID: comp.ComponentID(),
+				Quantity:    comp.Quantity(),
+				CreatedAt:   comp.CreatedAt(),
 			}
 			if err := tx.Create(&cModel).Error; err != nil {
 				return err

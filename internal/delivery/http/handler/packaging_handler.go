@@ -101,6 +101,7 @@ func (h *PackagingHandler) CreatePackagingItem(c echo.Context) error {
 		Name:             req.Name,
 		Category:         req.Category,
 		UnitType:         req.UnitType,
+		UnitCost:         req.UnitCost,
 		PurchasePrice:    req.PurchasePrice,
 		PurchaseQuantity: req.PurchaseQuantity,
 		StockQuantity:    req.StockQuantity,
@@ -146,6 +147,10 @@ func (h *PackagingHandler) UpdatePackagingItem(c echo.Context) error {
 	if req.UnitType != nil {
 		uType = *req.UnitType
 	}
+	unitCost := existing.UnitCost()
+	if req.UnitCost != nil && *req.UnitCost >= 0 {
+		unitCost = *req.UnitCost
+	}
 	price := existing.PurchasePrice()
 	if req.PurchasePrice != nil && *req.PurchasePrice >= 0 {
 		price = *req.PurchasePrice
@@ -164,6 +169,7 @@ func (h *PackagingHandler) UpdatePackagingItem(c echo.Context) error {
 		Name:             name,
 		Category:         cat,
 		UnitType:         uType,
+		UnitCost:         unitCost,
 		PurchasePrice:    price,
 		PurchaseQuantity: qty,
 		StockQuantity:    stock,

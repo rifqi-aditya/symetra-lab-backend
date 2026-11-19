@@ -51,6 +51,7 @@ type CostingContext struct {
 	DefaultMach   *costing.MachineCostInput
 	Machines      map[uuid.UUID]*costing.MachineCostInput
 	CompPrices    map[uuid.UUID]float64
+	CompMarkups   map[uuid.UUID]float64
 	PackUnitCosts map[uuid.UUID]float64
 	PresetTotals  map[uuid.UUID]float64
 }
@@ -59,6 +60,7 @@ func (cc *CostCalculator) LoadContext(ctx context.Context, userID uuid.UUID) *Co
 	contextCache := &CostingContext{
 		Machines:      make(map[uuid.UUID]*costing.MachineCostInput),
 		CompPrices:    make(map[uuid.UUID]float64),
+		CompMarkups:   make(map[uuid.UUID]float64),
 		PackUnitCosts: make(map[uuid.UUID]float64),
 		PresetTotals:  make(map[uuid.UUID]float64),
 	}
@@ -98,6 +100,7 @@ func (cc *CostCalculator) LoadContext(ctx context.Context, userID uuid.UUID) *Co
 		if comps, err := cc.componentRepo.FindAll(ctx, userID); err == nil {
 			for _, c := range comps {
 				contextCache.CompPrices[c.ID()] = c.PricePerUnit()
+				contextCache.CompMarkups[c.ID()] = c.DefaultMarkupPercent()
 			}
 		}
 	}
@@ -152,13 +155,15 @@ func (cc *CostCalculator) CalculateProductCosts(
 	var compInputs []costing.ComponentCostInput
 	for _, c := range p.Components() {
 		price := 0.0
+		markup := 0.0
 		if c.ComponentID() != nil && cache != nil {
 			price = cache.CompPrices[*c.ComponentID()]
+			markup = cache.CompMarkups[*c.ComponentID()]
 		}
 		compInputs = append(compInputs, costing.ComponentCostInput{
 			PricePerUnit:  price,
 			Quantity:      c.Quantity(),
-			MarkupPercent: c.MarkupPercent(),
+			MarkupPercent: markup,
 		})
 	}
 

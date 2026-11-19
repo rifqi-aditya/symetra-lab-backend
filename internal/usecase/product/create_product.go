@@ -155,19 +155,20 @@ func (uc *CreateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 			prodID,
 			c.ComponentID,
 			c.Quantity,
-			c.MarkupPercent,
 			now,
 		)
 		price := 0.0
+		markup := 0.0
 		if c.ComponentID != nil && uc.componentRepo != nil {
 			if compEntity, err := uc.componentRepo.FindByID(ctx, userID, *c.ComponentID); err == nil && compEntity != nil {
 				price = compEntity.PricePerUnit()
+				markup = compEntity.DefaultMarkupPercent()
 			}
 		}
 		compCostInputs = append(compCostInputs, costing.ComponentCostInput{
 			PricePerUnit:  price,
 			Quantity:      c.Quantity,
-			MarkupPercent: c.MarkupPercent,
+			MarkupPercent: markup,
 		})
 	}
 

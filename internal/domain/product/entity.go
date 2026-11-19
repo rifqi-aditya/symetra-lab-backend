@@ -9,27 +9,25 @@ import (
 
 // ProductComponent represents a hardware accessory required for one unit of product.
 type ProductComponent struct {
-	id            uuid.UUID
-	productID     uuid.UUID
-	componentID   *uuid.UUID
-	quantity      float64
-	markupPercent float64
-	createdAt     time.Time
+	id          uuid.UUID
+	productID   uuid.UUID
+	componentID *uuid.UUID
+	quantity    float64
+	createdAt   time.Time
 }
 
 func ReconstructProductComponent(
 	id, productID uuid.UUID,
 	componentID *uuid.UUID,
-	quantity, markupPercent float64,
+	quantity float64,
 	createdAt time.Time,
 ) *ProductComponent {
 	return &ProductComponent{
-		id:            id,
-		productID:     productID,
-		componentID:   componentID,
-		quantity:      quantity,
-		markupPercent: markupPercent,
-		createdAt:     createdAt,
+		id:          id,
+		productID:   productID,
+		componentID: componentID,
+		quantity:    quantity,
+		createdAt:   createdAt,
 	}
 }
 
@@ -37,7 +35,7 @@ func (pc *ProductComponent) ID() uuid.UUID            { return pc.id }
 func (pc *ProductComponent) ProductID() uuid.UUID     { return pc.productID }
 func (pc *ProductComponent) ComponentID() *uuid.UUID  { return pc.componentID }
 func (pc *ProductComponent) Quantity() float64        { return pc.quantity }
-func (pc *ProductComponent) MarkupPercent() float64   { return pc.markupPercent }
+func (pc *ProductComponent) MarkupPercent() float64   { return 0 }
 func (pc *ProductComponent) CreatedAt() time.Time     { return pc.createdAt }
 
 // ProductPackagingItem represents custom packaging material required for one unit of product.

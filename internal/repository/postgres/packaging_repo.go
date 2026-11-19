@@ -1,4 +1,4 @@
-﻿package postgres
+package postgres
 
 import (
 	"context"
@@ -12,17 +12,14 @@ import (
 )
 
 type packagingItemGORM struct {
-	ID               uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
-	UserID           uuid.UUID `gorm:"column:user_id;type:uuid"`
-	Name             string    `gorm:"column:name"`
-	Category         string    `gorm:"column:category"`
-	UnitType         string    `gorm:"column:unit_type"`
-	PurchasePrice    float64   `gorm:"column:purchase_price"`
-	PurchaseQuantity float64   `gorm:"column:purchase_quantity"`
-	UnitCost         float64   `gorm:"column:unit_cost"`
-	StockQuantity    float64   `gorm:"column:stock_quantity"`
-	CreatedAt        time.Time `gorm:"column:created_at"`
-	UpdatedAt        time.Time `gorm:"column:updated_at"`
+	ID            uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
+	UserID        uuid.UUID `gorm:"column:user_id;type:uuid"`
+	Name          string    `gorm:"column:name"`
+	UnitType      string    `gorm:"column:unit_type"`
+	UnitCost      float64   `gorm:"column:unit_cost"`
+	StockQuantity float64   `gorm:"column:stock_quantity"`
+	CreatedAt     time.Time `gorm:"column:created_at"`
+	UpdatedAt     time.Time `gorm:"column:updated_at"`
 }
 
 func (packagingItemGORM) TableName() string {
@@ -72,10 +69,7 @@ func mapPackagingItemGORMToDomain(p *packagingItemGORM) *packaging.PackagingItem
 		p.ID,
 		p.UserID,
 		p.Name,
-		p.Category,
 		p.UnitType,
-		p.PurchasePrice,
-		p.PurchaseQuantity,
 		p.UnitCost,
 		p.StockQuantity,
 		p.CreatedAt,
@@ -108,17 +102,14 @@ func (r *PackagingRepository) FindByID(ctx context.Context, userID, id uuid.UUID
 
 func (r *PackagingRepository) Create(ctx context.Context, p *packaging.PackagingItem) error {
 	m := packagingItemGORM{
-		ID:               p.ID(),
-		UserID:           p.UserID(),
-		Name:             p.Name(),
-		Category:         p.Category(),
-		UnitType:         p.UnitType(),
-		PurchasePrice:    p.PurchasePrice(),
-		PurchaseQuantity: p.PurchaseQuantity(),
-		UnitCost:         p.UnitCost(),
-		StockQuantity:    p.StockQuantity(),
-		CreatedAt:        p.CreatedAt(),
-		UpdatedAt:        p.UpdatedAt(),
+		ID:            p.ID(),
+		UserID:        p.UserID(),
+		Name:          p.Name(),
+		UnitType:      p.UnitType(),
+		UnitCost:      p.UnitCost(),
+		StockQuantity: p.StockQuantity(),
+		CreatedAt:     p.CreatedAt(),
+		UpdatedAt:     p.UpdatedAt(),
 	}
 	return r.db.WithContext(ctx).Create(&m).Error
 }
@@ -127,14 +118,11 @@ func (r *PackagingRepository) Update(ctx context.Context, p *packaging.Packaging
 	return r.db.WithContext(ctx).Model(&packagingItemGORM{}).
 		Where("id = ?", p.ID()).
 		Updates(map[string]interface{}{
-			"name":              p.Name(),
-			"category":          p.Category(),
-			"unit_type":         p.UnitType(),
-			"purchase_price":    p.PurchasePrice(),
-			"purchase_quantity": p.PurchaseQuantity(),
-			"unit_cost":         p.UnitCost(),
-			"stock_quantity":    p.StockQuantity(),
-			"updated_at":        p.UpdatedAt(),
+			"name":           p.Name(),
+			"unit_type":      p.UnitType(),
+			"unit_cost":      p.UnitCost(),
+			"stock_quantity": p.StockQuantity(),
+			"updated_at":     p.UpdatedAt(),
 		}).Error
 }
 

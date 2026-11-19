@@ -11,19 +11,21 @@ import (
 
 type CreatePackagingItemRequest struct {
 	Name             string  `json:"name"`
-	Category         string  `json:"category"`
+	Category         string  `json:"category,omitempty"`
 	UnitType         string  `json:"unit_type"`
-	PurchasePrice    float64 `json:"purchase_price"`
-	PurchaseQuantity float64 `json:"purchase_quantity"`
+	UnitCost         float64 `json:"unit_cost"`
+	PurchasePrice    float64 `json:"purchase_price,omitempty"`
+	PurchaseQuantity float64 `json:"purchase_quantity,omitempty"`
 	StockQuantity    float64 `json:"stock_quantity"`
 }
 
 type UpdatePackagingItemRequest struct {
 	Name             *string  `json:"name"`
-	Category         *string  `json:"category"`
+	Category         *string  `json:"category,omitempty"`
 	UnitType         *string  `json:"unit_type"`
-	PurchasePrice    *float64 `json:"purchase_price"`
-	PurchaseQuantity *float64 `json:"purchase_quantity"`
+	UnitCost         *float64 `json:"unit_cost"`
+	PurchasePrice    *float64 `json:"purchase_price,omitempty"`
+	PurchaseQuantity *float64 `json:"purchase_quantity,omitempty"`
 	StockQuantity    *float64 `json:"stock_quantity"`
 }
 

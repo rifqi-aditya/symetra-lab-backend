@@ -11,10 +11,8 @@ func TestNewPackagingItem(t *testing.T) {
 	item, err := NewPackagingItem(
 		userID,
 		"Cardboard Box 20x20x10",
-		"Box",
-		"box",
-		2500,
-		100,
+		"PCS",
+		25.0,
 		20,
 	)
 
@@ -23,5 +21,8 @@ func TestNewPackagingItem(t *testing.T) {
 	}
 	if item.Name() != "Cardboard Box 20x20x10" {
 		t.Errorf("Expected name match, got %s", item.Name())
+	}
+	if item.UnitCost() != 25.0 {
+		t.Errorf("Expected unit cost 25.0, got %f", item.UnitCost())
 	}
 }

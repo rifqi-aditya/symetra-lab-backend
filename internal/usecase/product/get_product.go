@@ -95,15 +95,17 @@ func (uc *GetProductUseCase) buildDetailOutput(ctx context.Context, userID uuid.
 	var compInputs []costing.ComponentCostInput
 	for _, pc := range p.Components() {
 		price := 0.0
+		markup := 0.0
 		if pc.ComponentID() != nil {
 			if c, err := uc.componentRepo.FindByID(ctx, userID, *pc.ComponentID()); err == nil && c != nil {
 				price = c.PricePerUnit()
+				markup = c.DefaultMarkupPercent()
 			}
 		}
 		compInputs = append(compInputs, costing.ComponentCostInput{
 			PricePerUnit:  price,
 			Quantity:      pc.Quantity(),
-			MarkupPercent: pc.MarkupPercent(),
+			MarkupPercent: markup,
 		})
 	}
 

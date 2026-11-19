@@ -13,6 +13,7 @@ type CreatePackagingItemInput struct {
 	Name             string
 	Category         string
 	UnitType         string
+	UnitCost         float64
 	PurchasePrice    float64
 	PurchaseQuantity float64
 	StockQuantity    float64
@@ -27,13 +28,15 @@ func NewCreatePackagingItemUseCase(repo packaging.Repository) *CreatePackagingIt
 }
 
 func (uc *CreatePackagingItemUseCase) Execute(ctx context.Context, userID uuid.UUID, input CreatePackagingItemInput) (*packaging.PackagingItem, error) {
+	unitCost := input.UnitCost
+	if unitCost <= 0 && input.PurchasePrice > 0 && input.PurchaseQuantity > 0 {
+		unitCost = input.PurchasePrice / input.PurchaseQuantity
+	}
 	item, err := packaging.NewPackagingItem(
 		userID,
 		input.Name,
-		input.Category,
 		input.UnitType,
-		input.PurchasePrice,
-		input.PurchaseQuantity,
+		unitCost,
 		input.StockQuantity,
 	)
 	if err != nil {
@@ -50,6 +53,7 @@ type UpdatePackagingItemInput struct {
 	Name             string
 	Category         string
 	UnitType         string
+	UnitCost         float64
 	PurchasePrice    float64
 	PurchaseQuantity float64
 	StockQuantity    float64
@@ -68,7 +72,11 @@ func (uc *UpdatePackagingItemUseCase) Execute(ctx context.Context, userID uuid.U
 	if err != nil {
 		return nil, err
 	}
-	if err := item.Update(input.Name, input.Category, input.UnitType, input.PurchasePrice, input.PurchaseQuantity, input.StockQuantity); err != nil {
+	unitCost := input.UnitCost
+	if unitCost <= 0 && input.PurchasePrice > 0 && input.PurchaseQuantity > 0 {
+		unitCost = input.PurchasePrice / input.PurchaseQuantity
+	}
+	if err := item.Update(input.Name, input.UnitType, unitCost, input.StockQuantity); err != nil {
 		return nil, err
 	}
 	if err := uc.repo.Update(ctx, item); err != nil {

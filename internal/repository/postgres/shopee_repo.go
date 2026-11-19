@@ -371,6 +371,7 @@ func (r *ShopeeRepository) FindOrders(ctx context.Context, status, carrier, sear
 
 type costingContextCache struct {
 	compPrices    map[uuid.UUID]float64
+	compMarkups   map[uuid.UUID]float64
 	packUnitCosts map[uuid.UUID]float64
 	machines      map[uuid.UUID]machineGORM
 	defaultMach   *machineGORM
@@ -380,6 +381,7 @@ type costingContextCache struct {
 func loadCostingContextCache(tx *gorm.DB) *costingContextCache {
 	cache := &costingContextCache{
 		compPrices:    make(map[uuid.UUID]float64),
+		compMarkups:   make(map[uuid.UUID]float64),
 		packUnitCosts: make(map[uuid.UUID]float64),
 		machines:      make(map[uuid.UUID]machineGORM),
 	}
@@ -387,16 +389,13 @@ func loadCostingContextCache(tx *gorm.DB) *costingContextCache {
 	if err := tx.Find(&comps).Error; err == nil {
 		for _, c := range comps {
 			cache.compPrices[c.ID] = c.PricePerUnit
+			cache.compMarkups[c.ID] = c.DefaultMarkupPercent
 		}
 	}
 	var packs []packagingItemGORM
 	if err := tx.Find(&packs).Error; err == nil {
 		for _, p := range packs {
-			uCost := p.UnitCost
-			if uCost <= 0 && p.PurchaseQuantity > 0 {
-				uCost = p.PurchasePrice / p.PurchaseQuantity
-			}
-			cache.packUnitCosts[p.ID] = uCost
+			cache.packUnitCosts[p.ID] = p.UnitCost
 		}
 	}
 	var machs []machineGORM
@@ -437,21 +436,25 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 	var compInputs []costing.ComponentCostInput
 	for _, c := range prod.Components {
 		price := 0.0
+		markup := 0.0
 		if c.ComponentID != nil {
 			if cp, ok := cache.compPrices[*c.ComponentID]; ok {
 				price = cp
+				markup = cache.compMarkups[*c.ComponentID]
 			} else {
 				var comp componentGORM
 				if err := tx.Where("id = ?", *c.ComponentID).First(&comp).Error; err == nil {
 					price = comp.PricePerUnit
+					markup = comp.DefaultMarkupPercent
 					cache.compPrices[*c.ComponentID] = price
+					cache.compMarkups[*c.ComponentID] = markup
 				}
 			}
 		}
 		compInputs = append(compInputs, costing.ComponentCostInput{
 			PricePerUnit:  price,
 			Quantity:      c.Quantity,
-			MarkupPercent: c.MarkupPercent,
+			MarkupPercent: markup,
 		})
 	}
 
@@ -464,9 +467,6 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 			var pack packagingItemGORM
 			if err := tx.Where("id = ?", p.PackagingItemID).First(&pack).Error; err == nil {
 				uCost = pack.UnitCost
-				if uCost <= 0 && pack.PurchaseQuantity > 0 {
-					uCost = pack.PurchasePrice / pack.PurchaseQuantity
-				}
 				cache.packUnitCosts[p.PackagingItemID] = uCost
 			}
 		}
