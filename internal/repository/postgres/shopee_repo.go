@@ -483,35 +483,6 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 
 	var machInput *costing.MachineCostInput
 
-	hasPreset := false
-	presetTotal := 0.0
-	if prod.PackagingPresetID != nil {
-		type presetItemRow struct {
-			PackagingItemID uuid.UUID `gorm:"column:packaging_item_id"`
-			QuantityUsed    float64   `gorm:"column:quantity_used"`
-		}
-		var pItems []presetItemRow
-		if err := tx.Table("packaging_preset_items").Where("preset_id = ?", *prod.PackagingPresetID).Find(&pItems).Error; err == nil && len(pItems) > 0 {
-			hasPreset = true
-			for _, pi := range pItems {
-				uCost := 0.0
-				if pu, ok := cache.packUnitCosts[pi.PackagingItemID]; ok {
-					uCost = pu
-				} else {
-					var pack packagingItemGORM
-					if err := tx.Where("id = ?", pi.PackagingItemID).First(&pack).Error; err == nil {
-						uCost = pack.UnitCost
-						if uCost <= 0 && pack.PurchaseQuantity > 0 {
-							uCost = pack.PurchasePrice / pack.PurchaseQuantity
-						}
-						cache.packUnitCosts[pi.PackagingItemID] = uCost
-					}
-				}
-				presetTotal += uCost * pi.QuantityUsed
-			}
-		}
-	}
-
 	var shopCfgInput *costing.ShopConfigInput
 	if cache.shopCfg != nil {
 		sc := cache.shopCfg
@@ -532,13 +503,10 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 		DefaultWeightGrams:    prod.DefaultWeightGrams,
 		DefaultPrintTimeHours: prod.DefaultPrintTimeHours,
 		BatchSize:             batchSize,
-		PackingFeeIDR:         prod.PackingFeeIDR,
 		BaseHPP:               prod.BaseHPP,
 		BaseSellingPrice:      prod.BaseSellingPrice,
 		Components:            compInputs,
 		PackagingItems:        packInputs,
-		HasPackagingPreset:    hasPreset,
-		PackagingPresetTotal:  presetTotal,
 		Machine:               machInput,
 		ShopConfig:            shopCfgInput,
 	})
@@ -797,7 +765,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			if productID != nil && (compCost == 0 || packCost == 0) {
 				var p productGORM
 				if err := tx.Preload("Components").Preload("PackagingItems").Where("id = ?", *productID).First(&p).Error; err == nil {
-					if len(p.Components) > 0 || len(p.PackagingItems) > 0 || p.PackingFeeIDR > 0 || p.PackagingPresetID != nil {
+					if len(p.Components) > 0 || len(p.PackagingItems) > 0 {
 						fCost, eCost, cCost, pCost, elCost, mCost, dCost, bHPP, _ := computeItemCostsFromProduct(tx, &p, item.Quantity(), item.DiscountedPrice())
 						if cCost > 0 || pCost > 0 {
 							filCost = fCost
@@ -869,9 +837,9 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 
 			if productID != nil {
 				var pr productGORM
-				if err := tx.Where("id = ?", *productID).First(&pr).Error; err == nil {
-					if pr.Name != "" {
-						prodTitle = pr.Name
+				if err := tx.Preload("Parent").Where("id = ?", *productID).First(&pr).Error; err == nil {
+					if pr.Parent != nil && pr.Parent.Name != "" {
+						prodTitle = pr.Parent.Name
 					}
 					itemWeight = pr.DefaultWeightGrams * float64(item.Quantity())
 					itemPrintTime = pr.DefaultPrintTimeHours * float64(item.Quantity())
@@ -1085,13 +1053,22 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1. Ambil data master produk beserta komponen & packaging
 		var prod productGORM
-		if err := tx.Preload("Components").Preload("PackagingItems").Where("id = ?", productID).First(&prod).Error; err != nil {
+		if err := tx.Preload("Parent").Preload("Components").Preload("PackagingItems").Where("id = ?", productID).First(&prod).Error; err != nil {
 			return fmt.Errorf("product not found: %w", err)
 		}
 
 		matchedSKU := ""
 		if prod.SKU != nil {
 			matchedSKU = *prod.SKU
+		}
+
+		prodName := prod.VariantName
+		if prod.Parent != nil && prod.Parent.Name != "" {
+			if prod.VariantName != "" && prod.VariantName != "Standard" {
+				prodName = prod.Parent.Name + " (" + prod.VariantName + ")"
+			} else {
+				prodName = prod.Parent.Name
+			}
 		}
 
 		// 2. Ambil semua baris order_items yang channel_item_id / channel_model_id nya cocok
@@ -1115,7 +1092,7 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 
 			updates := map[string]interface{}{
 				"product_id":        productID,
-				"product_name":      prod.Name,
+				"product_name":      prodName,
 				"matched_sku":       matchedSKU,
 				"mapping_status":    "MATCHED",
 				"filament_cost":     filCost,

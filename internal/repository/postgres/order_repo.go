@@ -129,11 +129,11 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 	for i, it := range g.Items {
 		prodName := it.ProductName
 		var thumbURL *string
-		if it.Product != nil {
-			if it.Product.Name != "" {
-				prodName = it.Product.Name
+		if it.Product != nil && it.Product.Parent != nil {
+			if it.Product.Parent.Name != "" {
+				prodName = it.Product.Parent.Name
 			}
-			thumbURL = it.Product.ThumbnailURL
+			thumbURL = it.Product.Parent.ThumbnailURL
 		}
 
 		var machineID *uuid.UUID
@@ -283,7 +283,7 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 func (r *OrderRepository) FindAll(ctx context.Context, userID uuid.UUID) ([]*order.Order, error) {
 	var gormOrders []orderGORM
 	err := r.db.WithContext(ctx).
-		Preload("Items.Product").
+		Preload("Items.Product.Parent").
 		Preload("MarketplaceDetails").
 		Preload("Allocations").
 		Where("user_id = ?", userID).
@@ -303,7 +303,7 @@ func (r *OrderRepository) FindAll(ctx context.Context, userID uuid.UUID) ([]*ord
 func (r *OrderRepository) FindByID(ctx context.Context, userID, id uuid.UUID) (*order.Order, error) {
 	var g orderGORM
 	err := r.db.WithContext(ctx).
-		Preload("Items.Product").
+		Preload("Items.Product.Parent").
 		Preload("MarketplaceDetails").
 		Preload("Allocations").
 		Where("id = ? AND user_id = ?", id, userID).
@@ -320,7 +320,7 @@ func (r *OrderRepository) FindByID(ctx context.Context, userID, id uuid.UUID) (*
 func (r *OrderRepository) FindByOrderNumber(ctx context.Context, userID uuid.UUID, orderNumber string) (*order.Order, error) {
 	var g orderGORM
 	err := r.db.WithContext(ctx).
-		Preload("Items.Product").
+		Preload("Items.Product.Parent").
 		Preload("MarketplaceDetails").
 		Preload("Allocations").
 		Where("(order_number = ? OR id IN (SELECT order_id FROM order_marketplace_details WHERE order_sn = ?)) AND user_id = ?", orderNumber, orderNumber, userID).

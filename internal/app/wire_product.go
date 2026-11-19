@@ -47,8 +47,8 @@ func wireProductModule(db *gorm.DB, cfg *config.Config) *ProductModule {
 
 	listProductsUC := productUC.NewListProductsUseCase(productRepo)
 	getProductUC := productUC.NewGetProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo)
-	createProductUC := productUC.NewCreateProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo)
-	updateProductUC := productUC.NewUpdateProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo)
+	createProductUC := productUC.NewCreateProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo, categoryRepo)
+	updateProductUC := productUC.NewUpdateProductUseCase(productRepo, shopConfigRepo, machineRepo, componentRepo, packagingRepo, categoryRepo)
 	deleteProductUC := productUC.NewDeleteProductUseCase(productRepo)
 	autoGenSKUUC := productUC.NewAutoGenerateSKUsUseCase(productRepo)
 

@@ -21,38 +21,43 @@ type ProductPackagingInput struct {
 }
 
 type CreateProductRequest struct {
+	ParentID              *string                 `json:"parent_id,omitempty"`
+	VariantName           string                  `json:"variant_name,omitempty"`
 	Name                  string                  `json:"name"`
 	ParentSKU             *string                 `json:"parent_sku"`
 	SKU                   *string                 `json:"sku"`
 	Description           *string                 `json:"description"`
 	Category              string                  `json:"category"`
+	CategoryID            *string                 `json:"category_id,omitempty"`
 	ThumbnailURL          *string                 `json:"thumbnail_url"`
 	DesignLink            *string                 `json:"design_link"`
 	DefaultWeightGrams    float64                 `json:"default_weight_grams"`
 	MaterialType          string                  `json:"material_type"`
 	DefaultPrintTimeHours float64                 `json:"default_print_time_hours"`
-	PackagingPresetID     *string                 `json:"packaging_preset_id"`
+	PackagingPresetID     *string                 `json:"packaging_preset_id,omitempty"`
 	BatchSize             int                     `json:"batch_size"`
-	PackingFeeIDR         int                     `json:"packing_fee_idr"`
+	PackingFeeIDR         int                     `json:"packing_fee_idr,omitempty"`
 	TargetMarginPercent   int                     `json:"target_margin_percent"`
 	Components            []ProductComponentInput `json:"components"`
 	PackagingItems        []ProductPackagingInput `json:"packaging_items"`
 }
 
 type UpdateProductRequest struct {
+	VariantName           *string                  `json:"variant_name,omitempty"`
 	Name                  *string                  `json:"name"`
 	ParentSKU             *string                  `json:"parent_sku"`
 	SKU                   *string                  `json:"sku"`
 	Description           *string                  `json:"description"`
 	Category              *string                  `json:"category"`
+	CategoryID            *string                  `json:"category_id,omitempty"`
 	ThumbnailURL          *string                  `json:"thumbnail_url"`
 	DesignLink            *string                  `json:"design_link"`
 	DefaultWeightGrams    *float64                 `json:"default_weight_grams"`
 	MaterialType          *string                  `json:"material_type"`
 	DefaultPrintTimeHours *float64                 `json:"default_print_time_hours"`
-	PackagingPresetID     *string                  `json:"packaging_preset_id"`
+	PackagingPresetID     *string                  `json:"packaging_preset_id,omitempty"`
 	BatchSize             *int                     `json:"batch_size"`
-	PackingFeeIDR         *int                     `json:"packing_fee_idr"`
+	PackingFeeIDR         *int                     `json:"packing_fee_idr,omitempty"`
 	TargetMarginPercent   *int                     `json:"target_margin_percent"`
 	Components            *[]ProductComponentInput `json:"components"`
 	PackagingItems        *[]ProductPackagingInput `json:"packaging_items"`
@@ -77,20 +82,23 @@ type ProductPackagingItemResponse struct {
 
 type ProductResponse struct {
 	ID                    uuid.UUID                      `json:"id"`
+	ParentID              uuid.UUID                      `json:"parent_id"`
+	VariantName           string                         `json:"variant_name"`
 	UserID                uuid.UUID                      `json:"user_id"`
 	Name                  string                         `json:"name"`
 	ParentSKU             *string                        `json:"parent_sku"`
 	SKU                   *string                        `json:"sku"`
 	Description           *string                        `json:"description"`
 	Category              string                         `json:"category"`
+	CategoryID            *uuid.UUID                     `json:"category_id"`
 	ThumbnailURL          *string                        `json:"thumbnail_url"`
 	DesignLink            *string                        `json:"design_link"`
 	DefaultWeightGrams    float64                        `json:"default_weight_grams"`
 	MaterialType          string                         `json:"material_type"`
 	DefaultPrintTimeHours float64                        `json:"default_print_time_hours"`
-	PackagingPresetID     *uuid.UUID                     `json:"packaging_preset_id"`
+	PackagingPresetID     *uuid.UUID                     `json:"packaging_preset_id,omitempty"`
 	BatchSize             int                            `json:"batch_size"`
-	PackingFeeIDR         int                            `json:"packing_fee_idr"`
+	PackingFeeIDR         int                            `json:"packing_fee_idr,omitempty"`
 	BaseHPP               float64                        `json:"base_hpp"`
 	BaseSellingPrice      float64                        `json:"base_selling_price"`
 	TargetMarginPercent   int                            `json:"target_margin_percent"`
@@ -129,24 +137,27 @@ func ToProductResponse(p *product.Product, totalSold int, cb costing.ProductCost
 
 	return ProductResponse{
 		ID:                    p.ID(),
+		ParentID:              p.ParentID(),
+		VariantName:           p.VariantName(),
 		UserID:                p.UserID(),
 		Name:                  p.Name(),
 		ParentSKU:             p.ParentSKU(),
 		SKU:                   p.SKU(),
 		Description:           p.Description(),
 		Category:              p.Category(),
+		CategoryID:            p.CategoryID(),
 		ThumbnailURL:          p.ThumbnailURL(),
 		DesignLink:            p.DesignLink(),
 		DefaultWeightGrams:    p.DefaultWeightGrams(),
 		MaterialType:          p.MaterialType(),
 		DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
-		PackagingPresetID:     p.PackagingPresetID(),
+		PackagingPresetID:     nil,
 		BatchSize:             p.BatchSize(),
-		PackingFeeIDR:         p.PackingFeeIDR(),
+		PackingFeeIDR:         0,
 		BaseHPP:               p.BaseHPP(),
 		BaseSellingPrice:      p.BaseSellingPrice(),
 		TargetMarginPercent:   p.TargetMarginPercent(),
-		TimesOrdered:          p.TimesOrdered(),
+		TimesOrdered:          totalSold,
 		CreatedAt:             p.CreatedAt(),
 		UpdatedAt:             p.UpdatedAt(),
 		Components:            comps,
@@ -158,17 +169,20 @@ func ToProductResponse(p *product.Product, totalSold int, cb costing.ProductCost
 
 type ProductListItemResponse struct {
 	ID                    uuid.UUID  `json:"id"`
+	ParentID              uuid.UUID  `json:"parent_id"`
+	VariantName           string     `json:"variant_name"`
 	Name                  string     `json:"name"`
 	ParentSKU             *string    `json:"parent_sku"`
 	SKU                   *string    `json:"sku"`
 	Category              string     `json:"category"`
+	CategoryID            *uuid.UUID `json:"category_id"`
 	ThumbnailURL          *string    `json:"thumbnail_url"`
 	MaterialType          string     `json:"material_type"`
 	DefaultWeightGrams    float64    `json:"default_weight_grams"`
 	DefaultPrintTimeHours float64    `json:"default_print_time_hours"`
-	PackagingPresetID     *uuid.UUID `json:"packaging_preset_id"`
+	PackagingPresetID     *uuid.UUID `json:"packaging_preset_id,omitempty"`
 	BatchSize             int        `json:"batch_size"`
-	PackingFeeIDR         int        `json:"packing_fee_idr"`
+	PackingFeeIDR         int        `json:"packing_fee_idr,omitempty"`
 	BaseHPP               float64    `json:"base_hpp"`
 	BaseSellingPrice      float64    `json:"base_selling_price"`
 	TargetMarginPercent   int        `json:"target_margin_percent"`
@@ -179,17 +193,20 @@ type ProductListItemResponse struct {
 func ToProductListItemResponse(p *product.Product, totalSold int) ProductListItemResponse {
 	return ProductListItemResponse{
 		ID:                    p.ID(),
+		ParentID:              p.ParentID(),
+		VariantName:           p.VariantName(),
 		Name:                  p.Name(),
 		ParentSKU:             p.ParentSKU(),
 		SKU:                   p.SKU(),
 		Category:              p.Category(),
+		CategoryID:            p.CategoryID(),
 		ThumbnailURL:          p.ThumbnailURL(),
 		MaterialType:          p.MaterialType(),
 		DefaultWeightGrams:    p.DefaultWeightGrams(),
 		DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
-		PackagingPresetID:     p.PackagingPresetID(),
+		PackagingPresetID:     nil,
 		BatchSize:             p.BatchSize(),
-		PackingFeeIDR:         p.PackingFeeIDR(),
+		PackingFeeIDR:         0,
 		BaseHPP:               p.BaseHPP(),
 		BaseSellingPrice:      p.BaseSellingPrice(),
 		TargetMarginPercent:   p.TargetMarginPercent(),

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,12 +13,12 @@ import (
 )
 
 type productComponentGORM struct {
-	ID            uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
-	ProductID     uuid.UUID `gorm:"column:product_id;type:uuid"`
+	ID            uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
+	ProductID     uuid.UUID  `gorm:"column:product_id;type:uuid"`
 	ComponentID   *uuid.UUID `gorm:"column:component_id;type:uuid"`
-	Quantity      float64   `gorm:"column:quantity"`
-	MarkupPercent float64   `gorm:"column:markup_percent"`
-	CreatedAt     time.Time `gorm:"column:created_at"`
+	Quantity      float64    `gorm:"column:quantity"`
+	MarkupPercent float64    `gorm:"column:markup_percent"`
+	CreatedAt     time.Time  `gorm:"column:created_at"`
 }
 
 func (productComponentGORM) TableName() string {
@@ -36,26 +37,38 @@ func (productPackagingItemGORM) TableName() string {
 	return "product_packaging_items"
 }
 
+type parentProductGORM struct {
+	ID           uuid.UUID            `gorm:"column:id;primaryKey;type:uuid"`
+	UserID       uuid.UUID            `gorm:"column:user_id;type:uuid"`
+	ParentSKU    string               `gorm:"column:parent_sku"`
+	Name         string               `gorm:"column:name"`
+	CategoryID   *uuid.UUID           `gorm:"column:category_id;type:uuid"`
+	Description  *string              `gorm:"column:description"`
+	ThumbnailURL *string              `gorm:"column:thumbnail_url"`
+	DesignLink   *string              `gorm:"column:design_link"`
+	Category     *productCategoryGORM `gorm:"foreignKey:CategoryID"`
+	Variants     []productGORM        `gorm:"foreignKey:ParentID"`
+	CreatedAt    time.Time            `gorm:"column:created_at"`
+	UpdatedAt    time.Time            `gorm:"column:updated_at"`
+}
+
+func (parentProductGORM) TableName() string {
+	return "parent_products"
+}
+
 type productGORM struct {
 	ID                    uuid.UUID                  `gorm:"column:id;primaryKey;type:uuid"`
-	UserID                uuid.UUID                  `gorm:"column:user_id;type:uuid"`
-	Name                  string                     `gorm:"column:name"`
-	ParentSKU             *string                    `gorm:"column:parent_sku"`
+	ParentID              uuid.UUID                  `gorm:"column:parent_id;type:uuid"`
+	VariantName           string                     `gorm:"column:variant_name"`
 	SKU                   *string                    `gorm:"column:sku"`
-	Description           *string                    `gorm:"column:description"`
-	Category              string                     `gorm:"column:category"`
-	ThumbnailURL          *string                    `gorm:"column:thumbnail_url"`
-	DesignLink            *string                    `gorm:"column:design_link"`
-	DefaultWeightGrams    float64                    `gorm:"column:default_weight_grams"`
 	MaterialType          string                     `gorm:"column:material_type"`
+	DefaultWeightGrams    float64                    `gorm:"column:default_weight_grams"`
 	DefaultPrintTimeHours float64                    `gorm:"column:default_print_time_hours"`
-	PackagingPresetID     *uuid.UUID                 `gorm:"column:packaging_preset_id;type:uuid"`
 	BatchSize             int                        `gorm:"column:batch_size"`
-	PackingFeeIDR         int                        `gorm:"column:packing_fee_idr"`
+	TargetMarginPercent   int                        `gorm:"column:target_margin_percent"`
 	BaseHPP               float64                    `gorm:"column:base_hpp"`
 	BaseSellingPrice      float64                    `gorm:"column:base_selling_price"`
-	TargetMarginPercent   int                        `gorm:"column:target_margin_percent"`
-	TimesOrdered          int                        `gorm:"column:times_ordered"`
+	Parent                *parentProductGORM         `gorm:"foreignKey:ParentID"`
 	Components            []productComponentGORM     `gorm:"foreignKey:ProductID"`
 	PackagingItems        []productPackagingItemGORM `gorm:"foreignKey:ProductID"`
 	CreatedAt             time.Time                  `gorm:"column:created_at"`
@@ -64,6 +77,37 @@ type productGORM struct {
 
 func (productGORM) TableName() string {
 	return "products"
+}
+
+func toParentProductEntity(g *parentProductGORM) *product.ParentProduct {
+	if g == nil {
+		return nil
+	}
+	catName := ""
+	if g.Category != nil {
+		catName = g.Category.Name
+	}
+	var variants []*product.Product
+	if len(g.Variants) > 0 {
+		variants = make([]*product.Product, len(g.Variants))
+		for i := range g.Variants {
+			variants[i] = toProductEntity(&g.Variants[i])
+		}
+	}
+	return product.ReconstructParentProduct(
+		g.ID,
+		g.UserID,
+		g.ParentSKU,
+		g.Name,
+		g.CategoryID,
+		catName,
+		g.Description,
+		g.ThumbnailURL,
+		g.DesignLink,
+		variants,
+		g.CreatedAt,
+		g.UpdatedAt,
+	)
 }
 
 func toProductEntity(g *productGORM) *product.Product {
@@ -81,26 +125,24 @@ func toProductEntity(g *productGORM) *product.Product {
 		packs[i] = product.ReconstructProductPackagingItem(p.ID, p.ProductID, p.PackagingItemID, p.QuantityUsed, p.CreatedAt)
 	}
 
+	var parentEntity *product.ParentProduct
+	if g.Parent != nil {
+		parentEntity = toParentProductEntity(g.Parent)
+	}
+
 	return product.ReconstructProduct(
 		g.ID,
-		g.UserID,
-		g.Name,
-		g.ParentSKU,
+		g.ParentID,
+		g.VariantName,
 		g.SKU,
-		g.Description,
-		g.Category,
-		g.ThumbnailURL,
-		g.DesignLink,
-		g.DefaultWeightGrams,
 		g.MaterialType,
+		g.DefaultWeightGrams,
 		g.DefaultPrintTimeHours,
-		g.PackagingPresetID,
 		g.BatchSize,
-		g.PackingFeeIDR,
+		g.TargetMarginPercent,
 		g.BaseHPP,
 		g.BaseSellingPrice,
-		g.TargetMarginPercent,
-		g.TimesOrdered,
+		parentEntity,
 		comps,
 		packs,
 		g.CreatedAt,
@@ -120,19 +162,26 @@ func (r *ProductRepository) FindAll(ctx context.Context, userID uuid.UUID, filte
 	var gormProducts []productGORM
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&productGORM{})
+	query := r.db.WithContext(ctx).Model(&productGORM{}).
+		Joins("JOIN parent_products ON parent_products.id = products.parent_id").
+		Preload("Parent.Category").
+		Preload("Components").
+		Preload("PackagingItems").
+		Where("parent_products.user_id = ?", userID)
 
 	if filter.Search != "" {
-		s := "%" + filter.Search + "%"
-		query = query.Where("name ILIKE ? OR sku ILIKE ? OR parent_sku ILIKE ?", s, s, s)
+		s := "%" + strings.TrimSpace(filter.Search) + "%"
+		query = query.Where("parent_products.name ILIKE ? OR products.sku ILIKE ? OR parent_products.parent_sku ILIKE ?", s, s, s)
 	}
-	if filter.Category != "" {
-		query = query.Where("category = ?", filter.Category)
+	if filter.CategoryID != nil && *filter.CategoryID != uuid.Nil {
+		query = query.Where("parent_products.category_id = ?", *filter.CategoryID)
+	} else if filter.Category != "" {
+		query = query.Joins("LEFT JOIN product_categories ON product_categories.id = parent_products.category_id").
+			Where("product_categories.name = ?", filter.Category)
 	}
 	if filter.ParentSKU != "" {
-		query = query.Where("parent_sku = ?", filter.ParentSKU)
+		query = query.Where("parent_products.parent_sku = ?", filter.ParentSKU)
 	}
-
 
 	if filter.Limit > 0 {
 		if err := query.Count(&total).Error; err != nil {
@@ -144,7 +193,7 @@ func (r *ProductRepository) FindAll(ctx context.Context, userID uuid.UUID, filte
 		query = query.Offset(filter.Offset)
 	}
 
-	query = query.Order("created_at DESC")
+	query = query.Order("products.created_at DESC")
 
 	if err := query.Find(&gormProducts).Error; err != nil {
 		return nil, 0, err
@@ -164,7 +213,12 @@ func (r *ProductRepository) FindAll(ctx context.Context, userID uuid.UUID, filte
 
 func (r *ProductRepository) FindByID(ctx context.Context, userID, id uuid.UUID) (*product.Product, error) {
 	var g productGORM
-	err := r.db.WithContext(ctx).Preload("Components").Preload("PackagingItems").Where("id = ?", id).First(&g).Error
+	err := r.db.WithContext(ctx).
+		Preload("Parent.Category").
+		Preload("Components").
+		Preload("PackagingItems").
+		Where("id = ?", id).
+		First(&g).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, product.ErrNotFound
@@ -176,7 +230,12 @@ func (r *ProductRepository) FindByID(ctx context.Context, userID, id uuid.UUID) 
 
 func (r *ProductRepository) FindBySKU(ctx context.Context, userID uuid.UUID, sku string) (*product.Product, error) {
 	var g productGORM
-	err := r.db.WithContext(ctx).Preload("Components").Preload("PackagingItems").Where("UPPER(TRIM(sku)) = UPPER(TRIM(?))", sku).First(&g).Error
+	err := r.db.WithContext(ctx).
+		Preload("Parent.Category").
+		Preload("Components").
+		Preload("PackagingItems").
+		Where("UPPER(TRIM(sku)) = UPPER(TRIM(?))", sku).
+		First(&g).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, product.ErrNotFound
@@ -188,7 +247,13 @@ func (r *ProductRepository) FindBySKU(ctx context.Context, userID uuid.UUID, sku
 
 func (r *ProductRepository) FindAllWithoutSKU(ctx context.Context, userID uuid.UUID) ([]*product.Product, error) {
 	var gormProducts []productGORM
-	err := r.db.WithContext(ctx).Where("sku IS NULL OR sku = ''").Find(&gormProducts).Error
+	err := r.db.WithContext(ctx).
+		Preload("Parent.Category").
+		Preload("Components").
+		Preload("PackagingItems").
+		Joins("JOIN parent_products ON parent_products.id = products.parent_id").
+		Where("parent_products.user_id = ? AND (products.sku IS NULL OR products.sku = '')", userID).
+		Find(&gormProducts).Error
 	if err != nil {
 		return nil, err
 	}
@@ -203,24 +268,16 @@ func (r *ProductRepository) Create(ctx context.Context, p *product.Product) erro
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		g := &productGORM{
 			ID:                    p.ID(),
-			UserID:                p.UserID(),
-			Name:                  p.Name(),
-			ParentSKU:             p.ParentSKU(),
+			ParentID:              p.ParentID(),
+			VariantName:           p.VariantName(),
 			SKU:                   p.SKU(),
-			Description:           p.Description(),
-			Category:              p.Category(),
-			ThumbnailURL:          p.ThumbnailURL(),
-			DesignLink:            p.DesignLink(),
-			DefaultWeightGrams:    p.DefaultWeightGrams(),
 			MaterialType:          p.MaterialType(),
+			DefaultWeightGrams:    p.DefaultWeightGrams(),
 			DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
-			PackagingPresetID:     p.PackagingPresetID(),
 			BatchSize:             p.BatchSize(),
-			PackingFeeIDR:         p.PackingFeeIDR(),
+			TargetMarginPercent:   p.TargetMarginPercent(),
 			BaseHPP:               p.BaseHPP(),
 			BaseSellingPrice:      p.BaseSellingPrice(),
-			TargetMarginPercent:   p.TargetMarginPercent(),
-			TimesOrdered:          p.TimesOrdered(),
 			CreatedAt:             p.CreatedAt(),
 			UpdatedAt:             p.UpdatedAt(),
 		}
@@ -263,23 +320,16 @@ func (r *ProductRepository) Create(ctx context.Context, p *product.Product) erro
 func (r *ProductRepository) Update(ctx context.Context, p *product.Product) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		updates := map[string]interface{}{
-			"name":                     p.Name(),
-			"parent_sku":               p.ParentSKU(),
+			"variant_name":             p.VariantName(),
 			"sku":                      p.SKU(),
-			"description":             p.Description(),
-			"category":                p.Category(),
-			"thumbnail_url":           p.ThumbnailURL(),
-			"design_link":             p.DesignLink(),
-			"default_weight_grams":    p.DefaultWeightGrams(),
-			"material_type":           p.MaterialType(),
+			"material_type":            p.MaterialType(),
+			"default_weight_grams":     p.DefaultWeightGrams(),
 			"default_print_time_hours": p.DefaultPrintTimeHours(),
-			"packaging_preset_id":     p.PackagingPresetID(),
-			"batch_size":              p.BatchSize(),
-			"packing_fee_idr":         p.PackingFeeIDR(),
-			"base_hpp":                p.BaseHPP(),
-			"base_selling_price":      p.BaseSellingPrice(),
-			"target_margin_percent":   p.TargetMarginPercent(),
-			"updated_at":              p.UpdatedAt(),
+			"batch_size":               p.BatchSize(),
+			"target_margin_percent":    p.TargetMarginPercent(),
+			"base_hpp":                 p.BaseHPP(),
+			"base_selling_price":       p.BaseSellingPrice(),
+			"updated_at":               p.UpdatedAt(),
 		}
 
 		if err := tx.Model(&productGORM{}).Where("id = ?", p.ID()).Updates(updates).Error; err != nil {
@@ -326,7 +376,6 @@ func (r *ProductRepository) Update(ctx context.Context, p *product.Product) erro
 }
 
 func (r *ProductRepository) Delete(ctx context.Context, userID, id uuid.UUID) error {
-	// Check order items existence
 	var count int64
 	r.db.WithContext(ctx).Table("order_items").Where("product_id = ?", id).Count(&count)
 	if count > 0 {
@@ -349,6 +398,182 @@ func (r *ProductRepository) Delete(ctx context.Context, userID, id uuid.UUID) er
 		}
 		return nil
 	})
+}
+
+// Parent Product Methods
+func (r *ProductRepository) FindAllParents(ctx context.Context, userID uuid.UUID, filter product.Filter) ([]*product.ParentProduct, int64, error) {
+	var gormParents []parentProductGORM
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&parentProductGORM{}).
+		Preload("Category").
+		Preload("Variants.Components").
+		Preload("Variants.PackagingItems").
+		Where("user_id = ?", userID)
+
+	if filter.Search != "" {
+		s := "%" + strings.TrimSpace(filter.Search) + "%"
+		query = query.Where("name ILIKE ? OR parent_sku ILIKE ?", s, s)
+	}
+	if filter.CategoryID != nil && *filter.CategoryID != uuid.Nil {
+		query = query.Where("category_id = ?", *filter.CategoryID)
+	} else if filter.Category != "" {
+		query = query.Joins("LEFT JOIN product_categories ON product_categories.id = parent_products.category_id").
+			Where("product_categories.name = ?", filter.Category)
+	}
+	if filter.ParentSKU != "" {
+		query = query.Where("parent_sku = ?", filter.ParentSKU)
+	}
+
+	if filter.Limit > 0 {
+		if err := query.Count(&total).Error; err != nil {
+			return nil, 0, err
+		}
+		query = query.Limit(filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query = query.Offset(filter.Offset)
+	}
+
+	query = query.Order("created_at DESC")
+
+	if err := query.Find(&gormParents).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if filter.Limit <= 0 {
+		total = int64(len(gormParents))
+	}
+
+	entities := make([]*product.ParentProduct, len(gormParents))
+	for i := range gormParents {
+		entities[i] = toParentProductEntity(&gormParents[i])
+	}
+
+	return entities, total, nil
+}
+
+func (r *ProductRepository) FindParentByID(ctx context.Context, userID, id uuid.UUID) (*product.ParentProduct, error) {
+	var g parentProductGORM
+	err := r.db.WithContext(ctx).
+		Preload("Category").
+		Preload("Variants.Components").
+		Preload("Variants.PackagingItems").
+		Where("id = ? AND user_id = ?", id, userID).
+		First(&g).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, product.ErrNotFound
+		}
+		return nil, err
+	}
+	return toParentProductEntity(&g), nil
+}
+
+func (r *ProductRepository) FindParentBySKU(ctx context.Context, userID uuid.UUID, parentSKU string) (*product.ParentProduct, error) {
+	var g parentProductGORM
+	err := r.db.WithContext(ctx).
+		Preload("Category").
+		Preload("Variants.Components").
+		Preload("Variants.PackagingItems").
+		Where("UPPER(TRIM(parent_sku)) = UPPER(TRIM(?)) AND user_id = ?", parentSKU, userID).
+		First(&g).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, product.ErrNotFound
+		}
+		return nil, err
+	}
+	return toParentProductEntity(&g), nil
+}
+
+func (r *ProductRepository) CreateParent(ctx context.Context, pp *product.ParentProduct) error {
+	g := &parentProductGORM{
+		ID:           pp.ID(),
+		UserID:       pp.UserID(),
+		ParentSKU:    pp.ParentSKU(),
+		Name:         pp.Name(),
+		CategoryID:   pp.CategoryID(),
+		Description:  pp.Description(),
+		ThumbnailURL: pp.ThumbnailURL(),
+		DesignLink:   pp.DesignLink(),
+		CreatedAt:    pp.CreatedAt(),
+		UpdatedAt:    pp.UpdatedAt(),
+	}
+	return r.db.WithContext(ctx).Create(g).Error
+}
+
+func (r *ProductRepository) UpdateParent(ctx context.Context, pp *product.ParentProduct) error {
+	updates := map[string]interface{}{
+		"parent_sku":    pp.ParentSKU(),
+		"name":          pp.Name(),
+		"category_id":   pp.CategoryID(),
+		"description":   pp.Description(),
+		"thumbnail_url": pp.ThumbnailURL(),
+		"design_link":   pp.DesignLink(),
+		"updated_at":    pp.UpdatedAt(),
+	}
+	return r.db.WithContext(ctx).Model(&parentProductGORM{}).
+		Where("id = ? AND user_id = ?", pp.ID(), pp.UserID()).
+		Updates(updates).Error
+}
+
+func (r *ProductRepository) DeleteParent(ctx context.Context, userID, id uuid.UUID) error {
+	// Check if any variant is used in order_items
+	var count int64
+	r.db.WithContext(ctx).Table("order_items").
+		Joins("JOIN products ON products.id = order_items.product_id").
+		Where("products.parent_id = ?", id).
+		Count(&count)
+	if count > 0 {
+		return product.ErrProductInUseInOrder
+	}
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Find variant IDs
+		var variantIDs []uuid.UUID
+		tx.Model(&productGORM{}).Where("parent_id = ?", id).Pluck("id", &variantIDs)
+
+		if len(variantIDs) > 0 {
+			if err := tx.Where("product_id IN ?", variantIDs).Delete(&productComponentGORM{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("product_id IN ?", variantIDs).Delete(&productPackagingItemGORM{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("id IN ?", variantIDs).Delete(&productGORM{}).Error; err != nil {
+				return err
+			}
+		}
+
+		res := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&parentProductGORM{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return product.ErrNotFound
+		}
+		return nil
+	})
+}
+
+func (r *ProductRepository) FindVariantsByParentID(ctx context.Context, parentID uuid.UUID) ([]*product.Product, error) {
+	var gormProducts []productGORM
+	err := r.db.WithContext(ctx).
+		Preload("Parent.Category").
+		Preload("Components").
+		Preload("PackagingItems").
+		Where("parent_id = ?", parentID).
+		Order("created_at ASC").
+		Find(&gormProducts).Error
+	if err != nil {
+		return nil, err
+	}
+	entities := make([]*product.Product, len(gormProducts))
+	for i := range gormProducts {
+		entities[i] = toProductEntity(&gormProducts[i])
+	}
+	return entities, nil
 }
 
 func (r *ProductRepository) GetTotalSoldMap(ctx context.Context, userID uuid.UUID) (map[uuid.UUID]int, error) {

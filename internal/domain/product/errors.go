@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	ErrUserIDRequired      = errors.New("user ID is required")
+	ErrParentIDRequired    = errors.New("parent product ID is required")
 	ErrProductNameRequired = errors.New("product name is required")
 	ErrCategoryRequired    = errors.New("category is required")
 	ErrNotFound            = errors.New("product not found")

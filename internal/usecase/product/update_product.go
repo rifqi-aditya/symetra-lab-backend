@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"symetra-lab-backend-v2/internal/domain/category"
 	"symetra-lab-backend-v2/internal/domain/component"
 	"symetra-lab-backend-v2/internal/domain/costing"
 	"symetra-lab-backend-v2/internal/domain/machine"
@@ -18,19 +19,19 @@ import (
 
 type UpdateProductInput struct {
 	ID                    uuid.UUID
+	VariantName           *string
 	Name                  *string
 	ParentSKU             *string
 	SKU                   *string
 	Description           *string
 	Category              *string
+	CategoryID            *uuid.UUID
 	ThumbnailURL          *string
 	DesignLink            *string
 	DefaultWeightGrams    *float64
 	MaterialType          *string
 	DefaultPrintTimeHours *float64
-	PackagingPresetID     *uuid.UUID
 	BatchSize             *int
-	PackingFeeIDR         *int
 	TargetMarginPercent   *int
 	Components            *[]ComponentInput
 	PackagingItems        *[]PackagingItemInput
@@ -42,6 +43,7 @@ type UpdateProductUseCase struct {
 	machineRepo    machine.Repository
 	componentRepo  component.Repository
 	packagingRepo  packaging.Repository
+	categoryRepo   category.Repository
 }
 
 func NewUpdateProductUseCase(
@@ -50,6 +52,7 @@ func NewUpdateProductUseCase(
 	mRepo machine.Repository,
 	cRepo component.Repository,
 	pkgRepo packaging.Repository,
+	catRepo category.Repository,
 ) *UpdateProductUseCase {
 	return &UpdateProductUseCase{
 		productRepo:    pRepo,
@@ -57,6 +60,7 @@ func NewUpdateProductUseCase(
 		machineRepo:    mRepo,
 		componentRepo:  cRepo,
 		packagingRepo:  pkgRepo,
+		categoryRepo:   catRepo,
 	}
 }
 
@@ -77,39 +81,71 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		cleanSKU = &val
 	}
 
-	parentSKU := existing.ParentSKU()
-	if input.ParentSKU != nil {
-		if strings.TrimSpace(*input.ParentSKU) == "" {
-			parentSKU = nil
-		} else {
-			cleanParent := strings.TrimSpace(strings.ToUpper(*input.ParentSKU))
-			parentSKU = &cleanParent
+	// 1. Update Parent Product if attributes are present
+	parent := existing.Parent()
+	if parent == nil && existing.ParentID() != uuid.Nil {
+		parent, _ = uc.productRepo.FindParentByID(ctx, userID, existing.ParentID())
+	}
+
+	if parent != nil {
+		parentModified := false
+		pName := parent.Name()
+		if input.Name != nil && strings.TrimSpace(*input.Name) != "" && strings.TrimSpace(*input.Name) != pName {
+			pName = strings.TrimSpace(*input.Name)
+			parentModified = true
+		}
+
+		pSKU := parent.ParentSKU()
+		if input.ParentSKU != nil && strings.TrimSpace(*input.ParentSKU) != "" && strings.TrimSpace(strings.ToUpper(*input.ParentSKU)) != pSKU {
+			pSKU = strings.TrimSpace(strings.ToUpper(*input.ParentSKU))
+			parentModified = true
+		}
+
+		pCatID := parent.CategoryID()
+		if input.CategoryID != nil && *input.CategoryID != uuid.Nil {
+			pCatID = input.CategoryID
+			parentModified = true
+		} else if input.Category != nil && strings.TrimSpace(*input.Category) != "" && uc.categoryRepo != nil {
+			cats, _ := uc.categoryRepo.FindAll(ctx, userID)
+			for _, c := range cats {
+				if strings.EqualFold(strings.TrimSpace(c.Name()), strings.TrimSpace(*input.Category)) {
+					id := c.ID()
+					pCatID = &id
+					parentModified = true
+					break
+				}
+			}
+		}
+
+		pDesc := parent.Description()
+		if input.Description != nil {
+			pDesc = input.Description
+			parentModified = true
+		}
+
+		pThumb := parent.ThumbnailURL()
+		if input.ThumbnailURL != nil {
+			pThumb = input.ThumbnailURL
+			parentModified = true
+		}
+
+		pDesign := parent.DesignLink()
+		if input.DesignLink != nil {
+			pDesign = input.DesignLink
+			parentModified = true
+		}
+
+		if parentModified {
+			if err := parent.Update(pName, pSKU, pCatID, pDesc, pThumb, pDesign); err == nil {
+				_ = uc.productRepo.UpdateParent(ctx, parent)
+			}
 		}
 	}
 
-	name := existing.Name()
-	if input.Name != nil {
-		name = strings.TrimSpace(*input.Name)
-	}
-
-	desc := existing.Description()
-	if input.Description != nil {
-		desc = input.Description
-	}
-
-	cat := existing.Category()
-	if input.Category != nil {
-		cat = strings.TrimSpace(*input.Category)
-	}
-
-	thumb := existing.ThumbnailURL()
-	if input.ThumbnailURL != nil {
-		thumb = input.ThumbnailURL
-	}
-
-	design := existing.DesignLink()
-	if input.DesignLink != nil {
-		design = input.DesignLink
+	// 2. Variant attributes
+	varName := existing.VariantName()
+	if input.VariantName != nil && strings.TrimSpace(*input.VariantName) != "" {
+		varName = strings.TrimSpace(*input.VariantName)
 	}
 
 	weight := existing.DefaultWeightGrams()
@@ -127,19 +163,9 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		printTime = *input.DefaultPrintTimeHours
 	}
 
-	presetID := existing.PackagingPresetID()
-	if input.PackagingPresetID != nil {
-		presetID = input.PackagingPresetID
-	}
-
 	batch := existing.BatchSize()
 	if input.BatchSize != nil && *input.BatchSize > 0 {
 		batch = *input.BatchSize
-	}
-
-	packingFee := existing.PackingFeeIDR()
-	if input.PackingFeeIDR != nil {
-		packingFee = *input.PackingFeeIDR
 	}
 
 	margin := existing.TargetMarginPercent()
@@ -163,7 +189,7 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 				now,
 			)
 			price := 0.0
-			if c.ComponentID != nil {
+			if c.ComponentID != nil && uc.componentRepo != nil {
 				if compEntity, err := uc.componentRepo.FindByID(ctx, userID, *c.ComponentID); err == nil && compEntity != nil {
 					price = compEntity.PricePerUnit()
 				}
@@ -178,7 +204,7 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		comps = existing.Components()
 		for _, pc := range comps {
 			price := 0.0
-			if pc.ComponentID() != nil {
+			if pc.ComponentID() != nil && uc.componentRepo != nil {
 				if compEntity, err := uc.componentRepo.FindByID(ctx, userID, *pc.ComponentID()); err == nil && compEntity != nil {
 					price = compEntity.PricePerUnit()
 				}
@@ -205,10 +231,12 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 				now,
 			)
 			unitCost := 0.0
-			if pkgEntity, err := uc.packagingRepo.FindByID(ctx, userID, p.PackagingItemID); err == nil && pkgEntity != nil {
-				unitCost = pkgEntity.UnitCost()
-				if unitCost <= 0 {
-					unitCost = pkgEntity.CalculateUnitCost()
+			if uc.packagingRepo != nil {
+				if pkgEntity, err := uc.packagingRepo.FindByID(ctx, userID, p.PackagingItemID); err == nil && pkgEntity != nil {
+					unitCost = pkgEntity.UnitCost()
+					if unitCost <= 0 {
+						unitCost = pkgEntity.CalculateUnitCost()
+					}
 				}
 			}
 			pkgCostInputs = append(pkgCostInputs, costing.PackagingCostInput{
@@ -220,10 +248,12 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		packs = existing.PackagingItems()
 		for _, pi := range packs {
 			unitCost := 0.0
-			if pkgEntity, err := uc.packagingRepo.FindByID(ctx, userID, pi.PackagingItemID()); err == nil && pkgEntity != nil {
-				unitCost = pkgEntity.UnitCost()
-				if unitCost <= 0 {
-					unitCost = pkgEntity.CalculateUnitCost()
+			if uc.packagingRepo != nil {
+				if pkgEntity, err := uc.packagingRepo.FindByID(ctx, userID, pi.PackagingItemID()); err == nil && pkgEntity != nil {
+					unitCost = pkgEntity.UnitCost()
+					if unitCost <= 0 {
+						unitCost = pkgEntity.CalculateUnitCost()
+					}
 				}
 			}
 			pkgCostInputs = append(pkgCostInputs, costing.PackagingCostInput{
@@ -235,38 +265,30 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 
 	// Config & Machine
 	var sCfgInput *costing.ShopConfigInput
-	if sc, err := uc.shopConfigRepo.GetByUserID(ctx, userID); err == nil && sc != nil {
-		sCfgInput = &costing.ShopConfigInput{
-			FilamentPricePerRoll:    sc.FilamentPricePerRoll(),
-			FilamentWeightGrams:     sc.FilamentWeightGrams(),
-			ElectricityTariffPerKwh: sc.ElectricityTariffPerKwh(),
-			PrinterPowerWatts:       sc.PrinterPowerWatts(),
-			PrinterPrice:            sc.PrinterPrice(),
-			PrinterLifespanHours:    sc.PrinterLifespanHours(),
-			FailureBufferPercent:    sc.FailureBufferPercent(),
+	if uc.shopConfigRepo != nil {
+		if sc, err := uc.shopConfigRepo.GetByUserID(ctx, userID); err == nil && sc != nil {
+			sCfgInput = &costing.ShopConfigInput{
+				FilamentPricePerRoll:    sc.FilamentPricePerRoll(),
+				FilamentWeightGrams:     sc.FilamentWeightGrams(),
+				ElectricityTariffPerKwh: sc.ElectricityTariffPerKwh(),
+				PrinterPowerWatts:       sc.PrinterPowerWatts(),
+				PrinterPrice:            sc.PrinterPrice(),
+				PrinterLifespanHours:    sc.PrinterLifespanHours(),
+				FailureBufferPercent:    sc.FailureBufferPercent(),
+			}
 		}
 	}
 
 	var mpInput *costing.MarketplacePlatformInput
-	if mp, err := uc.shopConfigRepo.GetActiveMarketplace(ctx, userID, "shopee"); err == nil && mp != nil {
-		mpInput = &costing.MarketplacePlatformInput{
-			CommissionPercent:   mp.CommissionPercent(),
-			PromoFeePercent:     mp.PromoFeePercent(),
-			FreeShippingPercent: mp.FreeShippingPercent(),
-			OrderFeeIDR:         mp.OrderFeeIDR(),
-			IsActive:            mp.IsActive(),
-		}
-	}
-
-	// Machine: nil means workshop global fleet rate is used
-	var machInput *costing.MachineCostInput
-
-	hasPreset := false
-	presetTotal := 0.0
-	if presetID != nil {
-		if preset, err := uc.packagingRepo.FindPresetByID(ctx, userID, *presetID); err == nil && preset != nil {
-			hasPreset = true
-			presetTotal = preset.TotalCost()
+	if uc.shopConfigRepo != nil {
+		if mp, err := uc.shopConfigRepo.GetActiveMarketplace(ctx, userID, "shopee"); err == nil && mp != nil {
+			mpInput = &costing.MarketplacePlatformInput{
+				CommissionPercent:   mp.CommissionPercent(),
+				PromoFeePercent:     mp.PromoFeePercent(),
+				FreeShippingPercent: mp.FreeShippingPercent(),
+				OrderFeeIDR:         mp.OrderFeeIDR(),
+				IsActive:            mp.IsActive(),
+			}
 		}
 	}
 
@@ -275,39 +297,28 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		DefaultWeightGrams:    weight,
 		DefaultPrintTimeHours: printTime,
 		BatchSize:             batch,
-		PackingFeeIDR:         packingFee,
 		TargetMarginPercent:   margin,
 		BaseHPP:               existing.BaseHPP(),
 		BaseSellingPrice:      existing.BaseSellingPrice(),
 		Components:            compCostInputs,
 		PackagingItems:        pkgCostInputs,
-		HasPackagingPreset:    hasPreset,
-		PackagingPresetTotal:  presetTotal,
-		Machine:               machInput,
 		ShopConfig:            sCfgInput,
 		Marketplace:           mpInput,
 	})
 
 	updatedProd := product.ReconstructProduct(
 		existing.ID(),
-		existing.UserID(),
-		name,
-		parentSKU,
+		existing.ParentID(),
+		varName,
 		cleanSKU,
-		desc,
-		cat,
-		thumb,
-		design,
-		weight,
 		mat,
+		weight,
 		printTime,
-		presetID,
 		batch,
-		packingFee,
+		margin,
 		cb.BaseHPP,
 		cb.BaseSellingPrice,
-		margin,
-		existing.TimesOrdered(),
+		parent,
 		comps,
 		packs,
 		existing.CreatedAt(),

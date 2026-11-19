@@ -140,149 +140,31 @@ func (r *PackagingRepository) Update(ctx context.Context, p *packaging.Packaging
 
 func (r *PackagingRepository) Delete(ctx context.Context, userID, id uuid.UUID, force bool) error {
 	if !force {
-		var presetUsage int64
-		r.db.WithContext(ctx).Table("packaging_preset_items").Where("packaging_item_id = ?", id).Count(&presetUsage)
-		if presetUsage > 0 {
-			return fmt.Errorf("packaging item sedang digunakan di %d preset", presetUsage)
+		var productUsage int64
+		r.db.WithContext(ctx).Table("product_packaging_items").Where("packaging_item_id = ?", id).Count(&productUsage)
+		if productUsage > 0 {
+			return fmt.Errorf("packaging item sedang digunakan di %d produk", productUsage)
 		}
 	}
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&packagingItemGORM{}).Error
 }
 
 func (r *PackagingRepository) FindAllPresets(ctx context.Context, userID uuid.UUID) ([]*packaging.PackagingPreset, error) {
-	var list []packagingPresetGORM
-	err := r.db.WithContext(ctx).Preload("Items.PackagingItem").Order("created_at DESC").Find(&list).Error
-	if err != nil {
-		return nil, err
-	}
-
-	res := make([]*packaging.PackagingPreset, len(list))
-	for i, preset := range list {
-		items := make([]*packaging.PackagingPresetItem, len(preset.Items))
-		for j, it := range preset.Items {
-			items[j] = packaging.ReconstructPresetItem(
-				it.ID,
-				it.PresetID,
-				it.PackagingItemID,
-				it.QuantityUsed,
-				mapPackagingItemGORMToDomain(it.PackagingItem),
-				it.CreatedAt,
-			)
-		}
-		res[i] = packaging.ReconstructPackagingPreset(
-			preset.ID,
-			preset.UserID,
-			preset.Name,
-			preset.Description,
-			items,
-			preset.CreatedAt,
-			preset.UpdatedAt,
-		)
-	}
-	return res, nil
+	return []*packaging.PackagingPreset{}, nil
 }
 
 func (r *PackagingRepository) FindPresetByID(ctx context.Context, userID, id uuid.UUID) (*packaging.PackagingPreset, error) {
-	var preset packagingPresetGORM
-	err := r.db.WithContext(ctx).Preload("Items.PackagingItem").Where("id = ?", id).First(&preset).Error
-	if err != nil {
-		return nil, err
-	}
-	items := make([]*packaging.PackagingPresetItem, len(preset.Items))
-	for j, it := range preset.Items {
-		items[j] = packaging.ReconstructPresetItem(
-			it.ID,
-			it.PresetID,
-			it.PackagingItemID,
-			it.QuantityUsed,
-			mapPackagingItemGORMToDomain(it.PackagingItem),
-			it.CreatedAt,
-		)
-	}
-	return packaging.ReconstructPackagingPreset(
-		preset.ID,
-		preset.UserID,
-		preset.Name,
-		preset.Description,
-		items,
-		preset.CreatedAt,
-		preset.UpdatedAt,
-	), nil
+	return nil, nil
 }
 
 func (r *PackagingRepository) CreatePreset(ctx context.Context, p *packaging.PackagingPreset) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		presetG := packagingPresetGORM{
-			ID:          p.ID(),
-			UserID:      p.UserID(),
-			Name:        p.Name(),
-			Description: p.Description(),
-			CreatedAt:   p.CreatedAt(),
-			UpdatedAt:   p.UpdatedAt(),
-		}
-		if err := tx.Create(&presetG).Error; err != nil {
-			return err
-		}
-
-		for _, it := range p.Items() {
-			itemG := packagingPresetItemGORM{
-				ID:              it.ID(),
-				PresetID:        p.ID(),
-				PackagingItemID: it.PackagingItemID(),
-				QuantityUsed:    it.QuantityUsed(),
-				CreatedAt:       it.CreatedAt(),
-			}
-			if err := tx.Create(&itemG).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return nil
 }
 
 func (r *PackagingRepository) UpdatePreset(ctx context.Context, p *packaging.PackagingPreset) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&packagingPresetGORM{}).Where("id = ?", p.ID()).Updates(map[string]interface{}{
-			"name":        p.Name(),
-			"description": p.Description(),
-			"updated_at":  p.UpdatedAt(),
-		}).Error; err != nil {
-			return err
-		}
-
-		if err := tx.Where("preset_id = ?", p.ID()).Delete(&packagingPresetItemGORM{}).Error; err != nil {
-			return err
-		}
-
-		for _, it := range p.Items() {
-			itemG := packagingPresetItemGORM{
-				ID:              it.ID(),
-				PresetID:        p.ID(),
-				PackagingItemID: it.PackagingItemID(),
-				QuantityUsed:    it.QuantityUsed(),
-				CreatedAt:       it.CreatedAt(),
-			}
-			if err := tx.Create(&itemG).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return nil
 }
 
 func (r *PackagingRepository) DeletePreset(ctx context.Context, userID, id uuid.UUID, force bool) error {
-	if !force {
-		var productCount int64
-		r.db.WithContext(ctx).Table("products").Where("packaging_preset_id = ?", id).Count(&productCount)
-		if productCount > 0 {
-			return fmt.Errorf("preset kemasan sedang digunakan oleh %d produk", productCount)
-		}
-	}
-
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("preset_id = ?", id).Delete(&packagingPresetItemGORM{}).Error; err != nil {
-			return err
-		}
-		return tx.Where("id = ?", id).Delete(&packagingPresetGORM{}).Error
-	})
+	return nil
 }

@@ -50,6 +50,21 @@ func (m *mockProductRepo) GetSoldQtyByID(ctx context.Context, userID, productID 
 func (m *mockProductRepo) FindAllWithoutSKU(ctx context.Context, userID uuid.UUID) ([]*product.Product, error) {
 	return nil, nil
 }
+func (m *mockProductRepo) FindAllParents(ctx context.Context, userID uuid.UUID, filter product.Filter) ([]*product.ParentProduct, int64, error) {
+	return nil, 0, nil
+}
+func (m *mockProductRepo) FindParentByID(ctx context.Context, userID, id uuid.UUID) (*product.ParentProduct, error) {
+	return nil, nil
+}
+func (m *mockProductRepo) FindParentBySKU(ctx context.Context, userID uuid.UUID, parentSKU string) (*product.ParentProduct, error) {
+	return nil, nil
+}
+func (m *mockProductRepo) CreateParent(ctx context.Context, pp *product.ParentProduct) error { return nil }
+func (m *mockProductRepo) UpdateParent(ctx context.Context, pp *product.ParentProduct) error { return nil }
+func (m *mockProductRepo) DeleteParent(ctx context.Context, userID, id uuid.UUID) error { return nil }
+func (m *mockProductRepo) FindVariantsByParentID(ctx context.Context, parentID uuid.UUID) ([]*product.Product, error) {
+	return nil, nil
+}
 
 type mockMappingFinder struct {
 	hist map[uint64]*uuid.UUID
@@ -62,33 +77,55 @@ func (m *mockMappingFinder) FindHistoricalProductID(ctx context.Context, channel
 	return nil, nil
 }
 
+func makeTestProduct(id, parentID, userID uuid.UUID, parentName, variantName, sku, parentSKU, category string, weight, printTime, hpp, price float64) *product.Product {
+	var skuPtr *string
+	if sku != "" {
+		skuPtr = &sku
+	}
+	parent := product.ReconstructParentProduct(
+		parentID,
+		userID,
+		parentSKU,
+		parentName,
+		nil,
+		category,
+		nil,
+		nil,
+		nil,
+		nil,
+		time.Now(),
+		time.Now(),
+	)
+	p := product.ReconstructProduct(
+		id,
+		parentID,
+		variantName,
+		skuPtr,
+		"PLA",
+		weight,
+		printTime,
+		1,
+		30,
+		hpp,
+		price,
+		parent,
+		nil,
+		nil,
+		time.Now(),
+		time.Now(),
+	)
+	return p
+}
+
 func TestSKUMatcher_MatchBySKU(t *testing.T) {
 	prodID := uuid.New()
+	parentID := uuid.New()
+	userID := uuid.New()
 	sku := "SKU-3D-DRAGON"
-	p := product.ReconstructProduct(
-		prodID,
-		uuid.New(),
-		"Articulated Dragon",
-		nil,
-		&sku,
-		nil,
-		"Toys",
-		nil,
-		nil,
-		150,
-		"PLA",
-		4.5,
-		nil,
-		1,
-		2000,
-		50000,
-		100000,
-		50,
-		0,
-		nil,
-		nil,
-		time.Now(),
-		time.Now(),
+	p := makeTestProduct(
+		prodID, parentID, userID,
+		"Articulated Dragon", "Standard", sku, "PAR-DRAGON", "Toys",
+		150, 4.5, 50000, 100000,
 	)
 
 	repo := &mockProductRepo{
@@ -101,7 +138,7 @@ func TestSKUMatcher_MatchBySKU(t *testing.T) {
 
 	ctx := context.Background()
 	res := matcher.MatchItem(ctx, usecaseProduct.MatchItemInput{
-		UserID:        uuid.New(),
+		UserID:        userID,
 		ModelSKU:      sku,
 		ChannelItemID: 12345,
 		ItemName:      "Shopee Dragon Toy",
@@ -128,31 +165,13 @@ func TestSKUMatcher_MatchBySKU(t *testing.T) {
 
 func TestSKUMatcher_HistoricalFallback(t *testing.T) {
 	prodID := uuid.New()
+	parentID := uuid.New()
+	userID := uuid.New()
 	sku := "SKU-BENCHY"
-	p := product.ReconstructProduct(
-		prodID,
-		uuid.New(),
-		"3DBenchy",
-		nil,
-		&sku,
-		nil,
-		"Boats",
-		nil,
-		nil,
-		20,
-		"PLA",
-		1.0,
-		nil,
-		1,
-		1000,
-		10000,
-		25000,
-		40,
-		0,
-		nil,
-		nil,
-		time.Now(),
-		time.Now(),
+	p := makeTestProduct(
+		prodID, parentID, userID,
+		"3DBenchy", "Standard", sku, "PAR-BENCHY", "Boats",
+		20, 1.0, 10000, 25000,
 	)
 
 	repo := &mockProductRepo{
@@ -170,7 +189,7 @@ func TestSKUMatcher_HistoricalFallback(t *testing.T) {
 	ctx := context.Background()
 	// Candidate SKU is unknown/empty, but channel_item_id = 99999 is in historical mapping
 	res := matcher.MatchItem(ctx, usecaseProduct.MatchItemInput{
-		UserID:        uuid.New(),
+		UserID:        userID,
 		ModelSKU:      "",
 		ItemSKU:       "",
 		ChannelItemID: 99999,
@@ -199,57 +218,20 @@ func TestSKUMatcher_MultiStackVariants(t *testing.T) {
 	sku3S := "RDM-3S"
 
 	id2S := uuid.New()
-	p2S := product.ReconstructProduct(
-		id2S,
-		uuid.New(),
-		"Rak Display Modular - 2 Stack",
-		&parentSKU,
-		&sku2S,
-		nil,
-		"Display",
-		nil,
-		nil,
-		55,
-		"PLA",
-		2.25,
-		nil,
-		1,
-		2000,
-		16500,
-		45000,
-		30,
-		0,
-		nil,
-		nil,
-		time.Now(),
-		time.Now(),
+	id3S := uuid.New()
+	parentID := uuid.New()
+	userID := uuid.New()
+
+	p2S := makeTestProduct(
+		id2S, parentID, userID,
+		"Rak Display Modular", "2 Stack", sku2S, parentSKU, "Display",
+		55, 2.25, 16500, 45000,
 	)
 
-	id3S := uuid.New()
-	p3S := product.ReconstructProduct(
-		id3S,
-		uuid.New(),
-		"Rak Display Modular - 3 Stack",
-		&parentSKU,
-		&sku3S,
-		nil,
-		"Display",
-		nil,
-		nil,
-		80,
-		"PLA",
-		3.5,
-		nil,
-		1,
-		2000,
-		24200,
-		65000,
-		30,
-		0,
-		nil,
-		nil,
-		time.Now(),
-		time.Now(),
+	p3S := makeTestProduct(
+		id3S, parentID, userID,
+		"Rak Display Modular", "3 Stack", sku3S, parentSKU, "Display",
+		80, 3.5, 24200, 65000,
 	)
 
 	repo := &mockProductRepo{
@@ -269,7 +251,7 @@ func TestSKUMatcher_MultiStackVariants(t *testing.T) {
 
 	// 1. Customer buys "Side View - 2 Stack", Shopee sends ModelSKU = RDM-2S
 	resSide2 := matcher.MatchItem(ctx, usecaseProduct.MatchItemInput{
-		UserID:        uuid.New(),
+		UserID:        userID,
 		ModelSKU:      "RDM-2S",
 		ItemSKU:       "RDM",
 		ChannelItemID: 55501,
@@ -290,7 +272,7 @@ func TestSKUMatcher_MultiStackVariants(t *testing.T) {
 
 	// 2. Customer buys "Front View - 2 Stack", Shopee sends ModelSKU = RDM-2S
 	resFront2 := matcher.MatchItem(ctx, usecaseProduct.MatchItemInput{
-		UserID:        uuid.New(),
+		UserID:        userID,
 		ModelSKU:      "RDM-2S",
 		ItemSKU:       "RDM",
 		ChannelItemID: 55501,
@@ -305,7 +287,7 @@ func TestSKUMatcher_MultiStackVariants(t *testing.T) {
 
 	// 3. Customer buys "Front View - 3 Stack", Shopee sends ModelSKU = RDM-3S
 	resFront3 := matcher.MatchItem(ctx, usecaseProduct.MatchItemInput{
-		UserID:        uuid.New(),
+		UserID:        userID,
 		ModelSKU:      "RDM-3S",
 		ItemSKU:       "RDM",
 		ChannelItemID: 55501,

@@ -69,43 +69,29 @@ func (pi *ProductPackagingItem) PackagingItemID() uuid.UUID { return pi.packagin
 func (pi *ProductPackagingItem) QuantityUsed() float64      { return pi.quantityUsed }
 func (pi *ProductPackagingItem) CreatedAt() time.Time       { return pi.createdAt }
 
-// Product represents the workshop master product and physical 3D print blueprint.
-type Product struct {
-	id                     uuid.UUID
-	userID                 uuid.UUID
-	name                   string
-	parentSKU              *string
-	sku                    *string
-	description            *string
-	category               string
-	thumbnailURL           *string
-	designLink             *string
-	defaultWeightGrams     float64
-	materialType           string
-	defaultPrintTimeHours  float64
-	packagingPresetID      *uuid.UUID
-	batchSize              int
-	packingFeeIDR          int
-	baseHPP                float64
-	baseSellingPrice       float64
-	targetMarginPercent    int
-	timesOrdered           int
-	components             []*ProductComponent
-	packagingItems         []*ProductPackagingItem
-	createdAt              time.Time
-	updatedAt              time.Time
+// ParentProduct represents the master catalog / etalase listing (3D design master).
+type ParentProduct struct {
+	id           uuid.UUID
+	userID       uuid.UUID
+	parentSKU    string
+	name         string
+	categoryID   *uuid.UUID
+	categoryName string // Populated when joined with product_categories
+	description  *string
+	thumbnailURL *string
+	designLink   *string
+	variants     []*Product
+	createdAt    time.Time
+	updatedAt    time.Time
 }
 
-// NewProduct creates a new Product entity with basic domain validations.
-func NewProduct(
+func NewParentProduct(
 	userID uuid.UUID,
 	name string,
-	sku *string,
-	category string,
-	defaultWeightGrams float64,
-	defaultPrintTimeHours float64,
-	materialType string,
-) (*Product, error) {
+	parentSKU string,
+	categoryID *uuid.UUID,
+	description, thumbnailURL, designLink *string,
+) (*ParentProduct, error) {
 	if userID == uuid.Nil {
 		return nil, ErrUserIDRequired
 	}
@@ -113,22 +99,140 @@ func NewProduct(
 	if cleanName == "" {
 		return nil, ErrProductNameRequired
 	}
+	cleanSKU := strings.TrimSpace(strings.ToUpper(parentSKU))
+	if cleanSKU == "" {
+		cleanSKU = "PAR-" + strings.ToUpper(uuid.New().String()[:8])
+	}
+	now := time.Now()
+	return &ParentProduct{
+		id:           uuid.New(),
+		userID:       userID,
+		parentSKU:    cleanSKU,
+		name:         cleanName,
+		categoryID:   categoryID,
+		description:  description,
+		thumbnailURL: thumbnailURL,
+		designLink:   designLink,
+		variants:     make([]*Product, 0),
+		createdAt:    now,
+		updatedAt:    now,
+	}, nil
+}
 
+func ReconstructParentProduct(
+	id, userID uuid.UUID,
+	parentSKU, name string,
+	categoryID *uuid.UUID,
+	categoryName string,
+	description, thumbnailURL, designLink *string,
+	variants []*Product,
+	createdAt, updatedAt time.Time,
+) *ParentProduct {
+	return &ParentProduct{
+		id:           id,
+		userID:       userID,
+		parentSKU:    parentSKU,
+		name:         name,
+		categoryID:   categoryID,
+		categoryName: categoryName,
+		description:  description,
+		thumbnailURL: thumbnailURL,
+		designLink:   designLink,
+		variants:     variants,
+		createdAt:    createdAt,
+		updatedAt:    updatedAt,
+	}
+}
+
+// ParentProduct Getters
+func (pp *ParentProduct) ID() uuid.UUID             { return pp.id }
+func (pp *ParentProduct) UserID() uuid.UUID         { return pp.userID }
+func (pp *ParentProduct) ParentSKU() string         { return pp.parentSKU }
+func (pp *ParentProduct) Name() string              { return pp.name }
+func (pp *ParentProduct) CategoryID() *uuid.UUID    { return pp.categoryID }
+func (pp *ParentProduct) CategoryName() string      { return pp.categoryName }
+func (pp *ParentProduct) Description() *string      { return pp.description }
+func (pp *ParentProduct) ThumbnailURL() *string     { return pp.thumbnailURL }
+func (pp *ParentProduct) DesignLink() *string       { return pp.designLink }
+func (pp *ParentProduct) Variants() []*Product      { return pp.variants }
+func (pp *ParentProduct) CreatedAt() time.Time      { return pp.createdAt }
+func (pp *ParentProduct) UpdatedAt() time.Time      { return pp.updatedAt }
+
+func (pp *ParentProduct) SetVariants(v []*Product) {
+	pp.variants = v
+}
+
+func (pp *ParentProduct) Update(
+	name string,
+	parentSKU string,
+	categoryID *uuid.UUID,
+	description, thumbnailURL, designLink *string,
+) error {
+	cleanName := strings.TrimSpace(name)
+	if cleanName == "" {
+		return ErrProductNameRequired
+	}
+	pp.name = cleanName
+	if strings.TrimSpace(parentSKU) != "" {
+		pp.parentSKU = strings.TrimSpace(strings.ToUpper(parentSKU))
+	}
+	pp.categoryID = categoryID
+	pp.description = description
+	pp.thumbnailURL = thumbnailURL
+	pp.designLink = designLink
+	pp.updatedAt = time.Now()
+	return nil
+}
+
+// Product represents a physical sellable variant line of a 3D print.
+type Product struct {
+	id                    uuid.UUID
+	parentID              uuid.UUID
+	variantName           string
+	sku                   *string
+	materialType          string
+	defaultWeightGrams    float64
+	defaultPrintTimeHours float64
+	batchSize             int
+	targetMarginPercent   int
+	baseHPP               float64
+	baseSellingPrice      float64
+	components            []*ProductComponent
+	packagingItems        []*ProductPackagingItem
+	parent                *ParentProduct
+	createdAt             time.Time
+	updatedAt             time.Time
+}
+
+// NewProduct creates a new Product variant entity.
+func NewProduct(
+	parentID uuid.UUID,
+	variantName string,
+	sku *string,
+	materialType string,
+	defaultWeightGrams float64,
+	defaultPrintTimeHours float64,
+) (*Product, error) {
+	if parentID == uuid.Nil {
+		return nil, ErrParentIDRequired
+	}
+	cleanVar := strings.TrimSpace(variantName)
+	if cleanVar == "" {
+		cleanVar = "Standard"
+	}
 	mat := strings.TrimSpace(materialType)
 	if mat == "" {
 		mat = "PLA"
 	}
-
 	now := time.Now()
 	return &Product{
 		id:                    uuid.New(),
-		userID:                userID,
-		name:                  cleanName,
+		parentID:              parentID,
+		variantName:           cleanVar,
 		sku:                   sku,
-		category:              strings.TrimSpace(category),
+		materialType:          mat,
 		defaultWeightGrams:    defaultWeightGrams,
 		defaultPrintTimeHours: defaultPrintTimeHours,
-		materialType:          mat,
 		batchSize:             1,
 		targetMarginPercent:   30,
 		createdAt:             now,
@@ -136,44 +240,33 @@ func NewProduct(
 	}, nil
 }
 
-// ReconstructProduct reconstitutes a Product from database persistence.
+// ReconstructProduct reconstitutes a Product variant from persistence.
 func ReconstructProduct(
-	id, userID uuid.UUID,
-	name string,
-	parentSKU, sku, description *string,
-	category string,
-	thumbnailURL, designLink *string,
-	defaultWeightGrams float64,
+	id, parentID uuid.UUID,
+	variantName string,
+	sku *string,
 	materialType string,
-	defaultPrintTimeHours float64,
-	packagingPresetID *uuid.UUID,
-	batchSize, packingFeeIDR int,
+	defaultWeightGrams, defaultPrintTimeHours float64,
+	batchSize, targetMarginPercent int,
 	baseHPP, baseSellingPrice float64,
-	targetMarginPercent, timesOrdered int,
+	parent *ParentProduct,
 	components []*ProductComponent,
 	packagingItems []*ProductPackagingItem,
 	createdAt, updatedAt time.Time,
 ) *Product {
 	return &Product{
 		id:                    id,
-		userID:                userID,
-		name:                  name,
-		parentSKU:             parentSKU,
+		parentID:              parentID,
+		variantName:           variantName,
 		sku:                   sku,
-		description:           description,
-		category:              category,
-		thumbnailURL:          thumbnailURL,
-		designLink:            designLink,
-		defaultWeightGrams:    defaultWeightGrams,
 		materialType:          materialType,
+		defaultWeightGrams:    defaultWeightGrams,
 		defaultPrintTimeHours: defaultPrintTimeHours,
-		packagingPresetID:     packagingPresetID,
 		batchSize:             batchSize,
-		packingFeeIDR:         packingFeeIDR,
+		targetMarginPercent:   targetMarginPercent,
 		baseHPP:               baseHPP,
 		baseSellingPrice:      baseSellingPrice,
-		targetMarginPercent:   targetMarginPercent,
-		timesOrdered:          timesOrdered,
+		parent:                parent,
 		components:            components,
 		packagingItems:        packagingItems,
 		createdAt:             createdAt,
@@ -182,51 +275,99 @@ func ReconstructProduct(
 }
 
 // Getters
-func (p *Product) ID() uuid.UUID                             { return p.id }
-func (p *Product) UserID() uuid.UUID                         { return p.userID }
-func (p *Product) Name() string                              { return p.name }
-func (p *Product) ParentSKU() *string                        { return p.parentSKU }
-func (p *Product) SKU() *string                              { return p.sku }
-func (p *Product) Description() *string                      { return p.description }
-func (p *Product) Category() string                          { return p.category }
-func (p *Product) ThumbnailURL() *string                     { return p.thumbnailURL }
-func (p *Product) DesignLink() *string                       { return p.designLink }
-func (p *Product) DefaultWeightGrams() float64               { return p.defaultWeightGrams }
-func (p *Product) MaterialType() string                      { return p.materialType }
-func (p *Product) DefaultPrintTimeHours() float64            { return p.defaultPrintTimeHours }
-func (p *Product) PackagingPresetID() *uuid.UUID             { return p.packagingPresetID }
-func (p *Product) BatchSize() int                            { return p.batchSize }
-func (p *Product) PackingFeeIDR() int                        { return p.packingFeeIDR }
-func (p *Product) BaseHPP() float64                          { return p.baseHPP }
-func (p *Product) BaseSellingPrice() float64                 { return p.baseSellingPrice }
-func (p *Product) TargetMarginPercent() int                  { return p.targetMarginPercent }
-func (p *Product) TimesOrdered() int                         { return p.timesOrdered }
-func (p *Product) Components() []*ProductComponent           { return p.components }
-func (p *Product) PackagingItems() []*ProductPackagingItem   { return p.packagingItems }
-func (p *Product) CreatedAt() time.Time                      { return p.createdAt }
-func (p *Product) UpdatedAt() time.Time                      { return p.updatedAt }
+func (p *Product) ID() uuid.UUID                           { return p.id }
+func (p *Product) ParentID() uuid.UUID                     { return p.parentID }
+func (p *Product) VariantName() string                     { return p.variantName }
+func (p *Product) SKU() *string                            { return p.sku }
+func (p *Product) MaterialType() string                    { return p.materialType }
+func (p *Product) DefaultWeightGrams() float64             { return p.defaultWeightGrams }
+func (p *Product) DefaultPrintTimeHours() float64          { return p.defaultPrintTimeHours }
+func (p *Product) BatchSize() int                          { return p.batchSize }
+func (p *Product) TargetMarginPercent() int                { return p.targetMarginPercent }
+func (p *Product) BaseHPP() float64                        { return p.baseHPP }
+func (p *Product) BaseSellingPrice() float64               { return p.baseSellingPrice }
+func (p *Product) Parent() *ParentProduct                  { return p.parent }
+func (p *Product) Components() []*ProductComponent         { return p.components }
+func (p *Product) PackagingItems() []*ProductPackagingItem { return p.packagingItems }
+func (p *Product) CreatedAt() time.Time                    { return p.createdAt }
+func (p *Product) UpdatedAt() time.Time                    { return p.updatedAt }
 
-// Business methods
-func (p *Product) Validate() error {
-	if p.name == "" {
-		return ErrProductNameRequired
+// Backward compatibility helpers for ParentProduct attributes
+func (p *Product) UserID() uuid.UUID {
+	if p.parent != nil {
+		return p.parent.UserID()
 	}
-	if p.defaultWeightGrams < 0 {
-		return ErrInvalidWeight
+	return uuid.Nil
+}
+
+func (p *Product) Name() string {
+	if p.parent != nil {
+		if p.variantName != "" && p.variantName != "Standard" {
+			return p.parent.Name() + " (" + p.variantName + ")"
+		}
+		return p.parent.Name()
 	}
-	if p.defaultPrintTimeHours < 0 {
-		return ErrInvalidPrintTime
+	return p.variantName
+}
+
+func (p *Product) ParentSKU() *string {
+	if p.parent != nil {
+		sku := p.parent.ParentSKU()
+		return &sku
 	}
 	return nil
 }
 
-func (p *Product) SetSKU(sku *string) {
-	p.sku = sku
-	p.updatedAt = time.Now()
+func (p *Product) Description() *string {
+	if p.parent != nil {
+		return p.parent.Description()
+	}
+	return nil
 }
 
-func (p *Product) SetParentSKU(parentSKU *string) {
-	p.parentSKU = parentSKU
+func (p *Product) Category() string {
+	if p.parent != nil {
+		return p.parent.CategoryName()
+	}
+	return ""
+}
+
+func (p *Product) CategoryID() *uuid.UUID {
+	if p.parent != nil {
+		return p.parent.CategoryID()
+	}
+	return nil
+}
+
+func (p *Product) ThumbnailURL() *string {
+	if p.parent != nil {
+		return p.parent.ThumbnailURL()
+	}
+	return nil
+}
+
+func (p *Product) DesignLink() *string {
+	if p.parent != nil {
+		return p.parent.DesignLink()
+	}
+	return nil
+}
+
+// PackagingPresetID & PackingFeeIDR & TimesOrdered compatibility stubs
+func (p *Product) PackagingPresetID() *uuid.UUID { return nil }
+func (p *Product) PackingFeeIDR() int            { return 0 }
+func (p *Product) TimesOrdered() int             { return 0 }
+
+// Setters and mutators
+func (p *Product) SetParent(parent *ParentProduct) {
+	p.parent = parent
+	if parent != nil {
+		p.parentID = parent.ID()
+	}
+}
+
+func (p *Product) SetSKU(sku *string) {
+	p.sku = sku
 	p.updatedAt = time.Now()
 }
 
@@ -236,34 +377,30 @@ func (p *Product) SetPricing(hpp, sellingPrice float64) {
 	p.updatedAt = time.Now()
 }
 
+func (p *Product) SetBOM(components []*ProductComponent, packagingItems []*ProductPackagingItem) {
+	p.components = components
+	p.packagingItems = packagingItems
+	p.updatedAt = time.Now()
+}
+
 func (p *Product) UpdateSpecs(
-	name string,
-	description, thumbnailURL, designLink *string,
-	category string,
+	variantName string,
 	weightGrams, printTimeHours float64,
 	materialType string,
-	presetID *uuid.UUID,
-	batchSize, packingFeeIDR, marginPercent int,
+	batchSize, marginPercent int,
 ) error {
-	cleanName := strings.TrimSpace(name)
-	if cleanName == "" {
-		return ErrProductNameRequired
+	cleanVar := strings.TrimSpace(variantName)
+	if cleanVar != "" {
+		p.variantName = cleanVar
 	}
-	p.name = cleanName
-	p.description = description
-	p.thumbnailURL = thumbnailURL
-	p.designLink = designLink
-	p.category = strings.TrimSpace(category)
 	p.defaultWeightGrams = weightGrams
 	p.defaultPrintTimeHours = printTimeHours
 	if strings.TrimSpace(materialType) != "" {
 		p.materialType = strings.TrimSpace(materialType)
 	}
-	p.packagingPresetID = presetID
 	if batchSize > 0 {
 		p.batchSize = batchSize
 	}
-	p.packingFeeIDR = packingFeeIDR
 	if marginPercent > 0 {
 		p.targetMarginPercent = marginPercent
 	}
@@ -271,8 +408,15 @@ func (p *Product) UpdateSpecs(
 	return nil
 }
 
-func (p *Product) SetBOM(components []*ProductComponent, packagingItems []*ProductPackagingItem) {
-	p.components = components
-	p.packagingItems = packagingItems
-	p.updatedAt = time.Now()
+func (p *Product) Validate() error {
+	if p.parentID == uuid.Nil {
+		return ErrParentIDRequired
+	}
+	if p.defaultWeightGrams < 0 {
+		return ErrInvalidWeight
+	}
+	if p.defaultPrintTimeHours < 0 {
+		return ErrInvalidPrintTime
+	}
+	return nil
 }

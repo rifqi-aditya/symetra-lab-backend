@@ -102,6 +102,21 @@ func (m *mockProductRepo) GetSoldQtyByID(ctx context.Context, userID, productID 
 func (m *mockProductRepo) FindAllWithoutSKU(ctx context.Context, userID uuid.UUID) ([]*product.Product, error) {
 	return nil, nil
 }
+func (m *mockProductRepo) FindAllParents(ctx context.Context, userID uuid.UUID, filter product.Filter) ([]*product.ParentProduct, int64, error) {
+	return nil, 0, nil
+}
+func (m *mockProductRepo) FindParentByID(ctx context.Context, userID, id uuid.UUID) (*product.ParentProduct, error) {
+	return nil, nil
+}
+func (m *mockProductRepo) FindParentBySKU(ctx context.Context, userID uuid.UUID, parentSKU string) (*product.ParentProduct, error) {
+	return nil, nil
+}
+func (m *mockProductRepo) CreateParent(ctx context.Context, pp *product.ParentProduct) error { return nil }
+func (m *mockProductRepo) UpdateParent(ctx context.Context, pp *product.ParentProduct) error { return nil }
+func (m *mockProductRepo) DeleteParent(ctx context.Context, userID, id uuid.UUID) error { return nil }
+func (m *mockProductRepo) FindVariantsByParentID(ctx context.Context, parentID uuid.UUID) ([]*product.Product, error) {
+	return nil, nil
+}
 
 type mockLedgerSync struct {
 	syncCalls int
@@ -114,27 +129,36 @@ func (m *mockLedgerSync) SyncRunningBalances(ctx context.Context) error {
 
 func TestProcessShopeeOrderUseCase_Execute(t *testing.T) {
 	prodID := uuid.New()
+	parentID := uuid.New()
+	userID := uuid.New()
 	sku := "SKU-VIBRO-PAD"
-	p := product.ReconstructProduct(
-		prodID,
-		uuid.New(),
+	parent := product.ReconstructParentProduct(
+		parentID,
+		userID,
+		"PAR-VIBRO-PAD",
 		"Anti-Vibration Pad",
-		nil,
-		&sku,
 		nil,
 		"Accessories",
 		nil,
 		nil,
-		50,
-		"TPU",
-		1.0,
 		nil,
+		nil,
+		time.Now(),
+		time.Now(),
+	)
+	p := product.ReconstructProduct(
+		prodID,
+		parentID,
+		"Standard",
+		&sku,
+		"TPU",
+		50,
+		1.0,
 		1,
-		500,
+		50,
 		15000,
 		35000,
-		50,
-		0,
+		parent,
 		nil,
 		nil,
 		time.Now(),
