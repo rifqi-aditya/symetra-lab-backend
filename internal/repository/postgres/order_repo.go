@@ -30,6 +30,7 @@ type orderGORM struct {
 	Status             string                      `gorm:"column:status"`
 	Notes              string                      `gorm:"column:notes"`
 	PaymentStatus      string                      `gorm:"column:payment_status"`
+	PaidAt             *time.Time                  `gorm:"column:paid_at"`
 	StartedAt          *time.Time                  `gorm:"column:started_at"`
 	CompletedAt        *time.Time                  `gorm:"column:completed_at"`
 	CreatedAt          time.Time                   `gorm:"column:created_at"`
@@ -57,9 +58,7 @@ func (orderAllocationGORM) TableName() string {
 }
 
 type orderMarketplaceDetailGORM struct {
-	ID              uuid.UUID  `gorm:"column:id;primaryKey;type:uuid"`
-	OrderID         uuid.UUID  `gorm:"column:order_id;type:uuid"`
-	Channel         string     `gorm:"column:channel"`
+	OrderID         uuid.UUID  `gorm:"column:order_id;primaryKey;type:uuid"`
 	OrderSN         string     `gorm:"column:order_sn"`
 	ShippingCarrier string     `gorm:"column:shipping_carrier"`
 	TrackingNumber  string     `gorm:"column:tracking_number"`
@@ -241,6 +240,10 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		g.UpdatedAt,
 	)
 
+	if g.PaidAt != nil {
+		domainOrder.SetPaidAt(g.PaidAt)
+	}
+
 	if g.MarketplaceDetails != nil {
 		domainOrder.SetLogistics(
 			g.MarketplaceDetails.ShippingCarrier,
@@ -367,6 +370,7 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 			Status:           o.Status(),
 			Notes:            o.Notes(),
 			PaymentStatus:    o.PaymentStatus(),
+			PaidAt:           o.PaidAt(),
 			StartedAt:        o.StartedAt(),
 			CompletedAt:      o.CompletedAt(),
 			CreatedAt:        o.CreatedAt(),
@@ -459,13 +463,21 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, userID, id uuid.UUID
 }
 
 func (r *OrderRepository) UpdatePaymentStatus(ctx context.Context, userID, id uuid.UUID, paymentStatus string) error {
+	now := time.Now()
+	updates := map[string]interface{}{
+		"payment_status": paymentStatus,
+		"updated_at":     now,
+	}
+	if paymentStatus == "PAID" {
+		updates["paid_at"] = &now
+	} else if paymentStatus == "UNPAID" {
+		updates["paid_at"] = nil
+	}
+
 	res := r.db.WithContext(ctx).
 		Model(&orderGORM{}).
 		Where("id = ? AND user_id = ?", id, userID).
-		Updates(map[string]interface{}{
-			"payment_status": paymentStatus,
-			"updated_at":     time.Now(),
-		})
+		Updates(updates)
 
 	if res.Error != nil {
 		return res.Error

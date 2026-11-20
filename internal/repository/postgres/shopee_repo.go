@@ -34,7 +34,6 @@ func (shopGORM) TableName() string {
 
 type shopeeOrderMarketplaceGORM struct {
 	OrderID                  uuid.UUID  `gorm:"column:order_id;primaryKey;type:uuid"`
-	Channel                  string     `gorm:"column:channel"`
 	ShopID                   uint64     `gorm:"column:shop_id"`
 	OrderSN                  string     `gorm:"column:order_sn;uniqueIndex"`
 	BuyerUserID              uint64     `gorm:"column:buyer_user_id"`
@@ -49,7 +48,6 @@ type shopeeOrderMarketplaceGORM struct {
 	SellerTransactionFee     float64    `gorm:"column:seller_transaction_fee"`
 	SellerOrderProcessingFee float64    `gorm:"column:seller_order_processing_fee"`
 	SellerVoucherDiscount    float64    `gorm:"column:seller_voucher_discount"`
-	TotalMarketplaceFee      float64    `gorm:"column:total_marketplace_fee"`
 	EscrowAmount             float64    `gorm:"column:escrow_amount"`
 	FinancialStatus          string     `gorm:"column:financial_status"`
 	CreatedAt                time.Time  `gorm:"column:created_at"`
@@ -985,7 +983,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		// 3. Simpan detail tabel anak: order_marketplace_details
 		mDetails := shopeeOrderMarketplaceGORM{
 			OrderID:         orderID,
-			Channel:         "SHOPEE",
 			ShopID:          o.ShopID(),
 			OrderSN:         o.OrderSN(),
 			BuyerUserID:     o.BuyerUserID(),
@@ -1005,7 +1002,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			mDetails.SellerTransactionFee = e.SellerTransactionFee()
 			mDetails.SellerOrderProcessingFee = e.SellerOrderProcessingFee()
 			mDetails.SellerVoucherDiscount = e.SellerVoucherDiscount()
-			mDetails.TotalMarketplaceFee = e.TotalMarketplaceFee()
 			mDetails.EscrowAmount = e.EscrowAmount()
 			mDetails.FinancialStatus = e.FinancialStatus()
 		}
@@ -1016,7 +1012,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "order_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"shipping_carrier", "tracking_number", "ship_by_date", "ship_by_date_time", "commission_fee", "service_fee", "seller_transaction_fee", "seller_order_processing_fee", "seller_voucher_discount", "total_marketplace_fee", "escrow_amount", "financial_status", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"shipping_carrier", "tracking_number", "ship_by_date", "ship_by_date_time", "commission_fee", "service_fee", "seller_transaction_fee", "seller_order_processing_fee", "seller_voucher_discount", "escrow_amount", "financial_status", "updated_at"}),
 		}).Create(&mDetails).Error; err != nil {
 			return err
 		}

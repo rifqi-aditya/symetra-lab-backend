@@ -38,6 +38,7 @@ type Order struct {
 	paymentStatus    string // PAID, UNPAID
 	startedAt        *time.Time
 	completedAt      *time.Time
+	paidAt           *time.Time
 	shippingCarrier  string
 	trackingNumber   string
 	shipByDateTime   *time.Time
@@ -178,6 +179,10 @@ func NewOrder(
 	finalNetProfit := math.Round((netProfit-profitCut)*100) / 100
 
 	now := time.Now()
+	var paidAt *time.Time
+	if paymentStatus == "PAID" {
+		paidAt = &now
+	}
 	return &Order{
 		id:               orderID,
 		userID:           userID,
@@ -205,6 +210,7 @@ func NewOrder(
 		notes:            notes,
 		source:           source,
 		paymentStatus:    paymentStatus,
+		paidAt:           paidAt,
 		items:            assignedItems,
 		createdAt:        now,
 		updatedAt:        now,
@@ -348,7 +354,21 @@ func (o *Order) UpdateStatus(newStatus string) {
 
 func (o *Order) UpdatePaymentStatus(newStatus string) {
 	o.paymentStatus = newStatus
-	o.updatedAt = time.Now()
+	now := time.Now()
+	o.updatedAt = now
+	if newStatus == "PAID" && o.paidAt == nil {
+		o.paidAt = &now
+	} else if newStatus == "UNPAID" {
+		o.paidAt = nil
+	}
+}
+
+func (o *Order) PaidAt() *time.Time {
+	return o.paidAt
+}
+
+func (o *Order) SetPaidAt(t *time.Time) {
+	o.paidAt = t
 }
 
 // Getters

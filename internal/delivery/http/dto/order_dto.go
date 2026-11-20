@@ -98,6 +98,7 @@ type OrderResponse struct {
 	Notes            string              `json:"notes"`
 	Source           string              `json:"source"`
 	PaymentStatus    string                      `json:"payment_status"`
+	PaidAt           *time.Time                  `json:"paid_at,omitempty"`
 	FinancialStatus  string                      `json:"financial_status,omitempty"`
 	Escrow           *ShopeeOrderEscrowResponse  `json:"escrow,omitempty"`
 	StartedAt        *time.Time                  `json:"started_at,omitempty"`
@@ -304,6 +305,7 @@ func ToOrderResponse(o *order.Order) OrderResponse {
 		Notes:            o.Notes(),
 		Source:           o.Source(),
 		PaymentStatus:    o.PaymentStatus(),
+		PaidAt:           o.PaidAt(),
 		FinancialStatus:  finStatus,
 		Escrow:           escrowResp,
 		StartedAt:        o.StartedAt(),
