@@ -40,8 +40,10 @@ type CreateProductInput struct {
 	ThumbnailURL          *string
 	DesignLink            *string
 	DefaultWeightGrams    float64
+	PlateWeightGrams      *float64
 	MaterialType          string
 	DefaultPrintTimeHours float64
+	PlatePrintTimeHours   *float64
 	BatchSize             int
 	TargetMarginPercent   int
 	Components            []ComponentInput
@@ -237,10 +239,29 @@ func (uc *CreateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		batchSize = 1
 	}
 
+	// =========================================================================
+	// Normalisasi Bobot & Waktu Cetak (Slicer Build Plate vs Unit Per Pcs)
+	// =========================================================================
+	// Arsitektur Data:
+	// - Database selalu menyimpan data dalam satuan per-unit (1 pcs).
+	// - Jika Frontend mengirimkan PlateWeightGrams / PlatePrintTimeHours (angka 1 plate slicer),
+	//   Backend yang bertugas membaginya dengan batch_size agar menjadi nilai per-unit murni.
+	// - Jika tidak dikirim (legacy payload), gunakan DefaultWeightGrams / DefaultPrintTimeHours
+	//   yang diasumsikan sudah berupa nilai per-unit.
+	unitWeight := input.DefaultWeightGrams
+	if input.PlateWeightGrams != nil && *input.PlateWeightGrams > 0 {
+		unitWeight = *input.PlateWeightGrams / float64(batchSize)
+	}
+
+	unitPrintTime := input.DefaultPrintTimeHours
+	if input.PlatePrintTimeHours != nil && *input.PlatePrintTimeHours > 0 {
+		unitPrintTime = *input.PlatePrintTimeHours / float64(batchSize)
+	}
+
 	cb := costing.Calculate(costing.CalculationInput{
 		MaterialType:          input.MaterialType,
-		DefaultWeightGrams:    input.DefaultWeightGrams,
-		DefaultPrintTimeHours: input.DefaultPrintTimeHours,
+		DefaultWeightGrams:    unitWeight,
+		DefaultPrintTimeHours: unitPrintTime,
 		BatchSize:             batchSize,
 		TargetMarginPercent:   margin,
 		Components:            compCostInputs,
@@ -265,8 +286,8 @@ func (uc *CreateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		varName,
 		cleanSKU,
 		mat,
-		input.DefaultWeightGrams,
-		input.DefaultPrintTimeHours,
+		unitWeight,
+		unitPrintTime,
 		batchSize,
 		margin,
 		cb.BaseHPP,

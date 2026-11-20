@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,9 +32,25 @@ type CreateProductRequest struct {
 	CategoryID            *string                 `json:"category_id,omitempty"`
 	ThumbnailURL          *string                 `json:"thumbnail_url"`
 	DesignLink            *string                 `json:"design_link"`
+
+	// =========================================================================
+	// Data Bobot & Waktu Cetak (Unit Level vs Slicer Build Plate Level)
+	// =========================================================================
+	// Database selalu menyimpan data dalam satuan per-unit (1 pcs):
+	// - DefaultWeightGrams: Berat per-unit (1 pcs).
+	// - DefaultPrintTimeHours: Waktu cetak per-unit (1 pcs).
+	//
+	// Opsi Virtual Field (Slicer Raw Input):
+	// - PlateWeightGrams: Total berat 1 plate slicer (misal 100 gram).
+	// - PlatePrintTimeHours: Total durasi 1 plate slicer (misal 5 jam).
+	// Jika Plate* dikirim, Backend otomatis membaginya dengan batch_size sehingga
+	// Frontend tidak perlu repot melakukan pembagian manual di UI.
 	DefaultWeightGrams    float64                 `json:"default_weight_grams"`
+	PlateWeightGrams      *float64                `json:"plate_weight_grams,omitempty"`
 	MaterialType          string                  `json:"material_type"`
 	DefaultPrintTimeHours float64                 `json:"default_print_time_hours"`
+	PlatePrintTimeHours   *float64                `json:"plate_print_time_hours,omitempty"`
+
 	PackagingPresetID     *string                 `json:"packaging_preset_id,omitempty"`
 	BatchSize             int                     `json:"batch_size"`
 	PackingFeeIDR         int                     `json:"packing_fee_idr,omitempty"`
@@ -52,9 +69,14 @@ type UpdateProductRequest struct {
 	CategoryID            *string                  `json:"category_id,omitempty"`
 	ThumbnailURL          *string                  `json:"thumbnail_url"`
 	DesignLink            *string                  `json:"design_link"`
+
+	// Data Bobot & Waktu Cetak (Unit Level vs Slicer Build Plate Level)
 	DefaultWeightGrams    *float64                 `json:"default_weight_grams"`
+	PlateWeightGrams      *float64                 `json:"plate_weight_grams,omitempty"`
 	MaterialType          *string                  `json:"material_type"`
 	DefaultPrintTimeHours *float64                 `json:"default_print_time_hours"`
+	PlatePrintTimeHours   *float64                 `json:"plate_print_time_hours,omitempty"`
+
 	PackagingPresetID     *string                  `json:"packaging_preset_id,omitempty"`
 	BatchSize             *int                     `json:"batch_size"`
 	PackingFeeIDR         *int                     `json:"packing_fee_idr,omitempty"`
@@ -93,9 +115,19 @@ type ProductResponse struct {
 	CategoryID            *uuid.UUID                     `json:"category_id"`
 	ThumbnailURL          *string                        `json:"thumbnail_url"`
 	DesignLink            *string                        `json:"design_link"`
+
+	// =========================================================================
+	// Weight & Print Time: Unit vs Slicer Plate
+	// =========================================================================
+	// DefaultWeightGrams & DefaultPrintTimeHours adalah nilai murni per-unit (1 pcs) yang tersimpan di DB.
+	// PlateWeightGrams & PlatePrintTimeHours adalah virtual field (Unit * BatchSize)
+	// untuk memudahkan Frontend menampilkan form slicer 1 plate tanpa perlu rumus manual.
 	DefaultWeightGrams    float64                        `json:"default_weight_grams"`
+	PlateWeightGrams      float64                        `json:"plate_weight_grams"`
 	MaterialType          string                         `json:"material_type"`
 	DefaultPrintTimeHours float64                        `json:"default_print_time_hours"`
+	PlatePrintTimeHours   float64                        `json:"plate_print_time_hours"`
+
 	PackagingPresetID     *uuid.UUID                     `json:"packaging_preset_id,omitempty"`
 	BatchSize             int                            `json:"batch_size"`
 	PackingFeeIDR         int                            `json:"packing_fee_idr,omitempty"`
@@ -135,6 +167,19 @@ func ToProductResponse(p *product.Product, totalSold int, cb costing.ProductCost
 		}
 	}
 
+	// =========================================================================
+	// Virtual Field Calculation: Slicer Build Plate
+	// =========================================================================
+	// Menghitung kembali angka 1 plate slicer utuh (Unit * BatchSize).
+	// Menggunakan pembulatan 2 desimal untuk berat dan 3 desimal untuk jam
+	// agar terhindar dari floating point precision error di sisi client.
+	bSize := p.BatchSize()
+	if bSize <= 0 {
+		bSize = 1
+	}
+	plateWeight := math.Round(p.DefaultWeightGrams()*float64(bSize)*100) / 100
+	plateHours := math.Round(p.DefaultPrintTimeHours()*float64(bSize)*1000) / 1000
+
 	return ProductResponse{
 		ID:                    p.ID(),
 		ParentID:              p.ParentID(),
@@ -149,8 +194,10 @@ func ToProductResponse(p *product.Product, totalSold int, cb costing.ProductCost
 		ThumbnailURL:          p.ThumbnailURL(),
 		DesignLink:            p.DesignLink(),
 		DefaultWeightGrams:    p.DefaultWeightGrams(),
+		PlateWeightGrams:      plateWeight,
 		MaterialType:          p.MaterialType(),
 		DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
+		PlatePrintTimeHours:   plateHours,
 		PackagingPresetID:     nil,
 		BatchSize:             p.BatchSize(),
 		PackingFeeIDR:         0,
@@ -179,7 +226,9 @@ type ProductListItemResponse struct {
 	ThumbnailURL          *string    `json:"thumbnail_url"`
 	MaterialType          string     `json:"material_type"`
 	DefaultWeightGrams    float64    `json:"default_weight_grams"`
+	PlateWeightGrams      float64    `json:"plate_weight_grams"`
 	DefaultPrintTimeHours float64    `json:"default_print_time_hours"`
+	PlatePrintTimeHours   float64    `json:"plate_print_time_hours"`
 	PackagingPresetID     *uuid.UUID `json:"packaging_preset_id,omitempty"`
 	BatchSize             int        `json:"batch_size"`
 	PackingFeeIDR         int        `json:"packing_fee_idr,omitempty"`
@@ -191,6 +240,13 @@ type ProductListItemResponse struct {
 }
 
 func ToProductListItemResponse(p *product.Product, totalSold int) ProductListItemResponse {
+	bSize := p.BatchSize()
+	if bSize <= 0 {
+		bSize = 1
+	}
+	plateWeight := math.Round(p.DefaultWeightGrams()*float64(bSize)*100) / 100
+	plateHours := math.Round(p.DefaultPrintTimeHours()*float64(bSize)*1000) / 1000
+
 	return ProductListItemResponse{
 		ID:                    p.ID(),
 		ParentID:              p.ParentID(),
@@ -203,7 +259,9 @@ func ToProductListItemResponse(p *product.Product, totalSold int) ProductListIte
 		ThumbnailURL:          p.ThumbnailURL(),
 		MaterialType:          p.MaterialType(),
 		DefaultWeightGrams:    p.DefaultWeightGrams(),
+		PlateWeightGrams:      plateWeight,
 		DefaultPrintTimeHours: p.DefaultPrintTimeHours(),
+		PlatePrintTimeHours:   plateHours,
 		PackagingPresetID:     nil,
 		BatchSize:             p.BatchSize(),
 		PackingFeeIDR:         0,

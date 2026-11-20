@@ -29,8 +29,10 @@ type UpdateProductInput struct {
 	ThumbnailURL          *string
 	DesignLink            *string
 	DefaultWeightGrams    *float64
+	PlateWeightGrams      *float64
 	MaterialType          *string
 	DefaultPrintTimeHours *float64
+	PlatePrintTimeHours   *float64
 	BatchSize             *int
 	TargetMarginPercent   *int
 	Components            *[]ComponentInput
@@ -148,24 +150,37 @@ func (uc *UpdateProductUseCase) Execute(ctx context.Context, userID uuid.UUID, i
 		varName = strings.TrimSpace(*input.VariantName)
 	}
 
-	weight := existing.DefaultWeightGrams()
-	if input.DefaultWeightGrams != nil {
-		weight = *input.DefaultWeightGrams
-	}
-
 	mat := existing.MaterialType()
 	if input.MaterialType != nil {
 		mat = strings.TrimSpace(*input.MaterialType)
 	}
 
-	printTime := existing.DefaultPrintTimeHours()
-	if input.DefaultPrintTimeHours != nil {
-		printTime = *input.DefaultPrintTimeHours
-	}
-
 	batch := existing.BatchSize()
 	if input.BatchSize != nil && *input.BatchSize > 0 {
 		batch = *input.BatchSize
+	}
+
+	// =========================================================================
+	// Normalisasi Bobot & Waktu Cetak (Slicer Build Plate vs Unit Per Pcs)
+	// =========================================================================
+	// Arsitektur Data:
+	// - Database selalu menyimpan data dalam satuan per-unit (1 pcs).
+	// - Jika Frontend mengirimkan PlateWeightGrams / PlatePrintTimeHours (angka 1 plate slicer),
+	//   Backend yang bertugas membaginya dengan batch_size agar menjadi nilai per-unit murni.
+	// - Jika tidak dikirim (legacy payload), gunakan DefaultWeightGrams / DefaultPrintTimeHours
+	//   yang diasumsikan sudah berupa nilai per-unit.
+	weight := existing.DefaultWeightGrams()
+	if input.PlateWeightGrams != nil && *input.PlateWeightGrams > 0 {
+		weight = *input.PlateWeightGrams / float64(batch)
+	} else if input.DefaultWeightGrams != nil {
+		weight = *input.DefaultWeightGrams
+	}
+
+	printTime := existing.DefaultPrintTimeHours()
+	if input.PlatePrintTimeHours != nil && *input.PlatePrintTimeHours > 0 {
+		printTime = *input.PlatePrintTimeHours / float64(batch)
+	} else if input.DefaultPrintTimeHours != nil {
+		printTime = *input.DefaultPrintTimeHours
 	}
 
 	margin := existing.TargetMarginPercent()
