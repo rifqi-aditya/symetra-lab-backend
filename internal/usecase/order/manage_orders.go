@@ -46,6 +46,7 @@ func (uc *GetOrderUseCase) ExecuteByOrderNumber(ctx context.Context, userID uuid
 type CreateOrderItemInput struct {
 	ProductID      *uuid.UUID
 	ProductName    string
+	SKU            string
 	Quantity       int
 	SellingPrice   float64
 	HPP            float64
@@ -82,11 +83,11 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, userID uuid.UUID, inp
 
 	for i, item := range input.Items {
 		name := item.ProductName
+		sku := item.SKU
 		price := item.SellingPrice
 		hpp := item.HPP
 		weight := item.WeightGrams
 		printTime := item.PrintTimeHours
-		machineID := item.MachineID
 
 		// If product ID supplied, enrich snapshot from product details if needed
 		if item.ProductID != nil && *item.ProductID != uuid.Nil {
@@ -94,6 +95,9 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, userID uuid.UUID, inp
 			if err == nil && p != nil {
 				if name == "" {
 					name = p.Name()
+				}
+				if sku == "" && p.SKU() != nil {
+					sku = *p.SKU()
 				}
 				if price <= 0 {
 					price = p.BaseSellingPrice()
@@ -115,12 +119,12 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, userID uuid.UUID, inp
 			uuid.Nil,
 			item.ProductID,
 			name,
+			sku,
 			item.Quantity,
 			price,
 			hpp,
 			weight,
 			printTime,
-			machineID,
 			0, 0, 0, 0,
 			time.Now(),
 		)

@@ -125,8 +125,6 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 			thumbURL = it.Product.Parent.ThumbnailURL
 		}
 
-		var machineID *uuid.UUID
-
 		itemSKU := it.SKU
 
 		itemObj := order.ReconstructOrderItemFull(
@@ -140,7 +138,6 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 			it.HPP,
 			it.WeightGrams,
 			it.PrintTimeHours,
-			machineID,
 			it.FilamentCost,
 			it.ComponentCost,
 			it.PackagingCost,
@@ -152,7 +149,6 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 			it.ChannelItemID,
 			it.ChannelModelID,
 			it.MappingStatus,
-			it.SKU,
 			it.CreatedAt,
 		)
 		itemObj.SetThumbnailURL(thumbURL)

@@ -11,8 +11,8 @@ func TestNewOrder_Success(t *testing.T) {
 	userID := uuid.New()
 	items := []OrderItem{
 		ReconstructOrderItem(
-			uuid.New(), uuid.Nil, nil, "Custom Phone Stand",
-			2, 35000, 15000, 30, 1.0, nil, 0, 0, 0, 0, time.Now(),
+			uuid.New(), uuid.Nil, nil, "Custom Phone Stand", "SKU-STAND-01",
+			2, 35000, 15000, 30, 1.0, 0, 0, 0, 0, time.Now(),
 		),
 	}
 
