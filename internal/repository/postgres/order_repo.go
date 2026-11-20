@@ -16,26 +16,18 @@ import (
 )
 
 type orderGORM struct {
-	ID               uuid.UUID       `gorm:"column:id;primaryKey;type:uuid"`
-	UserID           uuid.UUID       `gorm:"column:user_id;type:uuid"`
-	OrderNumber      string          `gorm:"column:order_number"`
-	CustomerName     string          `gorm:"column:customer_name"`
-	CustomerContact  string          `gorm:"column:customer_contact"`
-	Channel          string          `gorm:"column:channel"`
-	GrossAmount      float64         `gorm:"column:gross_amount"`
-	ChannelFee       float64         `gorm:"column:channel_fee"`
-	NetAmount        float64         `gorm:"column:net_amount"`
-	CogsAmount       float64         `gorm:"column:cogs_amount"`
-	NetProfit        float64         `gorm:"column:net_profit"`
-	FundFilament     float64         `gorm:"column:fund_filament"`
-	FundEmergency    float64         `gorm:"column:fund_emergency"`
-	FundComponent    float64         `gorm:"column:fund_component"`
-	FundPackaging    float64         `gorm:"column:fund_packaging"`
-	FundElectricity  float64         `gorm:"column:fund_electricity"`
-	FundMaintenance  float64         `gorm:"column:fund_maintenance"`
-	FundDepreciation float64         `gorm:"column:fund_depreciation"`
-	FundNetProfit    float64         `gorm:"column:fund_net_profit"`
-	Status           string          `gorm:"column:status"`
+	ID                 uuid.UUID                   `gorm:"column:id;primaryKey;type:uuid"`
+	UserID             uuid.UUID                   `gorm:"column:user_id;type:uuid"`
+	OrderNumber        string                      `gorm:"column:order_number"`
+	CustomerName       string                      `gorm:"column:customer_name"`
+	CustomerContact    string                      `gorm:"column:customer_contact"`
+	Channel            string                      `gorm:"column:channel"`
+	GrossAmount        float64                     `gorm:"column:gross_amount"`
+	ChannelFee         float64                     `gorm:"column:channel_fee"`
+	NetAmount          float64                     `gorm:"column:net_amount"`
+	CogsAmount         float64                     `gorm:"column:cogs_amount"`
+	NetProfit          float64                     `gorm:"column:net_profit"`
+	Status             string                      `gorm:"column:status"`
 	Notes              string                      `gorm:"column:notes"`
 	PaymentStatus      string                      `gorm:"column:payment_status"`
 	StartedAt          *time.Time                  `gorm:"column:started_at"`
@@ -193,35 +185,25 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 	totHpp := cogs
 	totProf := profit
 
-	fundFilament := g.FundFilament
-	fundEmergency := g.FundEmergency
-	fundComponent := g.FundComponent
-	fundPackaging := g.FundPackaging
-	fundElectricity := g.FundElectricity
-	fundMaintenance := g.FundMaintenance
-	fundDepreciation := g.FundDepreciation
-	fundNetProfit := g.FundNetProfit
-
-	if len(g.Allocations) > 0 {
-		for _, a := range g.Allocations {
-			switch a.AccountCode {
-			case "FILAMENT":
-				fundFilament = a.Amount
-			case "EMERGENCY":
-				fundEmergency = a.Amount
-			case "COMPONENT":
-				fundComponent = a.Amount
-			case "PACKAGING":
-				fundPackaging = a.Amount
-			case "ELECTRICITY":
-				fundElectricity = a.Amount
-			case "MAINTENANCE":
-				fundMaintenance = a.Amount
-			case "DEPRECIATION":
-				fundDepreciation = a.Amount
-			case "NET_PROFIT":
-				fundNetProfit = a.Amount
-			}
+	var fundFilament, fundEmergency, fundComponent, fundPackaging, fundElectricity, fundMaintenance, fundDepreciation, fundNetProfit float64
+	for _, a := range g.Allocations {
+		switch a.AccountCode {
+		case "FILAMENT":
+			fundFilament = a.Amount
+		case "EMERGENCY":
+			fundEmergency = a.Amount
+		case "COMPONENT":
+			fundComponent = a.Amount
+		case "PACKAGING":
+			fundPackaging = a.Amount
+		case "ELECTRICITY":
+			fundElectricity = a.Amount
+		case "MAINTENANCE":
+			fundMaintenance = a.Amount
+		case "DEPRECIATION":
+			fundDepreciation = a.Amount
+		case "NET_PROFIT":
+			fundNetProfit = a.Amount
 		}
 	}
 
@@ -382,14 +364,6 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 			NetAmount:        o.NetAmount(),
 			CogsAmount:       o.CogsAmount(),
 			NetProfit:        o.NetProfit(),
-			FundFilament:     o.FundFilament(),
-			FundEmergency:    o.FundEmergency(),
-			FundComponent:    o.FundComponent(),
-			FundPackaging:    o.FundPackaging(),
-			FundElectricity:  o.FundElectricity(),
-			FundMaintenance:  o.FundMaintenance(),
-			FundDepreciation: o.FundDepreciation(),
-			FundNetProfit:    o.FundNetProfit(),
 			Status:           o.Status(),
 			Notes:            o.Notes(),
 			PaymentStatus:    o.PaymentStatus(),
@@ -532,14 +506,6 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 		TotalNetRevenue     float64 `gorm:"column:total_net_revenue"`
 		TotalCOGS           float64 `gorm:"column:total_cogs"`
 		TotalNetProfit      float64 `gorm:"column:total_net_profit"`
-		FundFilament        float64 `gorm:"column:fund_filament"`
-		FundEmergency       float64 `gorm:"column:fund_emergency"`
-		FundComponent       float64 `gorm:"column:fund_component"`
-		FundPackaging       float64 `gorm:"column:fund_packaging"`
-		FundElectricity     float64 `gorm:"column:fund_electricity"`
-		FundMaintenance     float64 `gorm:"column:fund_maintenance"`
-		FundDepreciation    float64 `gorm:"column:fund_depreciation"`
-		FundNetProfit       float64 `gorm:"column:fund_net_profit"`
 		UnmappedItemsCount  int64   `gorm:"column:unmapped_items_count"`
 		PendingOrdersCount  int64   `gorm:"column:pending_orders_count"`
 		PendingGrossSales   float64 `gorm:"column:pending_gross_sales"`
@@ -555,14 +521,6 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 			COALESCE(SUM(net_amount), 0) AS total_net_revenue,
 			COALESCE(SUM(cogs_amount), 0) AS total_cogs,
 			COALESCE(SUM(net_profit), 0) AS total_net_profit,
-			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_filament ELSE 0 END), 0) AS fund_filament,
-			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_emergency ELSE 0 END), 0) AS fund_emergency,
-			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_component ELSE 0 END), 0) AS fund_component,
-			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_packaging ELSE 0 END), 0) AS fund_packaging,
-			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_electricity ELSE 0 END), 0) AS fund_electricity,
-			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_maintenance ELSE 0 END), 0) AS fund_maintenance,
-			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_depreciation ELSE 0 END), 0) AS fund_depreciation,
-			COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN fund_net_profit ELSE 0 END), 0) AS fund_net_profit,
 			COALESCE((
 				SELECT COUNT(*) 
 				FROM order_items oi
@@ -715,14 +673,53 @@ func (r *OrderRepository) GetOrderAllocationSummary(
 			}
 		}
 
-		allocFilament = agg.FundFilament
-		allocEmergency = agg.FundEmergency
-		allocComponent = agg.FundComponent
-		allocPackaging = agg.FundPackaging
-		allocElectricity = agg.FundElectricity
-		allocMaintenance = agg.FundMaintenance
-		allocDepreciation = agg.FundDepreciation
-		allocNetProfit = agg.FundNetProfit
+		type allocRow struct {
+			AccountCode string  `gorm:"column:account_code"`
+			Total       float64 `gorm:"column:total"`
+		}
+		var allocRows []allocRow
+		allocQuery := `
+			SELECT 
+				oa.account_code, 
+				COALESCE(SUM(oa.amount), 0) AS total
+			FROM order_allocations oa
+			JOIN orders o ON o.id = oa.order_id
+			WHERE o.user_id = ? 
+			  AND o.status NOT IN ('CANCELLED', 'UNPAID')
+			  AND o.payment_status = 'PAID'
+			  AND (? = 'ALL' OR o.channel = ?)
+			  AND (?::timestamptz IS NULL OR o.created_at >= ?)
+			  AND (?::timestamptz IS NULL OR o.created_at <= ?)
+			GROUP BY oa.account_code
+		`
+		_ = r.db.WithContext(ctx).Raw(
+			allocQuery,
+			userID,
+			ch, ch,
+			dateFrom, dateFrom,
+			dateTo, dateTo,
+		).Scan(&allocRows).Error
+
+		for _, ar := range allocRows {
+			switch ar.AccountCode {
+			case "FILAMENT":
+				allocFilament = ar.Total
+			case "EMERGENCY":
+				allocEmergency = ar.Total
+			case "COMPONENT":
+				allocComponent = ar.Total
+			case "PACKAGING":
+				allocPackaging = ar.Total
+			case "ELECTRICITY":
+				allocElectricity = ar.Total
+			case "MAINTENANCE":
+				allocMaintenance = ar.Total
+			case "DEPRECIATION":
+				allocDepreciation = ar.Total
+			case "NET_PROFIT":
+				allocNetProfit = ar.Total
+			}
+		}
 
 		fundFilament = allocFilament - spentFilament
 		fundEmergency = allocEmergency - spentEmergency

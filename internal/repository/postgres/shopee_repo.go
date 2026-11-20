@@ -103,19 +103,12 @@ type shopeeUnifiedOrderGORM struct {
 	NetAmount        float64                     `gorm:"column:net_amount"`
 	COGSAmount       float64                     `gorm:"column:cogs_amount"`
 	NetProfit        float64                     `gorm:"column:net_profit"`
-	FundFilament     float64                     `gorm:"column:fund_filament"`
-	FundEmergency    float64                     `gorm:"column:fund_emergency"`
-	FundComponent    float64                     `gorm:"column:fund_component"`
-	FundPackaging    float64                     `gorm:"column:fund_packaging"`
-	FundElectricity  float64                     `gorm:"column:fund_electricity"`
-	FundMaintenance  float64                     `gorm:"column:fund_maintenance"`
-	FundDepreciation float64                     `gorm:"column:fund_depreciation"`
-	FundNetProfit    float64                     `gorm:"column:fund_net_profit"`
 	PaidAt           *time.Time                  `gorm:"column:paid_at"`
 	CreatedAt        time.Time                   `gorm:"column:created_at"`
 	UpdatedAt        time.Time                   `gorm:"column:updated_at"`
 	Marketplace      *shopeeOrderMarketplaceGORM `gorm:"foreignKey:OrderID;references:ID"`
 	Items            []shopeeUnifiedItemGORM     `gorm:"foreignKey:OrderID;references:ID"`
+	Allocations      []orderAllocationGORM       `gorm:"foreignKey:OrderID;references:ID"`
 }
 
 func (shopeeUnifiedOrderGORM) TableName() string {
@@ -188,6 +181,26 @@ func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.Shopee
 	var escrow *shopee.ShopeeOrderEscrow
 	if o.Marketplace != nil {
 		m := o.Marketplace
+		var fundFilament, fundComponent, fundPackaging, fundElectricity, fundMaintenance, fundDepreciation, fundNetProfit float64
+		for _, a := range o.Allocations {
+			switch a.AccountCode {
+			case "FILAMENT":
+				fundFilament = a.Amount
+			case "COMPONENT":
+				fundComponent = a.Amount
+			case "PACKAGING":
+				fundPackaging = a.Amount
+			case "ELECTRICITY":
+				fundElectricity = a.Amount
+			case "MAINTENANCE":
+				fundMaintenance = a.Amount
+			case "DEPRECIATION":
+				fundDepreciation = a.Amount
+			case "NET_PROFIT":
+				fundNetProfit = a.Amount
+			}
+		}
+
 		escrow = shopee.ReconstructOrderEscrow(
 			o.OrderNumber,
 			o.NetAmount,
@@ -203,13 +216,13 @@ func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.Shopee
 			m.SellerVoucherDiscount,
 			o.ChannelFee,
 			o.COGSAmount,
-			o.FundFilament,
-			o.FundComponent,
-			o.FundPackaging,
-			o.FundElectricity,
-			o.FundMaintenance,
-			o.FundDepreciation,
-			o.FundNetProfit,
+			fundFilament,
+			fundComponent,
+			fundPackaging,
+			fundElectricity,
+			fundMaintenance,
+			fundDepreciation,
+			fundNetProfit,
 			m.FinancialStatus,
 			m.CreatedAt,
 			m.UpdatedAt,
@@ -329,6 +342,7 @@ func (r *ShopeeRepository) FindOrder(ctx context.Context, orderSN string) (*shop
 	err := r.db.WithContext(ctx).
 		Preload("Items").
 		Preload("Marketplace").
+		Preload("Allocations").
 		Where("order_number = ? AND channel = 'SHOPEE'", orderSN).
 		First(&o).Error
 	if err != nil {
@@ -344,6 +358,7 @@ func (r *ShopeeRepository) FindOrders(ctx context.Context, status, carrier, sear
 	query := r.db.WithContext(ctx).Model(&shopeeUnifiedOrderGORM{}).
 		Preload("Items").
 		Preload("Marketplace").
+		Preload("Allocations").
 		Where("channel = 'SHOPEE'")
 
 	if status != "" {
@@ -561,19 +576,22 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 	if err := tx.Where("id = ?", orderID).First(&ord).Error; err == nil {
 		if ord.PaymentStatus == "REFUNDED" {
 			_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
-				"net_amount":        0,
-				"fund_filament":     0,
-				"fund_emergency":    0,
-				"fund_component":    0,
-				"fund_packaging":    0,
-				"fund_electricity":  0,
-				"fund_maintenance":  0,
-				"fund_depreciation": 0,
-				"cogs_amount":       sums.TotalCOGS,
-				"net_profit":        -sums.TotalCOGS,
-				"fund_net_profit":   -sums.TotalCOGS,
-				"updated_at":        time.Now(),
+				"net_amount":  0,
+				"cogs_amount": sums.TotalCOGS,
+				"net_profit":  -sums.TotalCOGS,
+				"updated_at":  time.Now(),
 			}).Error
+			allocMap := map[string]float64{
+				"FILAMENT":     0,
+				"EMERGENCY":    0,
+				"COMPONENT":    0,
+				"PACKAGING":    0,
+				"ELECTRICITY":  0,
+				"MAINTENANCE":  0,
+				"DEPRECIATION": 0,
+				"NET_PROFIT":   -sums.TotalCOGS,
+			}
+			_ = upsertOrderAllocations(tx, orderID, ord.CreatedAt, allocMap)
 			return
 		}
 
@@ -603,19 +621,23 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 		})
 
 		_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
-			"net_amount":        goldenNet,
-			"fund_filament":     alloc.FundFilament,
-			"fund_emergency":    alloc.FundEmergency,
-			"fund_component":    alloc.FundComponent,
-			"fund_packaging":    alloc.FundPackaging,
-			"fund_electricity":  alloc.FundElectricity,
-			"fund_maintenance":  alloc.FundMaintenance,
-			"fund_depreciation": alloc.FundDepreciation,
-			"cogs_amount":       alloc.COGSAmount,
-			"net_profit":        alloc.NetProfit,
-			"fund_net_profit":   alloc.FundNetProfit,
-			"updated_at":        time.Now(),
+			"net_amount":  goldenNet,
+			"cogs_amount": alloc.COGSAmount,
+			"net_profit":  alloc.NetProfit,
+			"updated_at":  time.Now(),
 		}).Error
+
+		allocMap := map[string]float64{
+			"FILAMENT":     alloc.FundFilament,
+			"EMERGENCY":    alloc.FundEmergency,
+			"COMPONENT":    alloc.FundComponent,
+			"PACKAGING":    alloc.FundPackaging,
+			"ELECTRICITY":  alloc.FundElectricity,
+			"MAINTENANCE":  alloc.FundMaintenance,
+			"DEPRECIATION": alloc.FundDepreciation,
+			"NET_PROFIT":   alloc.FundNetProfit,
+		}
+		_ = upsertOrderAllocations(tx, orderID, ord.CreatedAt, allocMap)
 	}
 }
 
@@ -936,34 +958,26 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 
 		// 2. Simpan induk tabel orders TERLEBIH DAHULU agar Foreign Key tidak error
 		orderRecord := shopeeUnifiedOrderGORM{
-			ID:               orderID,
-			UserID:           userID,
-			OrderNumber:      o.OrderSN(),
-			CustomerName:     o.BuyerUsername(),
-			Status:           o.OrderStatus(),
-			Channel:          "SHOPEE",
-			PaymentStatus:    paymentStatus,
-			GrossAmount:      grossAmount,
-			ChannelFee:       channelFee,
-			NetAmount:        alloc.NetAmount,
-			COGSAmount:       alloc.COGSAmount,
-			NetProfit:        alloc.NetProfit,
-			FundFilament:     alloc.FundFilament,
-			FundEmergency:    alloc.FundEmergency,
-			FundComponent:    alloc.FundComponent,
-			FundPackaging:    alloc.FundPackaging,
-			FundElectricity:  alloc.FundElectricity,
-			FundMaintenance:  alloc.FundMaintenance,
-			FundDepreciation: alloc.FundDepreciation,
-			FundNetProfit:    alloc.FundNetProfit,
-			PaidAt:           paidAt,
-			CreatedAt:        orderCreatedAt,
-			UpdatedAt:        orderUpdatedAt,
+			ID:            orderID,
+			UserID:        userID,
+			OrderNumber:   o.OrderSN(),
+			CustomerName:  o.BuyerUsername(),
+			Status:        o.OrderStatus(),
+			Channel:       "SHOPEE",
+			PaymentStatus: paymentStatus,
+			GrossAmount:   grossAmount,
+			ChannelFee:    channelFee,
+			NetAmount:     alloc.NetAmount,
+			COGSAmount:    alloc.COGSAmount,
+			NetProfit:     alloc.NetProfit,
+			PaidAt:        paidAt,
+			CreatedAt:     orderCreatedAt,
+			UpdatedAt:     orderUpdatedAt,
 		}
 
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"customer_name", "status", "payment_status", "gross_amount", "channel_fee", "net_amount", "cogs_amount", "net_profit", "fund_filament", "fund_emergency", "fund_component", "fund_packaging", "fund_electricity", "fund_maintenance", "fund_depreciation", "fund_net_profit", "paid_at", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"customer_name", "status", "payment_status", "gross_amount", "channel_fee", "net_amount", "cogs_amount", "net_profit", "paid_at", "updated_at"}),
 		}).Create(&orderRecord).Error; err != nil {
 			return err
 		}
@@ -1172,16 +1186,17 @@ func (r *ShopeeRepository) GetCashflowSummary(ctx context.Context) (*shopee.Cash
 	var fundAgg FundAgg
 	fundSQL := `
 		SELECT
-			COALESCE(SUM(fund_filament), 0) AS fund_filament,
-			COALESCE(SUM(fund_emergency), 0) AS fund_emergency,
-			COALESCE(SUM(fund_component), 0) AS fund_component,
-			COALESCE(SUM(fund_packaging), 0) AS fund_packaging,
-			COALESCE(SUM(fund_electricity), 0) AS fund_electricity,
-			COALESCE(SUM(fund_maintenance), 0) AS fund_maintenance,
-			COALESCE(SUM(fund_depreciation), 0) AS fund_depreciation,
-			COALESCE(SUM(fund_net_profit), 0) AS fund_net_profit
-		FROM orders
-		WHERE payment_status = 'PAID' AND status != 'CANCELLED'
+			COALESCE(SUM(CASE WHEN oa.account_code = 'FILAMENT' THEN oa.amount ELSE 0 END), 0) AS fund_filament,
+			COALESCE(SUM(CASE WHEN oa.account_code = 'EMERGENCY' THEN oa.amount ELSE 0 END), 0) AS fund_emergency,
+			COALESCE(SUM(CASE WHEN oa.account_code = 'COMPONENT' THEN oa.amount ELSE 0 END), 0) AS fund_component,
+			COALESCE(SUM(CASE WHEN oa.account_code = 'PACKAGING' THEN oa.amount ELSE 0 END), 0) AS fund_packaging,
+			COALESCE(SUM(CASE WHEN oa.account_code = 'ELECTRICITY' THEN oa.amount ELSE 0 END), 0) AS fund_electricity,
+			COALESCE(SUM(CASE WHEN oa.account_code = 'MAINTENANCE' THEN oa.amount ELSE 0 END), 0) AS fund_maintenance,
+			COALESCE(SUM(CASE WHEN oa.account_code = 'DEPRECIATION' THEN oa.amount ELSE 0 END), 0) AS fund_depreciation,
+			COALESCE(SUM(CASE WHEN oa.account_code = 'NET_PROFIT' THEN oa.amount ELSE 0 END), 0) AS fund_net_profit
+		FROM order_allocations oa
+		JOIN orders o ON o.id = oa.order_id
+		WHERE o.payment_status = 'PAID' AND o.status != 'CANCELLED'
 	`
 	if err := r.db.WithContext(ctx).Raw(fundSQL).Scan(&fundAgg).Error; err != nil {
 		return nil, err
