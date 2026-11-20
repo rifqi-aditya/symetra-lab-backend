@@ -435,8 +435,6 @@ func (item *OrderItem) ThumbnailURL() *string       { return item.thumbnailURL }
 func (item *OrderItem) SetThumbnailURL(url *string) { item.thumbnailURL = url }
 func (item *OrderItem) SetProductName(name string)  { item.productName = name }
 func (item *OrderItem) SKU() string                 { return item.sku }
-func (item *OrderItem) ItemSKU() string             { return item.sku } // Alias for backward compatibility
-func (item *OrderItem) MatchedSKU() string          { return item.sku } // Alias for backward compatibility
 func (item *OrderItem) Quantity() int               { return item.quantity }
 func (item *OrderItem) SellingPrice() float64       { return item.sellingPrice }
 func (item *OrderItem) HPP() float64                { return item.hpp }
@@ -446,9 +444,7 @@ func (item *OrderItem) FilamentCost() float64       { return item.filamentCost }
 func (item *OrderItem) ComponentCost() float64      { return item.componentCost }
 func (item *OrderItem) HardwareCost() float64       { return item.componentCost }
 func (item *OrderItem) PackagingCost() float64      { return item.packagingCost }
-func (item *OrderItem) PackingFee() float64         { return item.packagingCost } // Alias for backward compatibility
 func (item *OrderItem) EnergyCost() float64         { return item.energyCost }
-func (item *OrderItem) ElectricityCost() float64    { return item.energyCost } // Alias for backward compatibility
 func (item *OrderItem) MaintenanceCost() float64    { return item.maintenanceCost }
 func (item *OrderItem) DepreciationCost() float64   { return item.depreciationCost }
 func (item *OrderItem) MachineCost() float64 {

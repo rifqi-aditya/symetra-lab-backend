@@ -44,7 +44,6 @@ type OrderItemResponse struct {
 	ProductName      string     `json:"product_name"`
 	ThumbnailURL     *string    `json:"thumbnail_url,omitempty"`
 	SKU              string     `json:"sku"`
-	ItemSKU          string     `json:"item_sku,omitempty"`
 	Quantity         int        `json:"quantity"`
 	SellingPrice     float64    `json:"selling_price"`
 	HPP              float64    `json:"hpp"`
@@ -54,18 +53,15 @@ type OrderItemResponse struct {
 	ComponentCost    float64    `json:"component_cost"`
 	HardwareCost     float64    `json:"hardware_cost"`
 	PackagingCost    float64    `json:"packaging_cost"`
-	ElectricityCost  float64    `json:"electricity_cost"`
+	EnergyCost       float64    `json:"energy_cost"`
 	MaintenanceCost  float64    `json:"maintenance_cost"`
 	DepreciationCost float64    `json:"depreciation_cost"`
 	MachineCost      float64    `json:"machine_cost"`
 	TotalCogs        float64    `json:"total_cogs"`
 	NetProfit        float64    `json:"net_profit"`
-	EnergyCost       float64    `json:"energy_cost"`
-	PackingFee       float64    `json:"packing_fee"`
 	ChannelItemID    int64      `json:"channel_item_id,omitempty"`
 	ChannelModelID   int64      `json:"channel_model_id,omitempty"`
 	MappingStatus    string     `json:"mapping_status,omitempty"`
-	MatchedSKU       string     `json:"matched_sku,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 }
 
@@ -175,7 +171,6 @@ func ToOrderItemResponse(it *order.OrderItem) OrderItemResponse {
 		ProductName:      it.ProductName(),
 		ThumbnailURL:     it.ThumbnailURL(),
 		SKU:              it.SKU(),
-		ItemSKU:          it.SKU(),
 		Quantity:         it.Quantity(),
 		SellingPrice:     it.SellingPrice(),
 		HPP:              it.HPP(),
@@ -185,18 +180,15 @@ func ToOrderItemResponse(it *order.OrderItem) OrderItemResponse {
 		ComponentCost:    it.ComponentCost(),
 		HardwareCost:     it.HardwareCost(),
 		PackagingCost:    it.PackagingCost(),
-		ElectricityCost:  it.ElectricityCost(),
+		EnergyCost:       it.EnergyCost(),
 		MaintenanceCost:  it.MaintenanceCost(),
 		DepreciationCost: it.DepreciationCost(),
 		MachineCost:      it.MachineCost(),
 		TotalCogs:        it.TotalCogs(),
 		NetProfit:        it.NetProfit(),
-		EnergyCost:       it.EnergyCost(),
-		PackingFee:       it.PackingFee(),
 		ChannelItemID:    it.ChannelItemID(),
 		ChannelModelID:   it.ChannelModelID(),
 		MappingStatus:    it.MappingStatus(),
-		MatchedSKU:       it.SKU(),
 		CreatedAt:        it.CreatedAt(),
 	}
 }

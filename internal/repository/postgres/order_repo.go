@@ -373,7 +373,7 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 		}
 
 		for _, it := range o.Items() {
-			itemSKU := it.ItemSKU()
+			itemSKU := it.SKU()
 			itemGORM := orderItemGORM{
 				ID:               it.ID(),
 				OrderID:          o.ID(),
