@@ -147,12 +147,10 @@ func (r *DashboardRepository) GetOverview(ctx context.Context) (*dashboard.Dashb
 		FROM orders o
 		LEFT JOIN order_marketplace_details m ON m.order_id = o.id
 		WHERE o.status NOT IN ('SHIPPED', 'TO_CONFIRM_RECEIVE', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'UNPAID')
-		  AND (
-		    (m.ship_by_date_time IS NOT NULL AND m.ship_by_date_time <= ?)
-		    OR (m.ship_by_date IS NOT NULL AND to_timestamp(m.ship_by_date) <= ?)
-		  );
+		  AND m.ship_by_date_time IS NOT NULL 
+		  AND m.ship_by_date_time <= ?;
 	`
-	if err := r.db.WithContext(ctx).Raw(urgentShippingQuery, endOfTodayWIB, endOfTodayWIB).Scan(&urgentShippingCount).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(urgentShippingQuery, endOfTodayWIB).Scan(&urgentShippingCount).Error; err != nil {
 		return nil, fmt.Errorf("failed to query urgent shipping count: %w", err)
 	}
 	overview.UrgentShippingOrdersCount = int(urgentShippingCount)
