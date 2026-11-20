@@ -11,12 +11,12 @@ import (
 type CreateOrderItemRequest struct {
 	ProductID      *string  `json:"product_id"`
 	ProductName    string   `json:"product_name"`
+	SKU            string   `json:"sku"`
 	Quantity       int      `json:"quantity"`
 	SellingPrice   float64  `json:"selling_price"`
 	HPP            *float64 `json:"hpp"`
 	WeightGrams    *float64 `json:"weight_grams"`
 	PrintTimeHours *float64 `json:"print_time_hours"`
-	MachineID      *string  `json:"machine_id"`
 }
 
 type CreateOrderRequest struct {
@@ -43,13 +43,13 @@ type OrderItemResponse struct {
 	ProductID        *uuid.UUID `json:"product_id,omitempty"`
 	ProductName      string     `json:"product_name"`
 	ThumbnailURL     *string    `json:"thumbnail_url,omitempty"`
+	SKU              string     `json:"sku"`
 	ItemSKU          string     `json:"item_sku,omitempty"`
 	Quantity         int        `json:"quantity"`
 	SellingPrice     float64    `json:"selling_price"`
 	HPP              float64    `json:"hpp"`
 	WeightGrams      float64    `json:"weight_grams"`
 	PrintTimeHours   float64    `json:"print_time_hours"`
-	MachineID        *uuid.UUID `json:"machine_id,omitempty"`
 	FilamentCost     float64    `json:"filament_cost"`
 	ComponentCost    float64    `json:"component_cost"`
 	HardwareCost     float64    `json:"hardware_cost"`
@@ -174,13 +174,13 @@ func ToOrderItemResponse(it *order.OrderItem) OrderItemResponse {
 		ProductID:        it.ProductID(),
 		ProductName:      it.ProductName(),
 		ThumbnailURL:     it.ThumbnailURL(),
+		SKU:              it.SKU(),
 		ItemSKU:          it.SKU(),
 		Quantity:         it.Quantity(),
 		SellingPrice:     it.SellingPrice(),
 		HPP:              it.HPP(),
 		WeightGrams:      it.WeightGrams(),
 		PrintTimeHours:   it.PrintTimeHours(),
-		MachineID:        nil,
 		FilamentCost:     it.FilamentCost(),
 		ComponentCost:    it.ComponentCost(),
 		HardwareCost:     it.HardwareCost(),

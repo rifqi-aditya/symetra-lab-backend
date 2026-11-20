@@ -101,13 +101,6 @@ func (h *OrderHandler) Create(c echo.Context) error {
 			}
 		}
 
-		var mID *uuid.UUID
-		if item.MachineID != nil && *item.MachineID != "" {
-			if parsed, err := uuid.Parse(*item.MachineID); err == nil {
-				mID = &parsed
-			}
-		}
-
 		qty := item.Quantity
 		if qty <= 0 {
 			qty = 1
@@ -131,12 +124,12 @@ func (h *OrderHandler) Create(c echo.Context) error {
 		itemsInput[i] = orderUC.CreateOrderItemInput{
 			ProductID:      pID,
 			ProductName:    item.ProductName,
+			SKU:            item.SKU,
 			Quantity:       qty,
 			SellingPrice:   item.SellingPrice,
 			HPP:            hpp,
 			WeightGrams:    weight,
 			PrintTimeHours: printTime,
-			MachineID:      mID,
 		}
 	}
 
