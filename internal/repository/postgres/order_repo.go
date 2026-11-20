@@ -79,24 +79,22 @@ type orderItemGORM struct {
 	Product          *productGORM `gorm:"foreignKey:ProductID;references:ID"`
 	ProductName      string       `gorm:"column:product_name"`
 	SKU              string       `gorm:"column:sku"`
-	ItemSKU          string     `gorm:"column:item_sku"`
-	Quantity         int        `gorm:"column:quantity"`
-	SellingPrice     float64    `gorm:"column:selling_price"`
-	HPP              float64    `gorm:"column:hpp"`
-	WeightGrams      float64    `gorm:"column:weight_grams"`
-	PrintTimeHours   float64    `gorm:"column:print_time_hours"`
-	FilamentCost     float64    `gorm:"column:filament_cost"`
-	ComponentCost    float64    `gorm:"column:component_cost"`
-	PackagingCost    float64    `gorm:"column:packaging_cost"`
-	EnergyCost       float64    `gorm:"column:energy_cost"`
-	MaintenanceCost  float64    `gorm:"column:maintenance_cost"`
-	DepreciationCost float64    `gorm:"column:depreciation_cost"`
-	ChannelItemID    int64      `gorm:"column:channel_item_id"`
-	ChannelModelID   int64      `gorm:"column:channel_model_id"`
-	MappingStatus    string     `gorm:"column:mapping_status"`
-	MatchedSKU       string     `gorm:"column:matched_sku"`
-	CreatedAt        time.Time  `gorm:"column:created_at"`
-	UpdatedAt        time.Time  `gorm:"column:updated_at"`
+	Quantity         int          `gorm:"column:quantity"`
+	SellingPrice     float64      `gorm:"column:selling_price"`
+	HPP              float64      `gorm:"column:hpp"`
+	WeightGrams      float64      `gorm:"column:weight_grams"`
+	PrintTimeHours   float64      `gorm:"column:print_time_hours"`
+	FilamentCost     float64      `gorm:"column:filament_cost"`
+	ComponentCost    float64      `gorm:"column:component_cost"`
+	PackagingCost    float64      `gorm:"column:packaging_cost"`
+	EnergyCost       float64      `gorm:"column:energy_cost"`
+	MaintenanceCost  float64      `gorm:"column:maintenance_cost"`
+	DepreciationCost float64      `gorm:"column:depreciation_cost"`
+	ChannelItemID    int64        `gorm:"column:channel_item_id"`
+	ChannelModelID   int64        `gorm:"column:channel_model_id"`
+	MappingStatus    string       `gorm:"column:mapping_status"`
+	CreatedAt        time.Time    `gorm:"column:created_at"`
+	UpdatedAt        time.Time    `gorm:"column:updated_at"`
 }
 
 func (orderItemGORM) TableName() string {
@@ -130,9 +128,6 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 		var machineID *uuid.UUID
 
 		itemSKU := it.SKU
-		if itemSKU == "" {
-			itemSKU = it.ItemSKU
-		}
 
 		itemObj := order.ReconstructOrderItemFull(
 			it.ID,
@@ -157,7 +152,7 @@ func mapOrderGORMToDomain(g *orderGORM) *order.Order {
 			it.ChannelItemID,
 			it.ChannelModelID,
 			it.MappingStatus,
-			it.MatchedSKU,
+			it.SKU,
 			it.CreatedAt,
 		)
 		itemObj.SetThumbnailURL(thumbURL)
@@ -389,7 +384,6 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 				ProductID:        it.ProductID(),
 				ProductName:      it.ProductName(),
 				SKU:              itemSKU,
-				ItemSKU:          itemSKU,
 				Quantity:         it.Quantity(),
 				SellingPrice:     it.SellingPrice(),
 				HPP:              it.HPP(),
@@ -404,7 +398,6 @@ func (r *OrderRepository) Create(ctx context.Context, o *order.Order) error {
 				ChannelItemID:    it.ChannelItemID(),
 				ChannelModelID:   it.ChannelModelID(),
 				MappingStatus:    it.MappingStatus(),
-				MatchedSKU:       it.MatchedSKU(),
 				CreatedAt:        it.CreatedAt(),
 			}
 			if err := tx.Create(&itemGORM).Error; err != nil {

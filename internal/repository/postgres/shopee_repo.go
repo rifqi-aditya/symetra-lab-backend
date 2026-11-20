@@ -65,8 +65,6 @@ type shopeeUnifiedItemGORM struct {
 	ChannelModelID   uint64     `gorm:"column:channel_model_id"`
 	ProductName      string     `gorm:"column:product_name"`
 	SKU              string     `gorm:"column:sku"`
-	ItemSKU          string     `gorm:"column:item_sku"`
-	MatchedSKU       string     `gorm:"column:matched_sku"`
 	MappingStatus    string     `gorm:"column:mapping_status"`
 	Quantity         int        `gorm:"column:quantity"`
 	SellingPrice     float64    `gorm:"column:selling_price"`
@@ -152,15 +150,15 @@ func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.Shopee
 			o.OrderNumber,
 			it.ChannelItemID,
 			it.ProductName,
-			it.ItemSKU,
+			it.SKU,
 			it.ChannelModelID,
 			"",
-			it.ItemSKU,
+			it.SKU,
 			it.Quantity,
 			it.SellingPrice,
 			it.SellingPrice,
 			it.ProductID,
-			it.MatchedSKU,
+			it.SKU,
 			it.MappingStatus,
 			it.FilamentCost,
 			it.ComponentCost,
@@ -770,7 +768,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 
 			if productID == nil && existingItem.ProductID != nil {
 				productID = existingItem.ProductID
-				matchedSKU = existingItem.MatchedSKU
+				matchedSKU = existingItem.SKU
 				mappingStatus = existingItem.MappingStatus
 				filCost = existingItem.FilamentCost
 				compCost = existingItem.ComponentCost
@@ -881,8 +879,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				ChannelModelID:   item.ModelID(),
 				ProductName:      prodTitle,
 				SKU:              skuToUse,
-				ItemSKU:          itemSKU,
-				MatchedSKU:       matchedSKU,
 				MappingStatus:    mappingStatus,
 				Quantity:         item.Quantity(),
 				SellingPrice:     item.DiscountedPrice(),
@@ -1021,7 +1017,7 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		for _, itemG := range itemsToInsert {
 			if err := tx.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "id"}},
-				DoUpdates: clause.AssignmentColumns([]string{"product_id", "sku", "matched_sku", "mapping_status", "selling_price", "hpp", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "updated_at"}),
+				DoUpdates: clause.AssignmentColumns([]string{"product_id", "sku", "mapping_status", "selling_price", "hpp", "filament_cost", "component_cost", "packaging_cost", "energy_cost", "maintenance_cost", "depreciation_cost", "updated_at"}),
 			}).Create(&itemG).Error; err != nil {
 				return err
 			}
@@ -1103,7 +1099,7 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 			updates := map[string]interface{}{
 				"product_id":        productID,
 				"product_name":      prodName,
-				"matched_sku":       matchedSKU,
+				"sku":               matchedSKU,
 				"mapping_status":    "MATCHED",
 				"filament_cost":     filCost,
 				"component_cost":    compCost,
@@ -1120,9 +1116,6 @@ func (r *ShopeeRepository) LinkSKU(ctx context.Context, itemID, modelID uint64, 
 			}
 			if prod.DefaultPrintTimeHours > 0 {
 				updates["print_time_hours"] = prod.DefaultPrintTimeHours * float64(it.Quantity)
-			}
-			if it.ItemSKU == "" && matchedSKU != "" {
-				updates["item_sku"] = matchedSKU
 			}
 
 			if err := tx.Model(&shopeeUnifiedItemGORM{}).Where("id = ?", it.ID).Updates(updates).Error; err != nil {
