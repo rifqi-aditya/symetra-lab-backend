@@ -56,8 +56,8 @@ func TestConvertToStandardOrder(t *testing.T) {
 	if ord.Channel != "TOKOPEDIA" {
 		t.Errorf("expected TOKOPEDIA channel, got %s", ord.Channel)
 	}
-	if ord.OrderStatus != "TO_SHIP" {
-		t.Errorf("expected TO_SHIP status, got %s", ord.OrderStatus)
+	if ord.OrderStatus != "PROCESSED" {
+		t.Errorf("expected PROCESSED status, got %s", ord.OrderStatus)
 	}
 	if ord.BuyerUsername != "Budi Santoso" {
 		t.Errorf("expected Budi Santoso, got %s", ord.BuyerUsername)

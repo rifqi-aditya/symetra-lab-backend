@@ -85,16 +85,17 @@ type StandardMarketplaceOrder struct {
 	Financials        StandardMarketplaceFinancials
 }
 
-// NormalizeStatus translates channel-specific order status strings into a canonical internal status.
+// NormalizeMarketplaceStatus translates channel-specific order status strings into the 4 canonical internal statuses:
+// PENDING, PROCESSED, SHIPPED, COMPLETED (or CANCELLED).
 func NormalizeMarketplaceStatus(channel, rawStatus string) string {
 	raw := strings.ToUpper(strings.TrimSpace(rawStatus))
 	switch strings.ToUpper(channel) {
 	case ChannelShopee:
 		switch raw {
 		case "UNPAID":
-			return "UNPAID"
+			return "PENDING"
 		case "READY_TO_SHIP", "PROCESSED":
-			return "TO_SHIP"
+			return "PROCESSED"
 		case "SHIPPED":
 			return "SHIPPED"
 		case "COMPLETED", "TO_CONFIRM_RECEIVE":
@@ -110,9 +111,9 @@ func NormalizeMarketplaceStatus(channel, rawStatus string) string {
 		// 114: PARTIALLY_SHIPPING, 121: IN_TRANSIT, 122: DELIVERED, 130: COMPLETED, 140: CANCELLED
 		switch raw {
 		case "100", "UNPAID":
-			return "UNPAID"
+			return "PENDING"
 		case "111", "112", "AWAITING_SHIPMENT", "AWAITING_COLLECTION":
-			return "TO_SHIP"
+			return "PROCESSED"
 		case "114", "121", "PARTIALLY_SHIPPING", "IN_TRANSIT":
 			return "SHIPPED"
 		case "122", "130", "DELIVERED", "COMPLETED":

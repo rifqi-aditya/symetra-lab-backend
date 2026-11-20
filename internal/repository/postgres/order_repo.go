@@ -58,14 +58,14 @@ func (orderAllocationGORM) TableName() string {
 }
 
 type orderMarketplaceDetailGORM struct {
-	OrderID         uuid.UUID  `gorm:"column:order_id;primaryKey;type:uuid"`
-	OrderSN         string     `gorm:"column:order_sn"`
-	ShippingCarrier string     `gorm:"column:shipping_carrier"`
-	TrackingNumber  string     `gorm:"column:tracking_number"`
-	ShipByDate      int64      `gorm:"column:ship_by_date"`
-	ShipByDateTime  *time.Time `gorm:"column:ship_by_date_time"`
-	EscrowAmount    float64    `gorm:"column:escrow_amount"`
-	FinancialStatus string     `gorm:"column:financial_status"`
+	OrderID           uuid.UUID  `gorm:"column:order_id;primaryKey;type:uuid"`
+	OrderSN           string     `gorm:"column:order_sn"`
+	ShippingCarrier   string     `gorm:"column:shipping_carrier"`
+	TrackingNumber    string     `gorm:"column:tracking_number"`
+	ShipByDateTime    *time.Time `gorm:"column:ship_by_date_time"`
+	EscrowAmount      float64    `gorm:"column:escrow_amount"`
+	FinancialStatus   string     `gorm:"column:financial_status"`
+	BuyerCancelReason *string    `gorm:"column:buyer_cancel_reason"`
 }
 
 func (orderMarketplaceDetailGORM) TableName() string {

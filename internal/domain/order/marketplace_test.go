@@ -30,11 +30,11 @@ func TestNormalizeMarketplaceStatus(t *testing.T) {
 		raw      string
 		expected string
 	}{
-		{order.ChannelShopee, "READY_TO_SHIP", "TO_SHIP"},
+		{order.ChannelShopee, "READY_TO_SHIP", "PROCESSED"},
 		{order.ChannelShopee, "TO_CONFIRM_RECEIVE", "COMPLETED"},
 		{order.ChannelShopee, "CANCELLED", "CANCELLED"},
-		{order.ChannelTikTok, "100", "UNPAID"},
-		{order.ChannelTikTok, "111", "TO_SHIP"},
+		{order.ChannelTikTok, "100", "PENDING"},
+		{order.ChannelTikTok, "111", "PROCESSED"},
 		{order.ChannelTokopedia, "121", "SHIPPED"},
 		{order.ChannelTokopedia, "130", "COMPLETED"},
 		{order.ChannelTikTok, "140", "CANCELLED"},

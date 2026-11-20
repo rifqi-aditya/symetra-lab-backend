@@ -12,6 +12,7 @@ import (
 
 	"symetra-lab-backend-v2/internal/domain/costing"
 	"symetra-lab-backend-v2/internal/domain/finance"
+	"symetra-lab-backend-v2/internal/domain/order"
 	"symetra-lab-backend-v2/internal/domain/shopee"
 )
 
@@ -41,7 +42,6 @@ type shopeeOrderMarketplaceGORM struct {
 	MessageToSeller          string     `gorm:"column:message_to_seller"`
 	ShippingCarrier          string     `gorm:"column:shipping_carrier"`
 	TrackingNumber           string     `gorm:"column:tracking_number"`
-	ShipByDate               int64      `gorm:"column:ship_by_date"`
 	ShipByDateTime           *time.Time `gorm:"column:ship_by_date_time"`
 	CommissionFee            float64    `gorm:"column:commission_fee"`
 	ServiceFee               float64    `gorm:"column:service_fee"`
@@ -50,6 +50,7 @@ type shopeeOrderMarketplaceGORM struct {
 	SellerVoucherDiscount    float64    `gorm:"column:seller_voucher_discount"`
 	EscrowAmount             float64    `gorm:"column:escrow_amount"`
 	FinancialStatus          string     `gorm:"column:financial_status"`
+	BuyerCancelReason        *string    `gorm:"column:buyer_cancel_reason"`
 	CreatedAt                time.Time  `gorm:"column:created_at"`
 	UpdatedAt                time.Time  `gorm:"column:updated_at"`
 }
@@ -236,8 +237,10 @@ func mapShopeeUnifiedOrderGORMToDomain(o *shopeeUnifiedOrderGORM) *shopee.Shopee
 		msg = m.MessageToSeller
 		carrier = m.ShippingCarrier
 		tracking = m.TrackingNumber
-		shipByDate = m.ShipByDate
 		shipByDateTime = m.ShipByDateTime
+		if shipByDateTime != nil {
+			shipByDate = shipByDateTime.Unix()
+		}
 	}
 
 	var payTimeShopee int64
@@ -947,12 +950,14 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		}
 
 		// 2. Simpan induk tabel orders TERLEBIH DAHULU agar Foreign Key tidak error
+		normalizedStatus := order.NormalizeMarketplaceStatus("SHOPEE", o.OrderStatus())
+
 		orderRecord := shopeeUnifiedOrderGORM{
 			ID:            orderID,
 			UserID:        userID,
 			OrderNumber:   o.OrderSN(),
 			CustomerName:  o.BuyerUsername(),
-			Status:        o.OrderStatus(),
+			Status:        normalizedStatus,
 			Channel:       "SHOPEE",
 			PaymentStatus: paymentStatus,
 			GrossAmount:   grossAmount,
@@ -982,7 +987,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			MessageToSeller: o.MessageToSeller(),
 			ShippingCarrier: o.ShippingCarrier(),
 			TrackingNumber:  o.TrackingNumber(),
-			ShipByDate:      o.ShipByDate(),
 			ShipByDateTime:  o.ShipByDateTime(),
 			CreatedAt:       orderCreatedAt,
 			UpdatedAt:       orderUpdatedAt,
