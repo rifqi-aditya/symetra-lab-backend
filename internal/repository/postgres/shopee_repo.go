@@ -435,11 +435,6 @@ func computeItemCostsFromProduct(tx *gorm.DB, prod *productGORM, qty int, sellin
 func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty int, sellingPrice float64, cache *costingContextCache) (
 	filCost, emergencyCost, compCost, packCost, elecCost, maintCost, depCost, totalCOGS, netProf float64,
 ) {
-	if qty <= 0 {
-		qty = 1
-	}
-	q := float64(qty)
-
 	if cache == nil {
 		cache = loadCostingContextCache(tx)
 	}
@@ -522,21 +517,21 @@ func computeItemCostsFromProductWithCache(tx *gorm.DB, prod *productGORM, qty in
 		ShopConfig:            shopCfgInput,
 	})
 
-	filCost = cb.FilamentCost * q       // net filament cost (no buffer)
-	emergencyCost = cb.EmergencyFundCost * q // isolated failure buffer → Kas Cadangan Risiko
-	compCost = cb.HardwareCost * q
-	packCost = cb.PackagingCost * q
-	elecCost = cb.ElectricityCost * q
-	maintCost = cb.MaintenanceCost * q
-	depCost = cb.DepreciationCost * q
-	totalCOGS = cb.BaseHPP * q // BaseHPP already includes emergencyFundCost
+	filCost = cb.FilamentCost       // net filament cost per unit (no buffer)
+	emergencyCost = cb.EmergencyFundCost // isolated failure buffer per unit → Kas Cadangan Risiko
+	compCost = cb.HardwareCost
+	packCost = cb.PackagingCost
+	elecCost = cb.ElectricityCost
+	maintCost = cb.MaintenanceCost
+	depCost = cb.DepreciationCost
+	totalCOGS = cb.BaseHPP // BaseHPP per unit (already includes emergencyFundCost)
 
 	if totalCOGS == 0 && prod.BaseHPP > 0 {
-		totalCOGS = prod.BaseHPP * q
+		totalCOGS = prod.BaseHPP
 		filCost = totalCOGS // fallback: treat all as filament (legacy BaseHPP products)
 	}
 
-	netProf = (sellingPrice * q) - totalCOGS
+	netProf = sellingPrice - totalCOGS
 	return
 }
 
@@ -557,13 +552,13 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 	// We isolate the emergency portion here using the same 0.090909 ratio.
 	_ = tx.Raw(`
 		SELECT 
-			COALESCE(SUM(filament_cost), 0)                AS f_fil,
-			COALESCE(SUM(component_cost), 0)               AS f_comp,
-			COALESCE(SUM(packaging_cost), 0)               AS f_pack,
-			COALESCE(SUM(energy_cost), 0)                  AS f_elec,
-			COALESCE(SUM(maintenance_cost), 0)             AS f_maint,
-			COALESCE(SUM(depreciation_cost), 0)            AS f_dep,
-			COALESCE(SUM(hpp), 0)                          AS tot_cogs
+			COALESCE(SUM(filament_cost * quantity), 0)     AS f_fil,
+			COALESCE(SUM(component_cost * quantity), 0)    AS f_comp,
+			COALESCE(SUM(packaging_cost * quantity), 0)    AS f_pack,
+			COALESCE(SUM(energy_cost * quantity), 0)       AS f_elec,
+			COALESCE(SUM(maintenance_cost * quantity), 0)  AS f_maint,
+			COALESCE(SUM(depreciation_cost * quantity), 0) AS f_dep,
+			COALESCE(SUM(hpp * quantity), 0)               AS tot_cogs
 		FROM order_items
 		WHERE order_id = ?
 	`, orderID).Scan(&sums).Error
@@ -840,14 +835,15 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 				}
 			}
 
-			totFil += filCost
-			totEmergency += emergencyCost
-			totComp += compCost
-			totPack += packCost
-			totElec += elecCost
-			totMaint += maintCost
-			totDep += depCost
-			totCOGS += baseHPP
+			qItem := float64(item.Quantity())
+			totFil += filCost * qItem
+			totEmergency += emergencyCost * qItem
+			totComp += compCost * qItem
+			totPack += packCost * qItem
+			totElec += elecCost * qItem
+			totMaint += maintCost * qItem
+			totDep += depCost * qItem
+			totCOGS += baseHPP * qItem
 			prodTitle := item.ItemName()
 			var itemWeight float64
 			var itemPrintTime float64
