@@ -568,6 +568,30 @@ func recalculateOrderFunds(tx *gorm.DB, orderID uuid.UUID) {
 
 	var ord shopeeUnifiedOrderGORM
 	if err := tx.Where("id = ?", orderID).First(&ord).Error; err == nil {
+		if ord.Status == "CANCELLED" || ord.PaymentStatus == "CANCELLED" {
+			_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
+				"gross_amount":   0,
+				"net_amount":     0,
+				"channel_fee":    0,
+				"cogs_amount":    0,
+				"net_profit":     0,
+				"payment_status": "CANCELLED",
+				"updated_at":     time.Now(),
+			}).Error
+			allocMap := map[string]float64{
+				"FILAMENT":     0,
+				"EMERGENCY":    0,
+				"COMPONENT":    0,
+				"PACKAGING":    0,
+				"ELECTRICITY":  0,
+				"MAINTENANCE":  0,
+				"DEPRECIATION": 0,
+				"NET_PROFIT":   0,
+			}
+			_ = upsertOrderAllocations(tx, orderID, ord.CreatedAt, allocMap)
+			return
+		}
+
 		if ord.PaymentStatus == "REFUNDED" {
 			_ = tx.Model(&shopeeUnifiedOrderGORM{}).Where("id = ?", orderID).Updates(map[string]interface{}{
 				"net_amount":  0,
@@ -657,6 +681,9 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		var grossAmount, netAmount, channelFee float64
 		paymentStatus := "UNPAID"
 
+		normalizedStatus := order.NormalizeMarketplaceStatus("SHOPEE", o.OrderStatus())
+		isCancelled := normalizedStatus == "CANCELLED" || o.OrderStatus() == "CANCELLED" || o.OrderStatus() == "IN_CANCEL"
+
 		isRefunded := false
 		if o.Escrow() != nil && o.Escrow().FinancialStatus() == "REFUNDED" {
 			isRefunded = true
@@ -671,6 +698,11 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			netAmount = 0
 			channelFee = 0
 			paymentStatus = "REFUNDED"
+		} else if isCancelled {
+			grossAmount = 0
+			netAmount = 0
+			channelFee = 0
+			paymentStatus = "CANCELLED"
 		} else if o.Escrow() != nil && o.Escrow().EscrowAmount() > 0 {
 			e := o.Escrow()
 			grossAmount = e.SellingPrice()
@@ -710,10 +742,10 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			}
 		}
 
-		if grossAmount <= 0 && itemsTotal > 0 {
+		if !isCancelled && grossAmount <= 0 && itemsTotal > 0 {
 			grossAmount = itemsTotal
 		}
-		if grossAmount <= 0 && netAmount > 0 {
+		if !isCancelled && grossAmount <= 0 && netAmount > 0 {
 			grossAmount = netAmount + channelFee
 		}
 
@@ -917,6 +949,26 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 			// Batalkan / hapus catatan penerimaan kas escrow sebelumnya jika pernah ada
 			_ = tx.Where("reference_type = ? AND reference_id = ?", "SHOPEE_ESCROW", o.OrderSN()).
 				Delete(&financeTransactionGORM{}).Error
+		} else if isCancelled {
+			totFil = 0
+			totEmergency = 0
+			totComp = 0
+			totPack = 0
+			totElec = 0
+			totMaint = 0
+			totDep = 0
+			alloc = finance.FundAllocationResult{
+				GrossAmount:   0,
+				ChannelFee:    0,
+				NetAmount:     0,
+				COGSAmount:    0,
+				NetProfit:     0,
+				FundNetProfit: 0,
+			}
+
+			// Batalkan / hapus catatan penerimaan kas escrow sebelumnya jika pernah ada
+			_ = tx.Where("reference_type = ? AND reference_id = ?", "SHOPEE_ESCROW", o.OrderSN()).
+				Delete(&financeTransactionGORM{}).Error
 		} else {
 			var goldenNet float64
 			var sellerVoucher float64
@@ -950,8 +1002,6 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		}
 
 		// 2. Simpan induk tabel orders TERLEBIH DAHULU agar Foreign Key tidak error
-		normalizedStatus := order.NormalizeMarketplaceStatus("SHOPEE", o.OrderStatus())
-
 		orderRecord := shopeeUnifiedOrderGORM{
 			ID:            orderID,
 			UserID:        userID,
@@ -1003,6 +1053,9 @@ func (r *ShopeeRepository) SaveOrder(ctx context.Context, o *shopee.ShopeeOrder)
 		}
 		if isRefunded {
 			mDetails.FinancialStatus = "REFUNDED"
+			mDetails.EscrowAmount = 0
+		} else if isCancelled {
+			mDetails.FinancialStatus = "CANCELLED"
 			mDetails.EscrowAmount = 0
 		}
 
@@ -1302,6 +1355,7 @@ func (r *ShopeeRepository) RecalculateSingleOrder(ctx context.Context, orderID u
 		    HAVING SUM(selling_price * quantity) > 0
 		) sub
 		WHERE o.id = ?
+		  AND o.status != 'CANCELLED'
 		  AND (o.gross_amount != sub.items_total OR o.gross_amount <= 0)
 	`, orderID, orderID)
 

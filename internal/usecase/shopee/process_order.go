@@ -160,13 +160,17 @@ func (uc *ProcessShopeeOrderUseCase) Execute(
 			matchRes.Costs.TotalCOGS,
 		)
 
-		totFil += matchRes.Costs.FilamentCost
-		totComp += matchRes.Costs.ComponentCost
-		totPack += matchRes.Costs.PackagingCost
-		totElec += matchRes.Costs.ElectricityCost
-		totMaint += matchRes.Costs.MaintenanceCost
-		totDep += matchRes.Costs.DepreciationCost
-		totCOGS += matchRes.Costs.TotalCOGS
+		qItem := float64(item.Quantity())
+		if qItem <= 0 {
+			qItem = 1
+		}
+		totFil += matchRes.Costs.FilamentCost * qItem
+		totComp += matchRes.Costs.ComponentCost * qItem
+		totPack += matchRes.Costs.PackagingCost * qItem
+		totElec += matchRes.Costs.ElectricityCost * qItem
+		totMaint += matchRes.Costs.MaintenanceCost * qItem
+		totDep += matchRes.Costs.DepreciationCost * qItem
+		totCOGS += matchRes.Costs.TotalCOGS * qItem
 	}
 	order.SetItems(items)
 

@@ -142,7 +142,6 @@ func (cc *CostCalculator) CalculateProductCosts(
 	if qty <= 0 {
 		qty = 1
 	}
-	q := float64(qty)
 
 	if p == nil {
 		return ItemCostBreakdown{}
@@ -216,21 +215,21 @@ func (cc *CostCalculator) CalculateProductCosts(
 		ShopConfig:            shopCfgInput,
 	})
 
-	filCost := cb.FilamentCost * q
-	emergencyCost := cb.EmergencyFundCost * q
-	compCost := cb.HardwareCost * q
-	packCost := cb.PackagingCost * q
-	elecCost := cb.ElectricityCost * q
-	maintCost := cb.MaintenanceCost * q
-	depCost := cb.DepreciationCost * q
-	totalCOGS := cb.BaseHPP * q
+	filCost := cb.FilamentCost
+	emergencyCost := cb.EmergencyFundCost
+	compCost := cb.HardwareCost
+	packCost := cb.PackagingCost
+	elecCost := cb.ElectricityCost
+	maintCost := cb.MaintenanceCost
+	depCost := cb.DepreciationCost
+	totalCOGS := cb.BaseHPP
 
 	if totalCOGS == 0 && p.BaseHPP() > 0 {
-		totalCOGS = p.BaseHPP() * q
+		totalCOGS = p.BaseHPP()
 		filCost = totalCOGS
 	}
 
-	netProf := (sellingPrice * q) - totalCOGS
+	netProf := sellingPrice - totalCOGS
 
 	return ItemCostBreakdown{
 		FilamentCost:     filCost,
